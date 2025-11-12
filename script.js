@@ -53,11 +53,13 @@ document.addEventListener('DOMContentLoaded', () => {
     isInspection: !!document.getElementById('inspection-form'),
   };
 
+  // Cache for current email (driven by Firebase Auth state)
   const getCurrentEmail = () => localStorage.getItem('currentUserEmail');
   const setCurrentEmail = (email) => {
     if (email) localStorage.setItem('currentUserEmail', email);
     else localStorage.removeItem('currentUserEmail');
   };
+
   const getRole = (email) => (email && USERS[email] ? USERS[email].role : null);
 
   const userEmailEl = document.getElementById('user-email');
@@ -72,27 +74,41 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   if (logoutBtnEl) {
-    logoutBtnEl.addEventListener('click', () => {
-      setCurrentEmail(null);
-      refreshUserBox();
-      // After logout, send to login page for clarity
-      if (!page.isLogin) window.location.href = 'login.html';
+    logoutBtnEl.addEventListener('click', async () => {
+      try {
+        if (window.auth && window.auth.signOut) {
+          await window.auth.signOut();
+        }
+      } catch (e) {
+        console.error('Error al cerrar sesión', e);
+      }
     });
   }
 
   // Handle login form
   if (page.isLogin) {
     const form = document.getElementById('login-form');
-    const select = document.getElementById('email');
     form?.addEventListener('submit', (e) => {
       e.preventDefault();
-      const email = select?.value;
-      if (!email || !USERS[email]) {
-        alert('Usuario no válido');
+      const email = document.getElementById('login-email')?.value?.trim();
+      const password = document.getElementById('login-password')?.value;
+      if (!email || !password) {
+        alert('Correo y contraseña son requeridos');
         return;
       }
-      setCurrentEmail(email);
-      window.location.href = 'index.html';
+      if (!window.auth || !window.firebase) {
+        alert('Firebase no está cargado');
+        return;
+      }
+      window.auth
+        .signInWithEmailAndPassword(email, password)
+        .then(() => {
+          window.location.href = 'index.html';
+        })
+        .catch((err) => {
+          console.error(err);
+          alert('Error al iniciar sesión: ' + (err?.message || ''));
+        });
     });
   }
 
@@ -163,10 +179,23 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  // Initialize
-  refreshUserBox();
-  applyIndexPermissions();
-  applyInspectionGuard();
+  // Initialize from Firebase Auth state
+  function bindAuthState() {
+    if (window.auth && window.auth.onAuthStateChanged) {
+      window.auth.onAuthStateChanged((user) => {
+        setCurrentEmail(user?.email || null);
+        refreshUserBox();
+        applyIndexPermissions();
+        applyInspectionGuard();
+      });
+    } else {
+      // Fallback (no Firebase): keep prior local state
+      refreshUserBox();
+      applyIndexPermissions();
+      applyInspectionGuard();
+    }
+  }
+  bindAuthState();
 
   // Optional: close mobile nav when clicking a nav link
   document.querySelectorAll('#primary-nav a').forEach((a) => {

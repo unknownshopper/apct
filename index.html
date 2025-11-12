@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="es">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -13,9 +13,9 @@
         <button class="menu-toggle" aria-label="Abrir menú" aria-controls="primary-nav" aria-expanded="false">☰</button>
         <nav id="primary-nav">
             <ul>
-                <li><a href="index.html">Dashboard</a></li>
-                <li><a href="#">Inventario</a></li>
-                <li><a href="#">Reportes</a></li>
+                <li><a class="active" href="index.html">Dashboard</a></li>
+                <li><a href="inventario.html">Inventario</a></li>
+                <li><a href="reportes.html">Reportes</a></li>
                 <li><a href="inspeccion.html">Inspección</a></li>
 
             </ul>
@@ -39,6 +39,13 @@
 
     </footer> 
 
+  <!-- Firebase SDKs (compat) -->
+  <script src="https://www.gstatic.com/firebasejs/9.6.11/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.6.11/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.6.11/firebase-firestore-compat.js"></script>
+  <!-- Your Firebase config: create firebase-config.js from firebase-config.sample.js -->
+  <script src="firebase-config.js"></script>
+  <script src="firebase-init.js"></script>
+  <script src="script.js"></script>
 </body>
-<script src="script.js"></script>
 </html>

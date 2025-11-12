@@ -13,9 +13,9 @@
     <nav id="primary-nav">
       <ul>
         <li><a href="index.html">Dashboard</a></li>
-        <li><a href="#">Inventario</a></li>
-        <li><a href="#">Reportes</a></li>
-        <li><a href="inspeccion.html">Inspección</a></li>
+        <li><a href="inventario.html">Inventario</a></li>
+        <li><a href="reportes.html">Reportes</a></li>
+        <li><a class="active" href="inspeccion.html">Inspección</a></li>
       </ul>
     </nav>
     <div class="user-box">
@@ -48,6 +48,13 @@
 
   <footer></footer>
 
+  <!-- Firebase SDKs (compat) -->
+  <script src="https://www.gstatic.com/firebasejs/9.6.11/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.6.11/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.6.11/firebase-firestore-compat.js"></script>
+  <!-- Your Firebase config: create firebase-config.js from firebase-config.sample.js -->
+  <script src="firebase-config.js"></script>
+  <script src="firebase-init.js"></script>
   <script src="script.js"></script>
 </body>
 </html>

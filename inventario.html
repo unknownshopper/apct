@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Inventario</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header>
+      <div class="logo"><img src="img/logopctch.png" alt="Logo" /></div>
+      <button class="menu-toggle" aria-label="Abrir menú" aria-controls="primary-nav" aria-expanded="false">☰</button>
+      <nav id="primary-nav">
+        <ul>
+          <li><a href="index.html">Dashboard</a></li>
+          <li><a class="active" href="inventario.html">Inventario</a></li>
+          <li><a href="reportes.html">Reportes</a></li>
+          <li><a href="inspeccion.html">Inspección</a></li>
+        </ul>
+      </nav>
+      <div class="user-box">
+        <span id="user-email"></span>
+        <a id="login-link" href="login.html">Login</a>
+        <button id="logout-btn" type="button" style="display:none">Salir</button>
+      </div>
+    </header>
+    <main class="wide">
+      <h1 style="margin-bottom: 1rem;">Inventario</h1>
+      <div id="inventory-tools" class="toolbar">
+        <div class="group">
+          <button id="btn-clear-filters" class="btn-primary">Limpiar filtros</button>
+          <button id="btn-export-csv" class="btn-primary">Exportar CSV</button>
+        </div>
+        <div id="inventory-count" class="toolbar-count">0 resultados</div>
+      </div>
+      <section id="inventory-filters" class="filters" aria-label="Filtros de inventario"></section>
+      <div class="table-responsive" id="inventory-wrapper">
+        <div id="inventory-scroll-top" class="scrollbar-x"><div class="scrollbar-content"></div></div>
+        <div id="inventory-scroll-body" class="table-scroll">
+          <div id="inventory-loading" style="padding: 0.75rem;">Cargando inventario...</div>
+          <table id="inventory-table" class="inventory" style="display:none;"></table>
+        </div>
+      </div>
+    </main>
+    <footer></footer>
+
+    <script>
+      (function () {
+        const CSV_URL = 'docs/inventario.csv';
+
+        function parseCSVLine(line) {
+          const out = [];
+          const regex = /(?:^|,)(?:"([^"]*(?:""[^"]*)*)"|([^",]*))/g;
+          let match;
+          while ((match = regex.exec(line)) !== null) {
+            let value = match[1] !== undefined ? match[1].replace(/""/g, '"') : match[2];
+            out.push(value ?? '');
+          }
+          return out;
+        }
+
+        function parseCSV(text) {
+          const lines = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n');
+          const rows = [];
+          for (const line of lines) {
+            if (line.trim() === '') continue;
+            rows.push(parseCSVLine(line));
+          }
+          return rows;
+        }
+
+        let ALL_ROWS = [];
+        let HEADERS = [];
+        let FILTERS = {};
+        let SORT = { index: -1, dir: 1 };
+        const CALIB_HEADER = 'PRUEBA / CALIBRACION';
+        const CALIB_OPTIONS = ['VT', 'PT', 'MT', 'LT', 'UTT'];
+        const STATE_HEADER = 'ESTADO';
+        const DATE_HEADERS = ['FECHA REALIZACIÓN', 'PROXIMA PRUEBA'];
+
+        function applyFilters(rows) {
+          const entries = Object.entries(FILTERS).filter(([, v]) => v);
+          if (entries.length === 0) return rows;
+          const lowered = entries.map(([k, v]) => [k, v]);
+          return rows.filter((row) => {
+            for (const [colName, val] of lowered) {
+              const colIdx = HEADERS.indexOf(colName);
+              if (colIdx === -1) continue;
+              const raw = row[colIdx] != null ? String(row[colIdx]) : '';
+              if (colName === CALIB_HEADER) {
+                // Single select: match if cell contains the selected token
+                const token = String(val || '').trim();
+                if (token) {
+                  const upperCell = raw.toUpperCase();
+                  if (!upperCell.includes(token.toUpperCase())) return false;
+                }
+              } else if (colName === STATE_HEADER) {
+                const cell = raw.trim().toLowerCase();
+                const needle = String(val).trim().toLowerCase();
+                if (needle && cell !== needle) return false;
+              } else if (DATE_HEADERS.includes(colName)) {
+                if (val && typeof val === 'object') {
+                  const cellDate = new Date(raw.replace(/\//g, '-'));
+                  if (val.from) {
+                    const from = new Date(val.from);
+                    if (Number.isNaN(cellDate.getTime()) || cellDate < from) return false;
+                  }
+                  if (val.to) {
+                    const to = new Date(val.to);
+                    if (Number.isNaN(cellDate.getTime()) || cellDate > to) return false;
+                  }
+                }
+              } else {
+                const cell = raw.toLowerCase();
+                const needle = String(val).toLowerCase();
+                if (needle && !cell.includes(needle)) return false;
+              }
+            }
+            return true;
+          });
+        }
+
+        function sortRows(rows) {
+          if (SORT.index < 0) return rows;
+          const idx = SORT.index;
+          const dir = SORT.dir;
+          const copy = rows.slice();
+          copy.sort((a, b) => {
+            const av = a[idx] ?? '';
+            const bv = b[idx] ?? '';
+            const an = parseFloat(av);
+            const bn = parseFloat(bv);
+            const aNum = !Number.isNaN(an) && String(an) === String(av).replace(',', '.');
+            const bNum = !Number.isNaN(bn) && String(bn) === String(bv).replace(',', '.');
+            if (aNum && bNum) return (an - bn) * dir;
+            return String(av).localeCompare(String(bv), 'es', { numeric: true, sensitivity: 'base' }) * dir;
+          });
+          return copy;
+        }
+
+        function getCurrentViewRows() {
+          const filtered = applyFilters(ALL_ROWS);
+          return sortRows(filtered);
+        }
+
+        function buildFilters() {
+          const mount = document.getElementById('inventory-filters');
+          if (!mount) return;
+          mount.innerHTML = '';
+          const df = document.createDocumentFragment();
+          // Precompute unique states
+          const stateIdx = HEADERS.indexOf(STATE_HEADER);
+          const states = new Set();
+          if (stateIdx !== -1) {
+            ALL_ROWS.forEach((r) => {
+              const v = r[stateIdx];
+              if (v != null && String(v).trim() !== '') states.add(String(v).trim());
+            });
+          }
+
+          HEADERS.forEach((name) => {
+            const wrap = document.createElement('div');
+            wrap.className = 'filter-field';
+            const label = document.createElement('label');
+            label.textContent = name;
+            wrap.appendChild(label);
+            if (name === CALIB_HEADER) {
+              const select = document.createElement('select');
+              const optAll = document.createElement('option');
+              optAll.value = '';
+              optAll.textContent = 'Todos';
+              select.appendChild(optAll);
+              CALIB_OPTIONS.forEach((val) => {
+                const opt = document.createElement('option');
+                opt.value = val;
+                opt.textContent = val;
+                select.appendChild(opt);
+              });
+              select.addEventListener('change', () => {
+                FILTERS[name] = select.value;
+                refresh();
+              });
+              wrap.appendChild(select);
+            } else if (name === STATE_HEADER) {
+              const select = document.createElement('select');
+              const optAll = document.createElement('option');
+              optAll.value = '';
+              optAll.textContent = 'Todos';
+              select.appendChild(optAll);
+              Array.from(states).sort((a,b)=>String(a).localeCompare(String(b),'es',{numeric:true,sensitivity:'base'})).forEach((val) => {
+                const opt = document.createElement('option');
+                opt.value = val;
+                opt.textContent = val;
+                select.appendChild(opt);
+              });
+              select.addEventListener('change', () => {
+                FILTERS[name] = select.value;
+                refresh();
+              });
+              wrap.appendChild(select);
+            } else if (DATE_HEADERS.includes(name)) {
+              const rangeWrap = document.createElement('div');
+              rangeWrap.className = 'date-range';
+              const from = document.createElement('input');
+              from.type = 'date';
+              const to = document.createElement('input');
+              to.type = 'date';
+              from.addEventListener('change', () => {
+                FILTERS[name] = { ...(FILTERS[name]||{}), from: from.value };
+                refresh();
+              });
+              to.addEventListener('change', () => {
+                FILTERS[name] = { ...(FILTERS[name]||{}), to: to.value };
+                refresh();
+              });
+              rangeWrap.appendChild(from);
+              rangeWrap.appendChild(to);
+              wrap.appendChild(rangeWrap);
+            } else {
+              const input = document.createElement('input');
+              input.type = 'text';
+              input.placeholder = 'Filtrar...';
+              input.addEventListener('input', () => {
+                FILTERS[name] = input.value.trim();
+                refresh();
+              });
+              wrap.appendChild(input);
+            }
+            df.appendChild(wrap);
+          });
+          mount.appendChild(df);
+        }
+
+        function renderTable(rows) {
+          if (!rows || rows.length === 0) return;
+          const table = document.getElementById('inventory-table');
+          const loading = document.getElementById('inventory-loading');
+          if (loading) loading.remove();
+
+          const headers = rows[0];
+          HEADERS = headers.slice();
+          let theadHTML = '<thead><tr>' + headers.map((h, i) => {
+            const sortAttr = (SORT.index === i) ? (SORT.dir === 1 ? ' data-sort="asc"' : ' data-sort="desc"') : '';
+            return `<th data-col="${i}" role="button"${sortAttr}>${escapeHtml(h)}</th>`;
+          }).join('') + '</tr></thead>';
+
+          ALL_ROWS = rows.slice(1);
+          const finalRows = getCurrentViewRows();
+
+          let bodyParts = new Array(finalRows.length);
+          for (let i = 0; i < finalRows.length; i++) {
+            const row = finalRows[i];
+            let tds = new Array(headers.length);
+            for (let c = 0; c < headers.length; c++) {
+              const val = row[c] != null ? String(row[c]) : '';
+              const title = `${headers[c]} | Fila ${i + 1}`;
+              tds[c] = `<td title="${escapeAttr(title)}">${escapeHtml(val)}</td>`;
+            }
+            bodyParts[i] = `<tr>${tds.join('')}</tr>`;
+          }
+          const tbodyHTML = `<tbody>${bodyParts.join('')}</tbody>`;
+          table.innerHTML = theadHTML + tbodyHTML;
+          table.style.display = '';
+
+          // Sorting interactions
+          const ths = table.querySelectorAll('thead th');
+          ths.forEach((th) => {
+            th.addEventListener('click', () => {
+              const idx = parseInt(th.getAttribute('data-col'), 10);
+              if (SORT.index === idx) {
+                SORT.dir = -SORT.dir;
+              } else {
+                SORT.index = idx; SORT.dir = 1;
+              }
+              refresh();
+            });
+          });
+
+          // Update results counter
+          const counter = document.getElementById('inventory-count');
+          if (counter) counter.textContent = `${finalRows.length} resultados`;
+
+          syncScrollBars();
+        }
+
+        function escapeHtml(str) {
+          return String(str)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+        }
+
+        function escapeAttr(str) {
+          return escapeHtml(str);
+        }
+
+        function refresh() {
+          if (!ALL_ROWS.length) return;
+          const table = document.getElementById('inventory-table');
+          const rows = [HEADERS, ...ALL_ROWS];
+          renderTable(rows);
+        }
+
+        async function loadCSV() {
+          try {
+            const res = await fetch(CSV_URL, { cache: 'no-store' });
+            if (!res.ok) throw new Error('No se pudo cargar el CSV');
+            const text = await res.text();
+            const rows = parseCSV(text);
+            // Initialize filters UI and render
+            HEADERS = rows[0].slice();
+            ALL_ROWS = rows.slice(1);
+            buildFilters();
+            renderTable(rows);
+          } catch (err) {
+            console.error(err);
+            const loading = document.getElementById('inventory-loading');
+            if (loading) loading.textContent = 'Error al cargar el inventario.';
+          }
+        }
+
+        function clearFilters() {
+          FILTERS = {};
+          // Reset UI controls
+          const filtersEl = document.getElementById('inventory-filters');
+          filtersEl.querySelectorAll('input[type="text"]').forEach((el) => el.value = '');
+          filtersEl.querySelectorAll('input[type="date"]').forEach((el) => el.value = '');
+          filtersEl.querySelectorAll('select').forEach((sel) => {
+            if (sel.multiple) {
+              Array.from(sel.options).forEach(o => o.selected = false);
+            } else {
+              sel.value = '';
+            }
+          });
+          renderTable([HEADERS, ...ALL_ROWS]);
+        }
+
+        function exportCSV() {
+          const rows = getCurrentViewRows();
+          const data = [HEADERS, ...rows];
+          const csv = data.map(r => r.map((v) => {
+            const s = v == null ? '' : String(v);
+            const needsQuote = /[",\n]/.test(s);
+            const escaped = s.replace(/"/g, '""');
+            return needsQuote ? `"${escaped}"` : escaped;
+          }).join(',')).join('\n');
+          const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = 'inventario_filtrado.csv';
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+        }
+
+        function setWrapperHeight() {
+          try {
+            const header = document.querySelector('header');
+            const footer = document.querySelector('footer');
+            const bodyScroll = document.getElementById('inventory-scroll-body');
+            const h = header ? header.offsetHeight : 0;
+            const f = footer ? footer.offsetHeight : 0;
+            const pad = 16; // margen interno aproximado
+            const available = window.innerHeight - h - f - pad * 2;
+            if (available > 200) {
+              bodyScroll.style.maxHeight = available + 'px';
+              bodyScroll.style.height = available + 'px';
+            }
+          } catch (e) { /* noop */ }
+        }
+        function ensureTopScrollbar() {
+          const top = document.getElementById('inventory-scroll-top');
+          return top;
+        }
+
+        let isSyncing = false;
+        let lastSource = null;
+        let scrollHandlers = { onTopScroll: null, onBodyScroll: null };
+        function syncScrollBars() {
+          const bodyScroll = document.getElementById('inventory-scroll-body');
+          const table = document.getElementById('inventory-table');
+          const top = ensureTopScrollbar();
+          const topContent = top.querySelector('.scrollbar-content');
+          topContent.style.width = table.scrollWidth + 'px';
+          // Align positions initially
+          top.scrollLeft = bodyScroll.scrollLeft;
+
+          // Remove previous handlers if any to avoid duplicates
+          if (scrollHandlers.onTopScroll) top.removeEventListener('scroll', scrollHandlers.onTopScroll);
+          if (scrollHandlers.onBodyScroll) bodyScroll.removeEventListener('scroll', scrollHandlers.onBodyScroll);
+
+          const onTopScroll = () => {
+            lastSource = 'top';
+            if (isSyncing) return;
+            isSyncing = true;
+            bodyScroll.scrollLeft = top.scrollLeft;
+            isSyncing = false;
+          };
+          const onBodyScroll = () => {
+            lastSource = 'wrap';
+            if (isSyncing) return;
+            isSyncing = true;
+            top.scrollLeft = bodyScroll.scrollLeft;
+            isSyncing = false;
+          };
+
+          scrollHandlers.onTopScroll = onTopScroll;
+          scrollHandlers.onBodyScroll = onBodyScroll;
+          top.addEventListener('scroll', onTopScroll, { passive: true });
+          bodyScroll.addEventListener('scroll', onBodyScroll, { passive: true });
+        }
+
+        function init() {
+          setWrapperHeight();
+          loadCSV();
+          ensureTopScrollbar();
+          syncScrollBars();
+          window.addEventListener('resize', setWrapperHeight);
+          window.addEventListener('resize', syncScrollBars);
+          // Wheel over top scrollbar should move horizontally
+          const top = document.getElementById('inventory-scroll-top');
+          if (top) {
+            top.addEventListener('wheel', (e) => {
+              if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
+                const bodyScroll = document.getElementById('inventory-scroll-body');
+                bodyScroll.scrollLeft += e.deltaY;
+                e.preventDefault();
+              }
+            }, { passive: false });
+          }
+          const btnClear = document.getElementById('btn-clear-filters');
+          const btnExport = document.getElementById('btn-export-csv');
+          btnClear?.addEventListener('click', clearFilters);
+          btnExport?.addEventListener('click', exportCSV);
+        }
+
+        if (document.readyState === 'loading') {
+          document.addEventListener('DOMContentLoaded', init);
+        } else {
+          init();
+        }
+      })();
+    </script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.11/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.11/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.11/firebase-firestore-compat.js"></script>
+    <script src="firebase-config.js"></script>
+    <script src="firebase-init.js"></script>
+    <script src="script.js"></script>
+  </body>
+  </html>
