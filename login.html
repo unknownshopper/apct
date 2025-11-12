@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Login - PCT</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header>
+    <div class="logo"><img src="img/logopctch.png" alt="Logo" /></div>
+    <button class="menu-toggle" aria-label="Abrir menú" aria-controls="primary-nav" aria-expanded="false">☰</button>
+    <nav id="primary-nav">
+      <ul>
+        <li><a href="index.html">Dashboard</a></li>
+        <li><a href="inspeccion.html">Inspección</a></li>
+      </ul>
+    </nav>
+  </header>
+
+  <main>
+    <h1>Iniciar sesión</h1>
+    <form id="login-form">
+      <label for="email">Usuario (correo)</label>
+      <select id="email" required>
+        <option value="the@unknownshoppers.com">the@unknownshoppers.com (admin)</option>
+        <option value="jalcz@pct.com">jalcz@pct.com (director)</option>
+        <option value="inspector1@pct.com">inspector1@pct.com (inspector)</option>
+      </select>
+      <button type="submit">Entrar</button>
+    </form>
+  </main>
+
+  <footer></footer>
+
+  <script src="script.js"></script>
+</body>
+</html>

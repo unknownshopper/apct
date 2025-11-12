@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Inspección - PCT</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header>
+    <div class="logo"><img src="img/logopctch.png" alt="Logo"></div>
+    <button class="menu-toggle" aria-label="Abrir menú" aria-controls="primary-nav" aria-expanded="false">☰</button>
+    <nav id="primary-nav">
+      <ul>
+        <li><a href="index.html">Dashboard</a></li>
+        <li><a href="#">Inventario</a></li>
+        <li><a href="#">Reportes</a></li>
+        <li><a href="inspeccion.html">Inspección</a></li>
+      </ul>
+    </nav>
+    <div class="user-box">
+      <span id="user-email"></span>
+      <a id="login-link" href="login.html">Login</a>
+      <button id="logout-btn" type="button" style="display:none">Salir</button>
+    </div>
+  </header>
+
+  <main>
+    <h1>Nueva Inspección</h1>
+    <p id="inspection-guard" style="display:none"></p>
+    <form id="inspection-form">
+      <label>
+        Título
+        <input type="text" id="insp-title" required>
+      </label>
+      <label>
+        Fecha
+        <input type="date" id="insp-date" required>
+      </label>
+      <label>
+        Descripción
+        <textarea id="insp-notes" rows="4"></textarea>
+      </label>
+      <button type="submit">Crear inspección</button>
+    </form>
+    <div id="inspection-result"></div>
+  </main>
+
+  <footer></footer>
+
+  <script src="script.js"></script>
+</body>
+</html>

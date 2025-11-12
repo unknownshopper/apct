@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PCT</title>
+    <link rel="stylesheet" href="styles.css">
+    
+</head>
+  <body>
+    <header>
+        <div class="logo">  <img src="img/logopctch.png" alt="Logo"></div>
+        <button class="menu-toggle" aria-label="Abrir menú" aria-controls="primary-nav" aria-expanded="false">☰</button>
+        <nav id="primary-nav">
+            <ul>
+                <li><a href="index.html">Dashboard</a></li>
+                <li><a href="#">Inventario</a></li>
+                <li><a href="#">Reportes</a></li>
+                <li><a href="inspeccion.html">Inspección</a></li>
+
+            </ul>
+        </nav>
+        <div class="user-box">
+          <span id="user-email"></span>
+          <a id="login-link" href="login.html">Login</a>
+          <button id="logout-btn" type="button" style="display:none">Salir</button>
+        </div>
+    </header>
+    <main>
+      <section class="actions">
+        <button class="action-btn" data-action="create">Crear</button>
+        <button class="action-btn" data-action="view">Ver</button>
+        <button class="action-btn" data-action="edit">Editar</button>
+        <button class="action-btn" data-action="destroy">Eliminar</button>
+      </section>
+    </main>
+    
+    <footer>
+
+    </footer> 
+
+</body>
+<script src="script.js"></script>
+</html>
