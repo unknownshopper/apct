@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Inventario General</title>
+  <title>Registro de Actividad</title>
   <link rel="stylesheet" href="styles.css">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -11,8 +11,11 @@
   <link rel="icon" href="data:,">
   <meta name="color-scheme" content="light">
   <meta name="theme-color" content="#ffffff">
+  <style>
+    [data-page="actividad"] input#q { min-width: 240px; padding: 0.5rem 0.6rem; border: 1px solid #e5e7eb; border-radius: 8px; }
+  </style>
 </head>
-<body data-page="inventario">
+<body data-page="actividad">
   <header>
     <div class="logo"><img src="img/logopctch.png" alt="Logo" /></div>
     <button class="menu-toggle" aria-label="Abrir menú" aria-controls="primary-nav" aria-expanded="false">☰</button>
@@ -22,7 +25,8 @@
         <li><a href="pruebas.html">Pruebas</a></li>
         <li><a href="tareas.html">Tareas</a></li>
         <li><a href="inspeccion.html">Inspección</a></li>
-        <li><a class="active" href="inventario.html">Inventario</a></li>
+        <li><a href="ingral.html">Inventario</a></li>
+        <li><a class="active" href="actividad.html">Actividad</a></li>
         <li><a href="reportes.html">Reportes</a></li>
       </ul>
     </nav>
@@ -33,7 +37,7 @@
     </div>
   </header>
   <main class="wide">
-    <h1>Inventario General</h1>
+    <h1>Registro de Actividad</h1>
     <div class="page-logo"><img src="img/logopctch.png" alt="PCT"></div>
 
     <div class="toolbar" role="region" aria-label="Herramientas de tabla">
@@ -47,7 +51,7 @@
     <div id="inventory-wrapper" class="table-responsive" aria-live="polite">
       <div class="scrollbar-x"><div class="scrollbar-content"></div></div>
       <div class="table-scroll">
-        <table class="inventory" id="invTable" aria-describedby="count">
+        <table class="inventory" id="actTable" aria-describedby="count">
           <thead id="thead"></thead>
           <tbody id="tbody"></tbody>
         </table>
@@ -67,13 +71,13 @@
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
   <script>
   (function(){
-    const SRC = 'docs/INVENTARIO GENERAL PCT 2025 NOV.csv';
+    const SRC = 'docs/REGISTRO DE ACTIVIDAD PCT 2025.csv';
     const thead = document.getElementById('thead');
     const tbody = document.getElementById('tbody');
     const q = document.getElementById('q');
     const clearQ = document.getElementById('clearQ');
     const count = document.getElementById('count');
-    const table = document.getElementById('invTable');
+    const table = document.getElementById('actTable');
 
     let rows = [];
     let headers = [];
@@ -185,7 +189,6 @@
 
     q.addEventListener('input', applyFilter);
     clearQ.addEventListener('click', ()=>{ q.value=''; applyFilter(); q.focus(); });
-
     document.addEventListener('DOMContentLoaded', load);
   })();
   </script>

@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tareas</title>
+  <link rel="stylesheet" href="styles.css">
+  <link rel="icon" href="data:,">
+  <meta name="color-scheme" content="light">
+  <meta name="theme-color" content="#ffffff">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+  <script>
+    function readLatestInspection(){
+      try {
+        // Prefer last saved inspection temp from primaria
+        const rawTemp = localStorage.getItem('pct_lastSavedInspectionTemp');
+        if (rawTemp) {
+          const obj = JSON.parse(rawTemp);
+          if (obj && Array.isArray(obj.rows)) return { headers: obj.headers||[], rows: obj.rows, meta: obj.meta || {} };
+        }
+      } catch {}
+      try {
+        const raw = localStorage.getItem('primariaStateV1');
+        if (!raw) return null;
+        const st = JSON.parse(raw);
+        if (st && Array.isArray(st.rows)) return { headers: st.headers||[], rows: st.rows, meta: st.meta || {} };
+      } catch {}
+      return null;
+    }
+    function text(v){ return String(v==null?'':v).trim(); }
+    function cleanParamName(s){
+      try {
+        let p = String(s||'');
+        // Si hay 'Causa:' cortar desde ahí
+        const causaIdx = p.toLowerCase().indexOf('causa:');
+        if (causaIdx >= 0) p = p.slice(0, causaIdx);
+        // Quitar tokens de opciones (aunque estén pegados)
+        const tokens = ['Bueno','Malo','No Aplica','Visible','No visible','Legible','No legible'];
+        for (const t of tokens){
+          const rx = new RegExp(t.replace(/\s+/g,'\\s*'), 'ig');
+          p = p.replace(rx, '');
+        }
+        // Quitar duplicados de separadores y restos
+        p = p.replace(/—/g,' ').replace(/\s{2,}/g,' ').trim();
+        return p || String(s||'').trim();
+      } catch { return String(s||'').trim(); }
+    }
+    function includes(txt, needle){ return text(txt).toLowerCase().includes(String(needle).toLowerCase()); }
+    function extractDamages(rows){
+      const findings = [];
+      const add = (display, kind)=>{ findings.push({ display, kind }); };
+      for (const r of rows){
+        const param = cleanParamName(text(r.parametro || r.Parametro || ''));
+        // 1) Causas explícitas capturadas
+        const causes = [r.__rosca_causa, r.__sellado_causa, r.__cuerpo_causa, r.__retenedor_causa, r.__insertos_causa, r.__mariposa_causa, r.__pinon_causa].map(text);
+        for (const c of causes){
+          const lc = c.toLowerCase();
+          if (!lc) continue;
+          if (['golpe','deformación','deformacion','abrasión','abrasion','corrosión','corrosion','lavadura','otro'].includes(lc)){
+            const norm = lc.replace('deformacion','deformación').replace('abrasion','abrasión').replace('corrosion','corrosión');
+            const cap = norm.charAt(0).toUpperCase() + norm.slice(1);
+            // Mostrar contexto de parámetro + estado Malo + causa
+            const ctx = param ? `${param} — Malo — ${cap}` : `Malo — ${cap}`;
+            add(ctx, 'cause');
+          }
+        }
+        // 2) Flejes específicos
+        if (/fleje/i.test(param)){
+          const vals = Object.keys(r).filter(k=>k!=='parametro'&&k!=='Parametro'&&!k.startsWith('__')).map(k=>text(r[k]).toLowerCase());
+          const base = cleanParamName(param) || 'Fleje';
+          if (vals.includes('no legible')) add(`${base} — No legible`, 'fleje');
+          if (vals.includes('sin fleje')) add(`${base} — Sin fleje`, 'fleje');
+        }
+        // 3) Recubrimiento en Malo
+        if (/recubrimiento/i.test(param)){
+          const vals = Object.keys(r).filter(k=>k!=='parametro'&&k!=='Parametro'&&!k.startsWith('__')).map(k=>text(r[k]).toLowerCase());
+          const base = cleanParamName(param) || 'Recubrimiento';
+          if (vals.includes('malo')) add(`${base} — Malo`, 'recubrimiento');
+        }
+        // 4) Elastómero con subopción
+        const em = text(r.__elastomero_main);
+        if (em.toLowerCase() === 'malo'){
+          const sub = text(r.__elastomero_sub);
+          add(`Elastómero — ${sub || 'Malo'}`, 'elastomero');
+        }
+        // 5) Genérico: cualquier fila con 'Malo'
+        const kv = Object.keys(r).filter(k=>k!=='parametro'&&k!=='Parametro'&&!k.startsWith('__'));
+        const valsUp = kv.map(k=>({ k, v: text(r[k]) }));
+        if (valsUp.some(x => x.v.toLowerCase() === 'malo')){
+          // detalle si existe *_detalle
+          let det = '';
+          for (const x of valsUp){ const dKey = x.k + '_detalle'; if (r.hasOwnProperty(dKey) && text(r[dKey])) { det = text(r[dKey]); break; } }
+          const display = det ? `${param} — ${det}` : param;
+          add(display, 'generic');
+        }
+      }
+      return findings;
+    }
+
+    // Asignación editable por inspección (persistida localmente)
+    const ASIG_KEY = 'pct_tareas_asignaciones_v1';
+    function loadAsignaciones(){
+      try { const raw = localStorage.getItem(ASIG_KEY); return raw ? JSON.parse(raw) : {}; } catch { return {}; }
+    }
+    function saveAsignacion(inspeccionId, value){
+      try { const map = loadAsignaciones(); map[inspeccionId] = String(value||''); localStorage.setItem(ASIG_KEY, JSON.stringify(map)); } catch {}
+    }
+    // reference table removed
+    function formatDateTime(dt){
+      try {
+        const d = (dt instanceof Date) ? dt : new Date(dt);
+        if (isNaN(d.getTime())) return '';
+        const pad = n => String(n).padStart(2,'0');
+        return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+      } catch { return ''; }
+    }
+    function addDays(base, days){
+      const d = (base instanceof Date) ? new Date(base.getTime()) : new Date(base);
+      if (isNaN(d.getTime())) return '';
+      d.setDate(d.getDate() + days);
+      return d;
+    }
+    // removed legacy reference-table render/load
+  </script>
+</head>
+<body data-page="tareas">
+  <header>
+    <div class="logo"><img src="img/logopctch.png" alt="Logo" /></div>
+    <button class="menu-toggle" aria-label="Abrir menú" aria-controls="primary-nav" aria-expanded="false">☰</button>
+    <nav id="primary-nav">
+      <ul>
+        <li><a href="index.html">Dashboard</a></li>
+        <li><a href="pruebas.html">Pruebas</a></li>
+        <li><a class="active" href="tareas.html">Tareas</a></li>
+        <li><a href="inspeccion.html">Inspección</a></li>
+        <li><a href="reportes.html">Reportes</a></li>
+      </ul>
+    </nav>
+    <div class="user-box">
+      <span id="user-email"></span>
+      <a id="login-link" href="login.html">Login</a>
+      <button id="logout-btn" type="button" style="display:none">Salir</button>
+    </div>
+  </header>
+  <main>
+    <h1>Inspecciones con daño (para programación)</h1>
+    <div style="margin:8px 0 10px; display:flex; gap:8px;">
+      <button id="btnRefresh" style="padding:6px 10px; border:1px solid var(--steel-400); border-radius:6px; background:#f8fafc; cursor:pointer;">Refrescar</button>
+      <span id="lblCounts" style="align-self:center; color:#334155; font-size:13px"></span>
+    </div>
+    <div class="table-wrap">
+      <table class="list" id="tblIns"></table>
+    </div>
+    <div id="authHint" class="muted" style="margin-top:8px; display:none">Inicia sesión para cargar inspecciones desde Firestore…</div>
+  </main>
+  <script src="https://www.gstatic.com/firebasejs/9.6.11/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.6.11/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.6.11/firebase-firestore-compat.js"></script>
+  <script src="firebase-config.js"></script>
+  <script src="firebase-init.js"></script>
+  <script src="script.js"></script>
+  <script>
+    (function(){
+      async function ready(){
+        const maxTries = 60;
+        for (let i=0;i<maxTries;i++){ if (window.db) return true; await new Promise(r=>setTimeout(r,50)); }
+        return !!window.db;
+      }
+
+      async function loadData(){
+        await ready();
+        const db = window.db;
+        const items = [];
+        try {
+          const snapRoot = await db.collection('inspections').orderBy('createdAt','desc').get();
+          snapRoot.forEach(doc=>{ const data = doc.data(); items.push(Object.assign({ id: doc.id, origin: 'inspections', path: 'inspections/'+doc.id }, data)); });
+        } catch {}
+        try {
+          const snapSub = await db.collectionGroup('inspections').orderBy('createdAt','desc').get();
+          snapSub.forEach(doc=>{ const data = doc.data(); let ik=null; try{ ik = doc.ref.parent.parent.id; }catch{} items.push(Object.assign({ id: doc.id, origin: 'items/*/inspections', itemKey: ik, path: doc.ref.path }, data)); });
+        } catch {}
+        return items.sort((a,b)=>{
+          const bs = (b.createdAt && b.createdAt.seconds) ? b.createdAt.seconds : 0;
+          const as = (a.createdAt && a.createdAt.seconds) ? a.createdAt.seconds : 0;
+          return bs - as;
+        });
+      }
+
+      window.loadData = loadData;
+
+      document.addEventListener('click', (e)=>{
+        if (e.target && e.target.id === 'btnRefresh'){
+          start();
+        }
+      });
+
+      async function start(){
+        const hint = document.getElementById('authHint');
+        const isAuthed = !!window.currentUser;
+        if (!isAuthed) { if (hint) hint.style.display = ''; }
+        try {
+          let items = await loadData();
+          items = mergeLocalInspection(items);
+          renderInspectionsTable(items);
+        } catch {}
+        if (isAuthed) {
+          if (hint) hint.style.display = 'none';
+          try {
+            await ready();
+            const db = window.db;
+            const map = new Map();
+            const apply = () => {
+              const byInsp = new Map();
+              Array.from(map.values()).forEach(it => {
+                const id = (it.meta && it.meta.inspectionId) || it.inspectionId || it.id;
+                if (!id) { byInsp.set(Math.random().toString(36), it); return; }
+                const prev = byInsp.get(id);
+                const score = (x)=> (x.origin === 'inspections' ? 2 : 1);
+                if (!prev || score(it) >= score(prev)) byInsp.set(id, it);
+              });
+              const arr = Array.from(byInsp.values()).sort((a,b)=>{
+                const bs = (b.createdAt && b.createdAt.seconds) ? b.createdAt.seconds : 0;
+                const as = (a.createdAt && a.createdAt.seconds) ? a.createdAt.seconds : 0;
+                return bs - as;
+              });
+              let merged = mergeLocalInspection(arr);
+              renderInspectionsTable(merged);
+            };
+            // Seed
+            try { const initial = await loadData(); initial.forEach((it, idx) => { const key = (it.origin === 'inspections') ? ('root/'+it.id) : ('sub/'+(it.itemKey||'')+'/'+it.id+'/'+idx); map.set(key, it); }); apply(); } catch {}
+            // Root snapshot
+            db.collection('inspections').orderBy('createdAt','desc').onSnapshot((snap)=>{
+              snap.docChanges().forEach(ch=>{
+                const d = ch.doc; const data = d.data(); const key = 'root/'+d.id;
+                if (ch.type === 'removed') { map.delete(key); }
+                else { map.set(key, Object.assign({ id: d.id, origin: 'inspections', path: 'inspections/'+d.id }, data)); }
+              });
+              apply();
+            });
+            // Subcollections snapshot
+            db.collectionGroup('inspections').orderBy('createdAt','desc').onSnapshot((snap)=>{
+              snap.docChanges().forEach(ch=>{
+                const d = ch.doc; const data = d.data(); let ik=null; try{ ik = d.ref.parent.parent.id; }catch{} const key = d.ref.path;
+                if (ch.type === 'removed') { map.delete(key); }
+                else { map.set(key, Object.assign({ id: d.id, origin: 'items/*/inspections', itemKey: ik, path: d.ref.path }, data)); }
+              });
+              apply();
+            });
+          } catch {}
+        } else {
+          window.addEventListener('auth:changed', (e)=>{ if (e && e.detail && e.detail.user) start(); });
+        }
+      }
+      start();
+    })();
+  </script>
+</body>
+</html>

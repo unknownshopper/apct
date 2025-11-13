@@ -62,6 +62,54 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const getRole = (email) => (email && USERS[email] ? USERS[email].role : null);
 
+  async function getAuthRoleClaim(){
+    try{
+      if (!window.firebase || !window.auth || !window.auth.currentUser) return null;
+      const res = await window.auth.currentUser.getIdTokenResult();
+      return res?.claims?.role || null;
+    }catch{return null}
+  }
+
+  async function getEffectiveRole(email){
+    const claim = await getAuthRoleClaim();
+    if (claim) return claim;
+    return getRole(email);
+  }
+
+  async function enforceInspectorRedirect(){
+    const email = getCurrentEmail();
+    const role = await getEffectiveRole(email);
+    const isLogin = !!document.getElementById('login-form');
+    const onInspection = /inspeccion\.html$/i.test(location.pathname);
+    if (role === 'inspector' && !onInspection && !isLogin){
+      location.href = 'inspeccion.html';
+    }
+  }
+
+  async function applyNavVisibility(){
+    const email = getCurrentEmail();
+    const role = await getEffectiveRole(email);
+    const nav = document.getElementById('primary-nav');
+    const onInspection = /inspeccion\.html$/i.test(location.pathname);
+    if (!nav) return;
+    // Mostrar nav siempre para conservar estilo
+    nav.style.display = '';
+    // Para inspector en inspeccion.html, ocultar opciones que no sean Inspección
+    const links = nav.querySelectorAll('a');
+    links.forEach(a => {
+      const href = String(a.getAttribute('href')||'');
+      const isInspeccion = /inspeccion\.html$/i.test(href);
+      if (role === 'inspector' && onInspection){
+        a.style.display = isInspeccion ? '' : 'none';
+      } else {
+        a.style.display = '';
+      }
+    });
+  }
+
+  // Header permanece visible siempre para mantener estilo
+  async function applyHeaderVisibility(){ return; }
+
   const userEmailEl = document.getElementById('user-email');
   const loginLinkEl = document.getElementById('login-link');
   const logoutBtnEl = document.getElementById('logout-btn');
@@ -182,17 +230,23 @@ document.addEventListener('DOMContentLoaded', () => {
   // Initialize from Firebase Auth state
   function bindAuthState() {
     if (window.auth && window.auth.onAuthStateChanged) {
-      window.auth.onAuthStateChanged((user) => {
+      window.auth.onAuthStateChanged(async (user) => {
         setCurrentEmail(user?.email || null);
         refreshUserBox();
         applyIndexPermissions();
         applyInspectionGuard();
+        await enforceInspectorRedirect();
+        await applyNavVisibility();
+        await applyHeaderVisibility();
       });
     } else {
       // Fallback (no Firebase): keep prior local state
       refreshUserBox();
       applyIndexPermissions();
       applyInspectionGuard();
+      enforceInspectorRedirect();
+      applyNavVisibility();
+      applyHeaderVisibility();
     }
   }
   bindAuthState();

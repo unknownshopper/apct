@@ -3,20 +3,27 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Inspección - PCT</title>
+  <title>Inspección Primaria</title>
   <link rel="stylesheet" href="styles.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+  <link rel="icon" href="data:,">
+  <meta name="color-scheme" content="light">
+  <meta name="theme-color" content="#ffffff">
 </head>
-<body>
+<body data-page="inspeccion">
   <header>
-    <div class="logo"><img src="img/logopctch.png" alt="Logo"></div>
+    <div class="logo"><img src="img/logopctch.png" alt="Logo" /></div>
     <button class="menu-toggle" aria-label="Abrir menú" aria-controls="primary-nav" aria-expanded="false">☰</button>
     <nav id="primary-nav">
-      <ul>
+      <!-- <ul>
         <li><a href="index.html">Dashboard</a></li>
-        <li><a href="inventario.html">Inventario</a></li>
-        <li><a href="reportes.html">Reportes</a></li>
+        <li><a href="pruebas.html">Pruebas</a></li>
+        <li><a href="tareas.html">Tareas</a></li>
         <li><a class="active" href="inspeccion.html">Inspección</a></li>
-      </ul>
+        <li><a href="reportes.html">Reportes</a></li>
+      </ul> -->
     </nav>
     <div class="user-box">
       <span id="user-email"></span>
@@ -24,37 +31,1193 @@
       <button id="logout-btn" type="button" style="display:none">Salir</button>
     </div>
   </header>
-
   <main>
-    <h1>Nueva Inspección</h1>
-    <p id="inspection-guard" style="display:none"></p>
-    <form id="inspection-form">
-      <label>
-        Título
-        <input type="text" id="insp-title" required>
-      </label>
-      <label>
-        Fecha
-        <input type="date" id="insp-date" required>
-      </label>
-      <label>
-        Descripción
-        <textarea id="insp-notes" rows="4"></textarea>
-      </label>
-      <button type="submit">Crear inspección</button>
-    </form>
-    <div id="inspection-result"></div>
+    <h1>Inspección de Equipo</h1>
+    <div class="page-logo"><img src="img/logopctch.png" alt="PCT"></div>
+    <p class="accent-left">Tabla resumen de inspección primaria para Codo y Tubería.</p>
+
+    <div class="meta"></div>
+
+    <div class="meta">
+      <div>
+        <div class="label">Usuario</div>
+        <div class="value"><span id="userInfo">No autenticado</span></div>
+      </div>
+      <div>
+        <div class="label">Cliente</div>
+        <div class="value" id="clienteGroup" style="display:inline-flex; gap:12px; align-items:center; flex-wrap:wrap">
+          <label class="pill" style="cursor:pointer; user-select:none;">
+            <input id="clienteInterno" name="clienteTipo" type="radio" style="margin:0" checked> Interno
+          </label>
+          <label class="pill" style="cursor:pointer; user-select:none;">
+            <input id="clienteExterno" name="clienteTipo" type="radio" style="margin:0"> Externo
+          </label>
+        </div>
+      </div>
+      <div>
+        <div class="label">Lugar</div>
+        <div class="value"><input id="lugarInput" class="input" type="text" style="width: 280px;" value="Base de Operaciones PCT" /></div>
+      </div>
+      <div>
+        <div class="label">Fecha / Hora</div>
+        <div class="value"><span id="fechaHoy">—</span></div>
+      </div>
+      <div>
+        <div class="label">Tipo de Inspección</div>
+        <div class="value" id="tipoInspeccionGroup" style="display:inline-flex; gap:12px; align-items:center; flex-wrap:wrap">
+          <label class="pill" style="cursor:pointer; user-select:none;">
+            <input id="tipoPre" name="tipoInspeccion" type="radio" style="margin:0"> Pre-Trabajo
+          </label>
+          <label class="pill" style="cursor:pointer; user-select:none;">
+            <input id="tipoPost" name="tipoInspeccion" type="radio" style="margin:0"> Post-trabajo
+          </label>
+          <label class="pill" style="cursor:pointer; user-select:none;">
+            <input id="tipoRecep" name="tipoInspeccion" type="radio" style="margin:0"> Recepción
+          </label>
+        </div>
+      </div>
+    </div>
+
+    <div class="table-wrap">
+      <table class="inspection">
+        <colgroup>
+          <col style="width:56px">
+          <col>
+        </colgroup>
+        <thead>
+          <tr>
+            <th class="num">#</th>
+            <th class="param">Parámetro</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="num">1</td>
+            <td class="param">Equipo/Activo <span class="badge-sep"></span>
+              <span class="pill"><input id="equipNumberInput" class="input" type="text" inputmode="numeric" pattern="[0-9]*" placeholder="Ingrese Equipo/Activo" style="width: 180px;" aria-label="Equipo/Activo" list="equipNumberList"></span>
+              <datalist id="equipNumberList"></datalist>
+              <span class="badge-sep"></span>
+              <label class="pill" style="cursor:pointer; user-select:none;">
+                <input id="equipAutoCheckbox" type="checkbox" style="margin:0"> Generar automáticamente
+              </label>
+              <span class="badge-sep"></span>
+              <label class="pill" aria-label="Producto detectado">Producto: <span id="productDisplay" style="font-weight:600; margin-left:6px">—</span></label>
+            </td>
+          </tr>
+          <tr>
+            <td class="num">2</td>
+            <td class="param">Diámetro <span class="badge-sep"></span>
+              <span class="pill"><input id="diametroInput" class="input" type="number" inputmode="decimal" step="0.1" min="0" placeholder="0.0" style="width: 90px;" aria-label="Diámetro en pulgadas"> <span class="unit">in</span></span>
+            </td>
+          </tr>
+          <tr>
+            <td class="num">3</td>
+            <td class="param">Conexión <span class="badge-sep"></span><span class="badge" id="conexionBadge">Pendiente</span></td>
+          </tr>
+          <tr>
+            <td class="num">4</td>
+            <td class="param">Longitud <span class="badge-sep"></span>
+              <span class="pill"><input id="longitudInput" class="input" type="number" inputmode="decimal" step="0.1" min="0" placeholder="0.0" style="width: 90px;" aria-label="Longitud"> <span class="unit" id="longitudUnit">ft</span></span>
+            </td>
+          </tr>
+          <tr>
+            <td class="num">5</td>
+            <td class="param">Serial <span class="badge-sep"></span><span class="badge">Visible</span> / <span class="badge">No Visible</span></td>
+          </tr>
+          <tr>
+            <td class="num">6</td>
+            <td class="param">Fleje #1 (No. Equipo) <span class="badge-sep"></span><span class="badge">Legible</span> <span class="badge">No legible</span> <span class="badge">Sin Fleje</span> <span class="badge">No Aplica</span></td>
+          </tr>
+          <tr>
+            <td class="num">7</td>
+            <td class="param">Fleje #2 (Reporte de Inspección) <span class="badge-sep"></span><span class="badge">Legible</span> <span class="badge">No legible</span> <span class="badge">Sin Fleje</span> <span class="badge">No Aplica</span></td>
+          </tr>
+          
+          <tr>
+            <td class="num">8</td>
+            <td class="param">Recubrimiento <span class="badge-sep"></span><span class="badge">Bueno</span> <span class="badge">Malo</span>
+              <div class="detail-box subopt-detail" data-subfor="8" style="display:none">
+                <span class="sub">Especificar:</span>
+                <span class="badge-row">
+                  <span class="badge subopt" data-val="Sin Elastómero">Sin Elastómero</span>
+                  <span class="badge subopt" data-val="Deformado">Deformado</span>
+                  <span class="badge subopt" data-val="Cortado">Cortado</span>
+                  <span class="badge subopt" data-val="Reseco">Reseco</span>
+                  <span class="badge subopt" data-val="Degradado">Degradado</span>
+                  <span class="badge subopt" data-val="Otro">Otro</span>
+                </span>
+                <div class="other-wrap" style="margin-top:8px; display:none">
+                  <input class="input subopt-other" type="text" placeholder="Especifique 'Otro'" style="width: 320px;">
+                </div>
+              </div>
+            </td>
+          </tr>
+          <tr>
+            <td class="num">9</td>
+            <td class="param">Rosca / Hembra <span class="badge-sep"></span><span class="badge">Bueno</span> <span class="badge">Malo</span>
+              <div class="detail-box subopt-detail" data-subfor="9" style="display:none">
+                <span class="sub">Especificar:</span>
+                <span class="badge-row">
+                  <span class="badge subopt" data-val="Golpe">Golpe</span>
+                  <span class="badge subopt" data-val="Deformación">Deformación</span>
+                  <span class="badge subopt" data-val="Abrasión">Abrasión</span>
+                  <span class="badge subopt" data-val="Lavadura">Lavadura</span>
+                  <span class="badge subopt" data-val="Otro">Otro</span>
+                </span>
+                <div class="other-wrap" style="margin-top:8px; display:none">
+                  <input class="input subopt-other" type="text" placeholder="Especifique 'Otro'" style="width: 320px;">
+                </div>
+              </div>
+            </td>
+          </tr>
+          <tr>
+            <td class="num">10</td>
+            <td class="param">Área de Sellado <span class="badge-sep"></span><span class="badge">Bueno</span> <span class="badge">Malo</span> <span class="badge">No Aplica</span>
+              <div class="detail-box subopt-detail" data-subfor="10" style="display:none">
+                <span class="sub">Especificar:</span>
+                <span class="badge-row">
+                  <span class="badge subopt" data-val="Golpe">Golpe</span>
+                  <span class="badge subopt" data-val="Deformación">Deformación</span>
+                  <span class="badge subopt" data-val="Abrasión">Abrasión</span>
+                  <span class="badge subopt" data-val="Lavadura">Lavadura</span>
+                  <span class="badge subopt" data-val="Otro">Otro</span>
+                </span>
+                <div class="other-wrap" style="margin-top:8px; display:none">
+                  <input class="input subopt-other" type="text" placeholder="Especifique 'Otro'" style="width: 320px;">
+                </div>
+              </div>
+            </td>
+          </tr>
+          <tr>
+            <td class="num">11</td>
+            <td class="param">Estado del Elastómero <span class="badge-sep"></span>
+              <span class="badge-row" data-elasto="11">
+                <span class="badge elasto-main" data-val="Bueno">Bueno</span>
+                <span class="badge elasto-main" data-val="Malo">Malo</span>
+                <span class="badge elasto-main" data-val="No Aplica">No Aplica</span>
+              </span>
+              <div class="detail-box" id="elasto-detail-11" style="display:none">
+                <span class="sub">Especificar:</span>
+                <span class="badge-row">
+                  <span class="badge elasto-sub" data-val="Sin Elastómero">Sin Elastómero</span>
+                  <span class="badge elasto-sub" data-val="Deformado">Deformado</span>
+                  <span class="badge elasto-sub" data-val="Cortado">Cortado</span>
+                  <span class="badge elasto-sub" data-val="Reseco">Reseco</span>
+                  <span class="badge elasto-sub" data-val="Degradado">Degradado</span>
+                  <span class="badge elasto-sub" data-val="Hinchado">Hinchado</span>
+                </span>
+              </div>
+            </td>
+          </tr>
+          <tr>
+            <td class="num">12</td>
+            <td class="param">Cuerpo <span class="badge-sep"></span><span class="badge">Bueno</span> <span class="badge">Malo</span>
+              <div class="detail-box subopt-detail" data-subfor="12" style="display:none">
+                <span class="sub">Especificar:</span>
+                <span class="badge-row">
+                  <span class="badge subopt" data-val="Golpe">Golpe</span>
+                  <span class="badge subopt" data-val="Deformación">Deformación</span>
+                  <span class="badge subopt" data-val="Abrasión">Abrasión</span>
+                  <span class="badge subopt" data-val="Lavadura">Lavadura</span>
+                  <span class="badge subopt" data-val="Otro">Otro</span>
+                </span>
+                <div class="other-wrap" style="margin-top:8px; display:none">
+                  <input class="input subopt-other" type="text" placeholder="Especifique 'Otro'" style="width: 320px;">
+                </div>
+              </div>
+            </td>
+          </tr>
+          <tr>
+            <td class="num">13</td>
+            <td class="param">Retenedor <span class="badge-sep"></span><span class="badge">Bueno</span> <span class="badge">Malo</span> <span class="badge">No Aplica</span>
+              <div class="detail-box subopt-detail" data-subfor="13" style="display:none">
+                <span class="sub">Especificar:</span>
+                <span class="badge-row">
+                  <span class="badge subopt" data-val="Golpe">Golpe</span>
+                  <span class="badge subopt" data-val="Deformación">Deformación</span>
+                  <span class="badge subopt" data-val="Abrasión">Abrasión</span>
+                  <span class="badge subopt" data-val="Lavadura">Lavadura</span>
+                  <span class="badge subopt" data-val="Otro">Otro</span>
+                </span>
+                <div class="other-wrap" style="margin-top:8px; display:none">
+                  <input class="input subopt-other" type="text" placeholder="Especifique 'Otro'" style="width: 320px;">
+                </div>
+              </div>
+            </td>
+          </tr>
+          <tr>
+            <td class="num">14</td>
+            <td class="param">Insertos <span class="badge-sep"></span><span class="badge">Bueno</span> <span class="badge">Malo</span> <span class="badge">No Aplica</span>
+              <div class="detail-box subopt-detail" data-subfor="14" style="display:none">
+                <span class="sub">Especificar:</span>
+                <span class="badge-row">
+                  <span class="badge subopt" data-val="Golpe">Golpe</span>
+                  <span class="badge subopt" data-val="Deformación">Deformación</span>
+                  <span class="badge subopt" data-val="Abrasión">Abrasión</span>
+                  <span class="badge subopt" data-val="Lavadura">Lavadura</span>
+                  <span class="badge subopt" data-val="Otro">Otro</span>
+                </span>
+                <div class="other-wrap" style="margin-top:8px; display:none">
+                  <input class="input subopt-other" type="text" placeholder="Especifique 'Otro'" style="width: 320px;">
+                </div>
+              </div>
+            </td>
+          </tr>
+          <tr>
+            <td class="num">15</td>
+            <td class="param">Mariposa <span class="badge-sep"></span><span class="badge">Bueno</span> <span class="badge">Malo</span>
+              <div class="detail-box subopt-detail" data-subfor="15" style="display:none">
+                <span class="sub">Especificar:</span>
+                <span class="badge-row">
+                  <span class="badge subopt" data-val="Golpe">Golpe</span>
+                  <span class="badge subopt" data-val="Deformación">Deformación</span>
+                  <span class="badge subopt" data-val="Abrasión">Abrasión</span>
+                  <span class="badge subopt" data-val="Lavadura">Lavadura</span>
+                  <span class="badge subopt" data-val="Otro">Otro</span>
+                </span>
+                <div class="other-wrap" style="margin-top:8px; display:none">
+                  <input class="input subopt-other" type="text" placeholder="Especifique 'Otro'" style="width: 320px;">
+                </div>
+              </div>
+            </td>
+          </tr>
+          <tr>
+            <td class="num">16</td>
+            <td class="param">Piñón <span class="badge-sep"></span><span class="badge">Bueno</span> <span class="badge">Malo</span>
+              <div class="detail-box subopt-detail" data-subfor="16" style="display:none">
+                <span class="sub">Especificar:</span>
+                <span class="badge-row">
+                  <span class="badge subopt" data-val="Golpe">Golpe</span>
+                  <span class="badge subopt" data-val="Deformación">Deformación</span>
+                  <span class="badge subopt" data-val="Abrasión">Abrasión</span>
+                  <span class="badge subopt" data-val="Lavadura">Lavadura</span>
+                  <span class="badge subopt" data-val="Otro">Otro</span>
+                </span>
+                <div class="other-wrap" style="margin-top:8px; display:none">
+                  <input class="input subopt-other" type="text" placeholder="Especifique 'Otro'" style="width: 320px;">
+                </div>
+              </div>
+            </td>
+          </tr>
+          <tr>
+            <td class="num">17</td>
+            <td class="param">Área de Sellado <span class="badge-sep"></span><span class="badge">Bueno</span> <span class="badge">Malo</span> <span class="badge">No Aplica</span>
+              <div class="detail-box subopt-detail" data-subfor="17" style="display:none">
+                <span class="sub">Especificar:</span>
+                <span class="badge-row">
+                  <span class="badge subopt" data-val="Golpe">Golpe</span>
+                  <span class="badge subopt" data-val="Deformación">Deformación</span>
+                  <span class="badge subopt" data-val="Abrasión">Abrasión</span>
+                  <span class="badge subopt" data-val="Lavadura">Lavadura</span>
+                  <span class="badge subopt" data-val="Otro">Otro</span>
+                </span>
+                <div class="other-wrap" style="margin-top:8px; display:none">
+                  <input class="input subopt-other" type="text" placeholder="Especifique 'Otro'" style="width: 320px;">
+                </div>
+              </div>
+            </td>
+          </tr>
+          <tr>
+            <td class="num">18</td>
+            <td class="param">Estado del Elastómero <span class="badge-sep"></span>
+              <span class="badge-row" data-elasto="18">
+                <span class="badge elasto-main" data-val="Bueno">Bueno</span>
+                <span class="badge elasto-main" data-val="Malo">Malo</span>
+                <span class="badge elasto-main" data-val="No Aplica">No Aplica</span>
+              </span>
+              <div class="detail-box" id="elasto-detail-18" style="display:none">
+                <span class="sub">Especificar:</span>
+                <span class="badge-row">
+                  <span class="badge elasto-sub" data-val="Sin Elastómero">Sin Elastómero</span>
+                  <span class="badge elasto-sub" data-val="Deformado">Deformado</span>
+                  <span class="badge elasto-sub" data-val="Cortado">Cortado</span>
+                  <span class="badge elasto-sub" data-val="Reseco">Reseco</span>
+                  <span class="badge elasto-sub" data-val="Degradado">Degradado</span>
+                  <span class="badge elasto-sub" data-val="Otro">Otro</span>
+                </span>
+                <div class="other-wrap" style="margin-top:8px; display:none">
+                  <input class="input elasto-other" type="text" placeholder="Especifique 'Otro'" style="width: 320px;">
+                </div>
+              </div>
+            </td>
+          </tr>
+          <tr>
+            <td class="num">19</td>
+            <td class="param">Evaluación <span class="badge-sep"></span><span class="badge" id="evalOper">Operativo</span> <span class="badge" id="evalNoOper">No operativo</span></td>
+          </tr>
+          <tr>
+            <td class="num">20</td>
+            <td class="param">Fecha de Inspección <span class="badge-sep"></span><span class="badge" id="fechaValue">FECHA</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <section id="observacionesSection" style="display:none; margin-top:16px;">
+      <h2>Observaciones</h2>
+      <ul id="observacionesList"></ul>
+    </section>
+
+    <section>
+      <h2>Trabajo por Realizar</h2>
+      <ul>
+        <li>Inspección</li>
+        <li>Mantenimiento Preventivo</li>
+        <li>Reparación de Equipo</li>
+        <li>Limpieza</li>
+        <li>Otro</li>
+      </ul>
+    </section>
+    <div class="actions">
+      <button id="saveBtn" class="btn-primary" type="button">Guardar</button>
+    </div>
+    <div id="toast" style="position:fixed; left:50%; bottom:24px; transform:translateX(-50%); background:#16a34a; color:#fff; padding:10px 16px; border-radius:8px; box-shadow:0 2px 8px rgba(0,0,0,.2); display:none; z-index:9999;">Guardado exitosamente</div>
   </main>
-
-  <footer></footer>
-
-  <!-- Firebase SDKs (compat) -->
+  <footer> <a href="https://unknownshoppers.com" target="_blank" rel="noopener noreferrer">Powered by <img src="img/logotus.jpg" alt="Unknown Shoppers" style="height:18px; vertical-align:middle"></a></footer>
   <script src="https://www.gstatic.com/firebasejs/9.6.11/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.6.11/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.6.11/firebase-firestore-compat.js"></script>
-  <!-- Your Firebase config: create firebase-config.js from firebase-config.sample.js -->
   <script src="firebase-config.js"></script>
   <script src="firebase-init.js"></script>
   <script src="script.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+  <script>
+    (function(){
+      const INGRAL_SRC = 'docs/INVENTARIO GENERAL PCT 2025 NOV.csv';
+      const INGRAL_SRC2 = 'docs/INVENTARIO GENERAL PCT 2025 NOV2.csv';
+      let ingrIndex = null; // Map por equipo/activo
+
+      function setupElastomero(id){
+        const container = document.querySelector(`.badge-row[data-elasto="${id}"]`);
+        const detail = document.getElementById(`elasto-detail-${id}`);
+        if (!container || !detail) return;
+        container.addEventListener('click', (e) => {
+          const btn = e.target.closest('.elasto-main');
+          if (!btn) return;
+          container.querySelectorAll('.elasto-main').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          if ((btn.dataset.val || '').toLowerCase() === 'malo'){
+            detail.style.display = 'block';
+          } else {
+            detail.style.display = 'none';
+            detail.querySelectorAll('.elasto-sub').forEach(s => s.classList.remove('active'));
+            const other = detail.querySelector('.elasto-other');
+            if (other){ other.value = ''; const wrap = detail.querySelector('.other-wrap'); if (wrap) wrap.style.display='none'; }
+          }
+
+      function showToast(msg){
+        const el = document.getElementById('toast');
+        if (!el) return;
+        el.textContent = msg || 'Guardado exitosamente';
+        el.style.display = 'block';
+        clearTimeout(showToast._t);
+        showToast._t = setTimeout(()=>{ el.style.display = 'none'; }, 2000);
+      }
+
+      function resetForm(){
+        // Limpiar entradas principales
+        const equip = document.getElementById('equipNumberInput'); if (equip) equip.value = '';
+        const diam = document.getElementById('diametroInput'); if (diam) diam.value = '';
+        const lon = document.getElementById('longitudInput'); if (lon){ lon.value = ''; lon.disabled = false; lon.readOnly = false; }
+        const lonUnit = document.getElementById('longitudUnit'); if (lonUnit) lonUnit.textContent = 'ft';
+        const fig = document.getElementById('conexionBadge'); if (fig) fig.textContent = 'Pendiente';
+        const serialSpan = document.getElementById('serialValue'); if (serialSpan) serialSpan.textContent = '';
+        const lugar = document.getElementById('lugarInput'); if (lugar) lugar.value = 'Base de Operaciones PCT';
+        // Reset de badges a valores por defecto
+        applyDefaultSelections();
+        // Ocultar observaciones
+        renderObservaciones([]);
+      }
+
+        });
+        // Subopciones elastómero y manejo de 'Otro'
+        detail.addEventListener('click', (e)=>{
+          const sub = e.target.closest('.elasto-sub');
+          if (!sub) return;
+          detail.querySelectorAll('.elasto-sub').forEach(s=>s.classList.remove('active'));
+          sub.classList.add('active');
+          const wrap = detail.querySelector('.other-wrap');
+          if (wrap){
+            if ((sub.dataset.val||'').toLowerCase()==='otro'){
+              wrap.style.display = 'block';
+            } else {
+              const input = detail.querySelector('.elasto-other');
+              if (input) input.value='';
+              wrap.style.display = 'none';
+            }
+          }
+        });
+      }
+
+      function findRowParamEl(regex){
+        const rows = document.querySelectorAll('table.inspection tbody tr td.param');
+        for (const td of rows){ if (regex.test(td.textContent || '')) return td; }
+        return null;
+      }
+
+      function selectBadgeIn(td, text){
+        if (!td) return;
+        const badges = td.querySelectorAll('.badge');
+        badges.forEach(b => b.classList.remove('active'));
+        for (const b of badges){
+          if (String(b.textContent||'').trim().toLowerCase() === String(text).toLowerCase()){
+            b.classList.add('active');
+            break;
+          }
+        }
+      }
+
+      function applyDefaultSelections(){
+        // 5 Serial -> Visible
+        selectBadgeIn(findRowParamEl(/^\s*Serial\b/i), 'Visible');
+        // 6 Fleje #1 -> Legible
+        selectBadgeIn(findRowParamEl(/Fleje\s*#1/i), 'Legible');
+        // 7 Fleje #2 -> Legible
+        selectBadgeIn(findRowParamEl(/Fleje\s*#2/i), 'Legible');
+        // 8 Recubrimiento -> Bueno
+        selectBadgeIn(findRowParamEl(/^\s*Recubrimiento\b/i), 'Bueno');
+        // 9 Rosca / Hembra -> Bueno
+        selectBadgeIn(findRowParamEl(/Rosca\s*\/\s*Hembra/i), 'Bueno');
+        // 10 Área de Sellado -> Bueno
+        selectBadgeIn(findRowParamEl(/^\s*Área de Sellado\b/i), 'Bueno');
+        // 11 Elastómero -> Bueno (usa grupo especial)
+        const el11 = document.querySelector('.badge-row[data-elasto="11"]');
+        if (el11){
+          el11.querySelectorAll('.elasto-main').forEach(b=>b.classList.remove('active'));
+          const good = el11.querySelector('.elasto-main[data-val="Bueno"]');
+          if (good) good.classList.add('active');
+          const detail = document.getElementById('elasto-detail-11');
+          if (detail) { detail.style.display = 'none'; detail.querySelectorAll('.elasto-sub').forEach(s=>s.classList.remove('active')); }
+        }
+        // 12 Cuerpo -> Bueno
+        selectBadgeIn(findRowParamEl(/^\s*Cuerpo\b/i), 'Bueno');
+        // 13 Retenedor -> Bueno
+        selectBadgeIn(findRowParamEl(/^\s*Retenedor\b/i), 'Bueno');
+        // 14 Insertos -> Bueno
+        selectBadgeIn(findRowParamEl(/^\s*Insertos\b/i), 'Bueno');
+        // 15 Mariposa -> Bueno
+        selectBadgeIn(findRowParamEl(/^\s*Mariposa\b/i), 'Bueno');
+        // 16 Piñón -> Bueno
+        selectBadgeIn(findRowParamEl(/^\s*Piñón\b/i), 'Bueno');
+        // 17 Área de Sellado -> Bueno
+        (function(){
+          const tds = Array.from(document.querySelectorAll('table.inspection tbody tr td.param'))
+            .filter(td => /^\s*Área de Sellado\b/i.test(td.textContent||''));
+          if (tds[1]) selectBadgeIn(tds[1], 'Bueno');
+        })();
+        // 18 Elastómero -> Bueno
+        const el18 = document.querySelector('.badge-row[data-elasto="18"]');
+        if (el18){
+          el18.querySelectorAll('.elasto-main').forEach(b=>b.classList.remove('active'));
+          const good = el18.querySelector('.elasto-main[data-val="Bueno"]');
+          if (good) good.classList.add('active');
+          const detail = document.getElementById('elasto-detail-18');
+          if (detail) { detail.style.display = 'none'; detail.querySelectorAll('.elasto-sub').forEach(s=>s.classList.remove('active')); }
+        }
+        // Limpiar subopciones y ocultarlas en todas las filas con subopciones
+        document.querySelectorAll('.subopt-detail').forEach(box=>{
+          box.style.display = 'none';
+          box.querySelectorAll('.subopt').forEach(s=>s.classList.remove('active'));
+          const ow = box.querySelector('.other-wrap');
+          const oi = box.querySelector('.subopt-other');
+          if (ow) ow.style.display = 'none';
+          if (oi) oi.value = '';
+        });
+      }
+
+      function initGenericBadgeToggles(){
+        const table = document.querySelector('table.inspection');
+        if (!table) return;
+        table.addEventListener('click', (e)=>{
+          const badge = e.target.closest('.badge');
+          if (!badge) return;
+          // Elastómero tiene su propio manejador, lo dejamos aparte
+          if (badge.classList.contains('elasto-main') || badge.classList.contains('elasto-sub')) return;
+          // Subopciones propias (Golpe, Deformación, etc.)
+          if (badge.classList.contains('subopt')){
+            const row = badge.closest('.subopt-detail');
+            if (row){
+              row.querySelectorAll('.subopt').forEach(b=>b.classList.remove('active'));
+              badge.classList.add('active');
+              const wrap = row.querySelector('.other-wrap');
+              if (wrap){
+                if ((badge.dataset.val||'').toLowerCase()==='otro'){
+                  wrap.style.display = 'block';
+                } else {
+                  const input = row.querySelector('.subopt-other');
+                  if (input) input.value='';
+                  wrap.style.display = 'none';
+                }
+              }
+              updateEvaluation();
+            }
+            return;
+          }
+          const td = badge.closest('td');
+          if (!td) return;
+          td.querySelectorAll('.badge').forEach(b=>b.classList.remove('active'));
+          badge.classList.add('active');
+          // Mostrar/ocultar subopciones si aplica cuando el valor es Malo
+          const tr = badge.closest('tr');
+          const rowNum = parseInt(tr?.querySelector('.num')?.textContent||'0', 10);
+          const isMalo = /\bMalo\b/i.test(String(badge.textContent||''));
+          const subBox = td.querySelector(`.subopt-detail[data-subfor="${rowNum}"]`);
+          if (subBox){
+            if (isMalo){
+              subBox.style.display = 'block';
+            } else {
+              subBox.style.display = 'none';
+              subBox.querySelectorAll('.subopt').forEach(s=>s.classList.remove('active'));
+              const wrap = subBox.querySelector('.other-wrap');
+              const input = subBox.querySelector('.subopt-other');
+              if (wrap) wrap.style.display = 'none';
+              if (input) input.value = '';
+            }
+          }
+          updateEvaluation();
+        });
+        // Recalcular al cambiar elastómero también
+        document.querySelectorAll('.badge-row[data-elasto] .elasto-main').forEach(b=>{
+          b.addEventListener('click', ()=>{ setTimeout(updateEvaluation, 0); });
+        });
+      }
+
+      function updateEvaluation(){
+        const table = document.querySelector('table.inspection');
+        if (!table) return;
+        // Buscar si hay algún "Malo" activo entre filas 5-18
+        let hasMalo = false;
+        table.querySelectorAll('tbody tr').forEach((tr, idx)=>{
+          const rowNum = parseInt(tr.querySelector('.num')?.textContent||'0', 10);
+          if (rowNum >= 5 && rowNum <= 18){
+            const td = tr.querySelector('td.param');
+            const mainActive = td?.querySelector('.badge.active:not(.subopt)');
+            if (mainActive && /\bMalo\b/i.test(mainActive.textContent||'')){
+              hasMalo = true;
+            }
+          }
+        });
+        const oper = document.getElementById('evalOper');
+        const noOper = document.getElementById('evalNoOper');
+        if (oper && noOper){
+          oper.classList.toggle('active', !hasMalo);
+          noOper.classList.toggle('active', hasMalo);
+        }
+        refreshObservaciones();
+      }
+
+      function validateMaloSpecs(){
+        const table = document.querySelector('table.inspection');
+        if (!table) return { ok:true, messages:[] };
+        const errors = [];
+        let firstEl = null;
+        table.querySelectorAll('.subopt-detail').forEach(box=>{ box.style.outline = ''; });
+        const rows = table.querySelectorAll('tbody tr');
+        rows.forEach(tr=>{
+          const num = parseInt(tr.querySelector('.num')?.textContent||'0', 10);
+          const td = tr.querySelector('td.param');
+          if (!td) return;
+          let malo = false;
+          const mainActive = td.querySelector('.badge.active:not(.subopt)');
+          if (mainActive && /\bMalo\b/i.test(mainActive.textContent||'')) malo = true;
+          if (!malo) return;
+          if (num === 11){
+            const d = document.getElementById('elasto-detail-11');
+            const pick = d && d.querySelector('.elasto-sub.active');
+            if (!pick){
+              errors.push('Elastómero (11) requiere especificación');
+              if (d){ d.style.display = 'block'; d.style.outline = '2px solid #e11d48'; if (!firstEl) firstEl = d; }
+            }
+            return;
+          }
+          if (num === 18){
+            const d = document.getElementById('elasto-detail-18');
+            const pick = d && d.querySelector('.elasto-sub.active');
+            if (!pick){
+              errors.push('Estado del Elastómero (18) requiere especificación');
+              if (d){ d.style.display = 'block'; d.style.outline = '2px solid #e11d48'; if (!firstEl) firstEl = d; }
+            } else {
+              const val = (pick.dataset.val||'').toLowerCase();
+              if (val === 'otro'){
+                const inp = d.querySelector('.elasto-other');
+                if (!inp || !String(inp.value||'').trim()){
+                  errors.push('Estado del Elastómero (18) requiere texto para "Otro"');
+                  if (d){ d.style.display = 'block'; d.style.outline = '2px solid #e11d48'; if (!firstEl) firstEl = inp || d; }
+                }
+              }
+            }
+            return;
+          }
+          const box = td.querySelector(`.subopt-detail[data-subfor="${num}"]`);
+          if (!box) return;
+          const pick = box.querySelector('.subopt.active');
+          if (!pick){
+            errors.push(`Fila ${num} requiere especificación`);
+            box.style.display = 'block';
+            box.style.outline = '2px solid #e11d48';
+            if (!firstEl) firstEl = box;
+          } else {
+            const val = (pick.dataset.val||'').toLowerCase();
+            if (val === 'otro'){
+              const inp = box.querySelector('.subopt-other');
+              if (!inp || !String(inp.value||'').trim()){
+                errors.push(`Fila ${num} requiere texto para "Otro"`);
+                box.style.display = 'block';
+                box.style.outline = '2px solid #e11d48';
+                if (!firstEl) firstEl = inp || box;
+              }
+            }
+          }
+        });
+        if (firstEl && firstEl.scrollIntoView) firstEl.scrollIntoView({behavior:'smooth', block:'center'});
+        return { ok: errors.length===0, messages: errors };
+      }
+
+      function validateRequiredCore(){
+        const errors = [];
+        let firstEl = null;
+        const tipoGroup = document.getElementById('tipoInspeccionGroup');
+        const tipoChecked = tipoGroup && tipoGroup.querySelector('input[name="tipoInspeccion"]:checked');
+        if (!tipoChecked){
+          errors.push('Seleccione el Tipo de Inspección');
+          if (!firstEl) firstEl = tipoGroup;
+        }
+        const equip = document.getElementById('equipNumberInput');
+        if (!equip || !String(equip.value||'').trim()){
+          errors.push('Ingrese Equipo/Activo');
+          if (equip){ equip.style.outline = '2px solid #e11d48'; setTimeout(()=>{equip.style.outline='';}, 2500); }
+          if (!firstEl) firstEl = equip;
+        }
+        const dia = document.getElementById('diametroInput');
+        const diaVal = parseFloat(String(dia?.value||'').replace(',','.'));
+        if (!dia || Number.isNaN(diaVal) || diaVal <= 0){
+          errors.push('Ingrese Diámetro válido (> 0)');
+          if (dia){ dia.style.outline = '2px solid #e11d48'; setTimeout(()=>{dia.style.outline='';}, 2500); }
+          if (!firstEl) firstEl = dia;
+        }
+        const conBadge = document.getElementById('conexionBadge');
+        const conText = String(conBadge?.textContent||'').trim();
+        if (!conText || /pendiente/i.test(conText)){
+          errors.push('Conexión pendiente: seleccione/establezca la conexión');
+          if (conBadge){ conBadge.style.outline = '2px solid #e11d48'; setTimeout(()=>{conBadge.style.outline='';}, 2500); }
+          if (!firstEl) firstEl = conBadge;
+        }
+        const lugar = document.getElementById('lugarInput');
+        if (!lugar || !String(lugar.value||'').trim()){
+          errors.push('Ingrese Lugar');
+          if (lugar){ lugar.style.outline = '2px solid #e11d48'; setTimeout(()=>{lugar.style.outline='';}, 2500); }
+          if (!firstEl) firstEl = lugar;
+        }
+        const lon = document.getElementById('longitudInput');
+        const lonUnit = document.getElementById('longitudUnit');
+        const unitTxt = String(lonUnit?.textContent||'').trim();
+        const lonRequired = !(unitTxt && /no aplica/i.test(unitTxt)) && !(lon?.disabled) && !(lon?.readOnly === true);
+        if (lonRequired){
+          const lonVal = parseFloat(String(lon?.value||'').replace(',','.'));
+          if (!lon || Number.isNaN(lonVal) || lonVal <= 0){
+            errors.push('Ingrese Longitud válida (> 0)');
+            if (lon){ lon.style.outline = '2px solid #e11d48'; setTimeout(()=>{lon.style.outline='';}, 2500); }
+            if (!firstEl) firstEl = lon;
+          }
+        }
+        if (firstEl && firstEl.scrollIntoView) firstEl.scrollIntoView({behavior:'smooth', block:'center'});
+        return { ok: errors.length===0, messages: errors };
+      }
+
+      function attachSaveHandler(){
+        const btn = document.getElementById('saveBtn');
+        if (!btn) return;
+        btn.addEventListener('click', async ()=>{
+          const vCore = validateRequiredCore();
+          if (!vCore.ok){
+            alert('Complete los datos obligatorios:\n- ' + vCore.messages.join('\n- '));
+            return;
+          }
+          const v = validateMaloSpecs();
+          if (!v.ok){
+            alert('Faltan especificaciones:\n- ' + v.messages.join('\n- '));
+            return;
+          }
+          // Construir listado de observaciones (todas las filas en "Malo")
+          const obs = collectObservations();
+          renderObservaciones(obs);
+          // Confirmación antes de guardar
+          const proceed = confirm(obs.length ? 'Revisar observaciones listadas. ¿Desea guardar?' : 'Sin observaciones en "Malo". ¿Desea guardar?');
+          if (!proceed) return;
+          const now = new Date();
+          const pad = (n)=> String(n).padStart(2,'0');
+          const stamp = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}`;
+          const badge = document.getElementById('fechaValue');
+          if (badge) badge.textContent = stamp;
+          updateEvaluation();
+          // Geolocalización obligatoria
+          const geo = await getGeoPosition();
+          if (!geo || !geo.coords){
+            alert('No se pudo obtener la ubicación. Active la localización del dispositivo y otorgue permisos para continuar.');
+            return;
+          }
+          (async ()=>{
+            try{
+              await ready();
+              const db = window.db;
+              const equipo = document.getElementById('equipNumberInput')?.value||'';
+              const diametro = document.getElementById('diametroInput')?.value||'';
+              const conexion = document.getElementById('conexionBadge')?.textContent||'';
+              const longitudVal = document.getElementById('longitudInput')?.value||'';
+              const longitudUnit = document.getElementById('longitudUnit')?.textContent||'';
+              const userTxt = document.getElementById('userInfo')?.textContent||'';
+              const clienteSel = (function(){ const g=document.getElementById('clienteGroup'); if(!g) return 'Interno'; const r=g.querySelector('input[name="clienteTipo"]:checked'); const txt=r? (r.parentElement?.textContent||'').trim() : 'Interno'; return txt; })();
+              const lugarTxt = document.getElementById('lugarInput')?.value || '';
+              const evalOper = document.getElementById('evalOper')?.classList.contains('active');
+              const evalNoOper = document.getElementById('evalNoOper')?.classList.contains('active');
+              const tipoSel = (()=>{ const g=document.getElementById('tipoInspeccionGroup'); if(!g) return ''; const r=g.querySelector('input[name="tipoInspeccion"]:checked'); if(!r) return ''; const label=r.parentElement?.textContent||''; return label.trim(); })();
+              const serialTd = findRowParamEl(/^\s*Serial\b/i);
+              const serialVis = serialTd ? !!serialTd.querySelector('.badge.active') && /Visible/i.test(serialTd.querySelector('.badge.active')?.textContent||'') : false;
+              const serialVal = document.getElementById('serialValue')?.textContent||'';
+              const payload = {
+                equipoActivo: equipo,
+                tipo: tipoSel,
+                cliente: clienteSel,
+                lugar: lugarTxt,
+                fecha: stamp,
+                fechaTs: Date.now(),
+                created_at: Date.now(),
+                created_at_text: `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`,
+                usuario: userTxt,
+                meta: {
+                  location: geo && geo.coords ? {
+                    lat: geo.coords.latitude,
+                    lon: geo.coords.longitude,
+                    accuracy: geo.coords.accuracy,
+                    ts: geo.timestamp || Date.now(),
+                    provider: 'html5'
+                  } : null
+                },
+                parametros: {
+                  diametro,
+                  conexion,
+                  longitud: longitudVal,
+                  longitudUnidad: longitudUnit,
+                  serialVisible: serialVis,
+                  serial: serialVal
+                },
+                observaciones: obs,
+                evaluacion: evalNoOper ? 'No operativo' : (evalOper ? 'Operativo' : '')
+              };
+              await db.collection('inspections').add(payload);
+            }catch(e){ console.error(e); }
+          })();
+          showToast('Guardado exitosamente');
+          resetForm();
+        });
+      }
+
+      function getGeoPosition(){
+        return new Promise((resolve)=>{
+          if (!('geolocation' in navigator)) return resolve(null);
+          const opts = { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 };
+          navigator.geolocation.getCurrentPosition(
+            (pos)=> resolve(pos),
+            (err)=> resolve(null),
+            opts
+          );
+        });
+      }
+
+      function collectObservations(){
+        const out = [];
+        const table = document.querySelector('table.inspection');
+        if (!table) return out;
+        const rows = table.querySelectorAll('tbody tr');
+        rows.forEach(tr=>{
+          const num = parseInt(tr.querySelector('.num')?.textContent||'0', 10);
+          if (num < 5 || num > 18) return;
+          const td = tr.querySelector('td.param');
+          if (!td) return;
+          const main = td.querySelector('.badge.active:not(.subopt):not(.elasto-sub)');
+          const isElastoSet = td.querySelector('.badge-row[data-elasto]');
+          const label = getParamLabel(td);
+          if (isElastoSet){
+            // Elastómero 11 o 18
+            const elastoMain = td.querySelector('.badge-row[data-elasto] .elasto-main.active');
+            if (!elastoMain) return;
+            if (!/\bMalo\b/i.test(elastoMain.textContent||'')) return;
+            const detail = td.querySelector('#elasto-detail-11') || td.querySelector('#elasto-detail-18');
+            const pick = detail && detail.querySelector('.elasto-sub.active');
+            if (!pick) return;
+            let val = String(pick.dataset.val||pick.textContent||'').trim();
+            if (/^otro$/i.test(val)){
+              const inp = detail.querySelector('.elasto-other');
+              const extra = String(inp?.value||'').trim();
+              if (extra) val += `: ${extra}`;
+            }
+            out.push(`${num}. ${label}: Malo — ${val}`);
+            return;
+          }
+          if (!main || !/\bMalo\b/i.test(main.textContent||'')) return;
+          const box = td.querySelector(`.subopt-detail[data-subfor="${num}"]`);
+          const pick = box && box.querySelector('.subopt.active');
+          let val = String(pick?.dataset?.val||pick?.textContent||'').trim();
+          if (/^otro$/i.test(val)){
+            const inp = box.querySelector('.subopt-other');
+            const extra = String(inp?.value||'').trim();
+            if (extra) val += `: ${extra}`;
+          }
+          out.push(`${num}. ${label}: Malo — ${val||'Sin especificar'}`);
+        });
+        return out;
+      }
+
+      function getParamLabel(td){
+        try {
+          const parts = [];
+          for (const node of td.childNodes){
+            if (node.nodeType === Node.ELEMENT_NODE){
+              const el = node;
+              if (el.classList.contains('badge-sep')) break;
+            } else if (node.nodeType === Node.TEXT_NODE){
+              parts.push(String(node.textContent||''));
+            }
+          }
+          const s = parts.join(' ').replace(/\s+/g,' ').trim();
+          if (s) return s;
+        } catch {}
+        return String(td.textContent||'').trim();
+      }
+
+      function renderObservaciones(obs){
+        const sec = document.getElementById('observacionesSection');
+        const ul = document.getElementById('observacionesList');
+        if (!sec || !ul) return;
+        ul.innerHTML = '';
+        if (obs.length){
+          sec.style.display = 'block';
+          obs.forEach(t=>{
+            const li = document.createElement('li');
+            li.textContent = t;
+            ul.appendChild(li);
+          });
+          if (sec.scrollIntoView) sec.scrollIntoView({behavior:'smooth', block:'start'});
+        } else {
+          sec.style.display = 'none';
+        }
+      }
+
+      function refreshObservaciones(){
+        const obs = collectObservations();
+        renderObservaciones(obs);
+      }
+
+      async function ready(){
+        const max = 60; for (let i=0;i<max;i++){ if (window.db) return true; await new Promise(r=>setTimeout(r,50)); } return !!window.db;
+      }
+
+      async function fetchEquipos(){
+        await ready();
+        const db = window.db;
+        const set = new Set();
+        try {
+          const snapItems = await db.collection('items').get();
+          snapItems.forEach(d=>{ if (d && d.id) set.add(String(d.id)); const v = d.data && d.data(); if (v && v.equipoActivo) set.add(String(v.equipoActivo)); });
+        } catch {}
+        try {
+          const snapRoot = await db.collection('inspections').limit(500).get();
+          snapRoot.forEach(doc=>{ const m = doc.data && doc.data(); const meta = m && m.meta ? m.meta : m; if (meta && meta.equipoActivo) set.add(String(meta.equipoActivo)); });
+        } catch {}
+        try {
+          const snapSub = await db.collectionGroup('inspections').limit(500).get();
+          snapSub.forEach(doc=>{ let ik=null; try{ ik = doc.ref.parent.parent.id; }catch{} if (ik) set.add(String(ik)); const m = doc.data && doc.data(); const meta = m && m.meta ? m.meta : m; if (meta && meta.equipoActivo) set.add(String(meta.equipoActivo)); });
+        } catch {}
+        return Array.from(set).filter(Boolean).sort();
+      }
+
+      function renderDatalist(list, all){
+        list.innerHTML = '';
+        for (let i=0;i<all.length;i++){
+          const opt = document.createElement('option');
+          opt.value = all[i];
+          list.appendChild(opt);
+          if (i>200) break;
+        }
+      }
+
+      async function initEquipAutocomplete(){
+        const input = document.getElementById('equipNumberInput');
+        const list = document.getElementById('equipNumberList');
+        if (!input || !list) return;
+        const idx = await fetchIngralIndex();
+        const ALL = Array.from(idx.keys());
+        renderDatalist(list, ALL);
+        input.addEventListener('input', () => {
+          const q = String(input.value||'').toLowerCase();
+          if (!q){ renderDatalist(list, ALL); return; }
+          const filtered = ALL.filter(v => v.toLowerCase().includes(q)).slice(0,200);
+          renderDatalist(list, filtered);
+        });
+        input.addEventListener('change', ()=> applyFromEquipo(input.value));
+        input.addEventListener('blur', ()=> applyFromEquipo(input.value));
+      }
+
+      // Inicialización global
+      document.addEventListener('DOMContentLoaded', () => {
+        ['11','18'].forEach(setupElastomero);
+        initGenericBadgeToggles();
+        initEquipAutocomplete();
+        applyDefaultSelections();
+        prefillFromIngral();
+        attachSaveHandler();
+        updateEvaluation();
+        // Fecha visible de hoy (dd/mm/yyyy) en cabecera
+        (function(){
+          function fmt(){ const d=new Date(); const p=n=>String(n).padStart(2,'0'); return `${p(d.getDate())}/${p(d.getMonth()+1)}/${d.getFullYear()}`; }
+          const el = document.getElementById('fechaHoy'); if (el) el.textContent = fmt();
+          setInterval(()=>{ const e=document.getElementById('fechaHoy'); if (e) e.textContent = fmt(); }, 60*1000);
+        })();
+        setTimeout(applyDefaultSelections, 0);
+        setTimeout(updateEvaluation, 10);
+      });
+
+      window.addEventListener('load', () => {
+        applyDefaultSelections();
+        updateEvaluation();
+      });
+
+      function getQueryParams(){
+        const out = {}; const q = window.location.search.slice(1).split('&');
+        for (const part of q){ if (!part) continue; const [k,v] = part.split('='); out[decodeURIComponent(k||'').toLowerCase()] = decodeURIComponent((v||'').replace(/\+/g,' ')); }
+        return out;
+      }
+
+      function setText(el, val){ if (!el) return; el.textContent = String(val==null? '': val); }
+
+      function ensureSerialSpan(){
+        // Busca la fila de "Serial" y añade un span para valor si no existe
+        const rows = document.querySelectorAll('table.inspection tbody tr');
+        for (const tr of rows){
+          const td = tr.querySelector('td.param');
+          if (!td) continue;
+          if (/^\s*Serial\b/i.test(td.textContent || '')){
+            let span = td.querySelector('#serialValue');
+            if (!span){
+              const holder = document.createElement('span');
+              holder.id = 'serialValue';
+              holder.style.marginLeft = '8px';
+              holder.style.fontWeight = '600';
+              holder.style.color = '#111827';
+              td.appendChild(holder);
+            }
+            return td.querySelector('#serialValue');
+          }
+        }
+        return null;
+      }
+
+      function prefillFromIngral(){
+        const params = getQueryParams();
+        const hasAny = ['equipo','diametro','conexion','figura','longitud','serial'].some(k => params[k] && params[k].trim()!=='');
+        const lock = params['lockauto']==='1' || params['lock']==='1';
+
+        let ctx = null;
+        if (hasAny){
+          ctx = {
+            equipo: params.equipo || '',
+            diametro: params.diametro || '',
+            conexion: params.conexion || params.figura || '',
+            longitud: params.longitud || '',
+            serial: params.serial || ''
+          };
+          try { localStorage.setItem('ingral_ctx_v1', JSON.stringify(ctx)); } catch{}
+        } else {
+          try { const raw = localStorage.getItem('ingral_ctx_v1'); if (raw) ctx = JSON.parse(raw); } catch{}
+          if (ctx && ctx.figura && !ctx.conexion){ ctx.conexion = ctx.figura; }
+        }
+
+        if (!ctx) return;
+
+        const equip = document.getElementById('equipNumberInput');
+        const diam = document.getElementById('diametroInput');
+        const fig = document.getElementById('conexionBadge');
+        const lon = document.getElementById('longitudInput');
+        const serialSpan = ensureSerialSpan();
+
+        if (ctx.equipo && equip){ equip.value = ctx.equipo; }
+        if (ctx.diametro && diam){ diam.value = ctx.diametro; }
+        if (ctx.conexion && fig){ setText(fig, ctx.conexion); }
+        if (ctx.longitud && lon){ lon.value = ctx.longitud; }
+        if (ctx.serial && serialSpan){ setText(serialSpan, ctx.serial); }
+
+        if (lock){
+          if (equip) equip.readOnly = true;
+          if (diam) { diam.readOnly = true; diam.disabled = true; }
+          if (lon) { lon.readOnly = true; lon.disabled = true; }
+          // Figura y Serial no tienen input; dejamos solo visual bloqueado
+        }
+      }
+
+      function parseFromDescripcion(desc){
+        const out = {};
+        if (!desc) return out;
+        // Longitud: buscar LONG: <num>
+        let m = String(desc).match(/LONG\s*[:]?\s*([0-9]+(?:\.[0-9]+)?)/i);
+        if (m) out.longitud = m[1];
+        // Conexión (antes figura): por compatibilidad, si hay 45/90 lo asignamos como conexión textual
+        m = String(desc).match(/\b(45|90)\b/);
+        if (m) out.conexion = m[1];
+        // Conexión adicional: patrones como H X M, M X H, M X F, F X M, con 2 o 3 segmentos
+        if (!out.conexion){
+          const m2 = String(desc).match(/\b([HMF])\s*[xX]\s*([HMF])(?:\s*[xX]\s*([HMF]))?\b/);
+          if (m2){
+            out.conexion = [m2[1], m2[2], m2[3]].filter(Boolean).join(' X ').toUpperCase();
+          }
+        }
+        // Diametro: intentar primer número con posible decimal al inicio o antes de palabra FLANGE/206/1502
+        m = String(desc).match(/(^|\s)([0-9]+(?:\.[0-9]+)?)\s*(?=(FLANGE|206|1502|R-\d+|BX-|RX-|\bM\b|\bH\b))/i);
+        if (m) out.diametro = m[2];
+        return out;
+      }
+
+      function normHeaderName(s){
+        return String(s||'')
+          .toLowerCase()
+          .normalize('NFD').replace(/[\u0300-\u036f]/g,'') // remove accents
+          .replace(/\s+/g,'')
+          .replace(/[\/]/g,'');
+      }
+
+      function indexMapForHeaderRow(headerRow){
+        const map = new Map();
+        headerRow.forEach((h,i)=>{ map.set(normHeaderName(h), i); });
+        return map;
+      }
+
+      function pickIndex(hmap, candidates){
+        for (const c of candidates){
+          const idx = hmap.get(normHeaderName(c));
+          if (typeof idx === 'number' && idx >= 0) return idx;
+        }
+        return -1;
+      }
+
+      function buildIngralIndex(csv){
+        const rows = csv.data || [];
+        if (!rows.length) return new Map();
+        const hmap = indexMapForHeaderRow(rows[0]);
+        const idxEquipo = pickIndex(hmap, ['equipo / activo','equipo/activo','equipo activo','equipo']);
+        const idxSerial = pickIndex(hmap, ['serial','no de serie','nserie']);
+        const idxDesc = pickIndex(hmap, ['descripcion','descripción','desc']);
+        const map = new Map();
+        for (let i=1;i<rows.length;i++){
+          const r = rows[i];
+          const equipo = String(r[idxEquipo]||'').trim();
+          if (!equipo) continue;
+          const serial = String(r[idxSerial]||'').trim();
+          const descripcion = r[idxDesc] || '';
+          const parsed = parseFromDescripcion(descripcion);
+          map.set(equipo, { equipo, serial, descripcion, ...parsed });
+        }
+        return map;
+      }
+
+      function buildIngralIndex2(csv){
+        const rows = csv.data || [];
+        if (!rows.length) return new Map();
+        const hmap = indexMapForHeaderRow(rows[0]);
+        const idxEquipo = pickIndex(hmap, ['equipo / activo','equipo/activo','equipo activo','equipo']);
+        const idxConexion1 = pickIndex(hmap, ['conexion1','conexión1','conexion']);
+        const idxSerial = pickIndex(hmap, ['serial','no de serie','nserie']); // opcional
+        const map = new Map();
+        for (let i=1;i<rows.length;i++){
+          const r = rows[i];
+          const equipo = String(r[idxEquipo]||'').trim();
+          if (!equipo) continue;
+          const conexion = String(r[idxConexion1]||'').trim();
+          const serial = idxSerial>=0 ? String(r[idxSerial]||'').trim() : '';
+          map.set(equipo, { equipo, conexion, serial });
+        }
+        return map;
+      }
+
+      function getCsvUrl(src){
+        const ts = Date.now();
+        if (!src) return '';
+        return src + (src.includes('?') ? '&' : '?') + '_ts=' + ts;
+      }
+
+      function fetchIngralIndex(){
+        return new Promise((resolve)=>{
+          if (ingrIndex) return resolve(ingrIndex);
+          let map1 = new Map();
+          let map2 = new Map();
+          let done1 = false, done2 = false;
+          const maybeDone = ()=>{
+            if (!(done1 && done2)) return;
+            // Merge: base map1, luego aplicar conexion/serial desde map2 si existen
+            const out = new Map(map1);
+            for (const [k, v2] of map2.entries()){
+              const v1 = out.get(k) || { equipo:k };
+              if (v2.conexion) v1.conexion = v2.conexion;
+              if (v2.serial && !v1.serial) v1.serial = v2.serial;
+              out.set(k, v1);
+            }
+            ingrIndex = out;
+            resolve(ingrIndex);
+          };
+          Papa.parse(getCsvUrl(INGRAL_SRC), { download:true, skipEmptyLines:'greedy', complete:(res)=>{
+            try { map1 = buildIngralIndex(res); } catch {}
+            done1 = true; maybeDone();
+          }});
+          Papa.parse(getCsvUrl(INGRAL_SRC2), { download:true, skipEmptyLines:'greedy', complete:(res)=>{
+            try { map2 = buildIngralIndex2(res); } catch {}
+            done2 = true; maybeDone();
+          }});
+        });
+      }
+
+      async function applyFromEquipo(equipo){
+        const idx = await fetchIngralIndex();
+        const rec = idx.get(String(equipo||'').trim());
+        if (!rec) return;
+        // Rellenar campos
+        const equip = document.getElementById('equipNumberInput');
+        const diam = document.getElementById('diametroInput');
+        const fig = document.getElementById('conexionBadge');
+        const lon = document.getElementById('longitudInput');
+        const lonUnit = document.getElementById('longitudUnit');
+        const serialSpan = ensureSerialSpan();
+        if (equip) equip.value = rec.equipo || '';
+        if (rec.diametro && diam) diam.value = rec.diametro;
+        let cx = rec.conexion;
+        if (!cx && rec.descripcion){
+          const extra = parseFromDescripcion(rec.descripcion);
+          if (extra && extra.conexion) cx = extra.conexion;
+        }
+        if (fig) fig.textContent = cx || '—';
+        console.debug('[inspeccion] applyFromEquipo conexion fuente:', cx ? (rec.conexion ? 'csv2/merge' : 'descripcion') : 'vacio', 'valor:', cx);
+        // Unidad dinámica para Longitud
+        const desc = rec.descripcion || '';
+        const family = (desc + ' ' + (cx||'')).toUpperCase();
+        let unit = 'in';
+        let na = false;
+        if (/\b(CODO|90|45)\b/.test(family)) { na = true; }
+        else if (/\b(XO|TUBO|PUP)\b/.test(family)) { unit = 'ft'; }
+        else { unit = 'in'; }
+        if (lonUnit) lonUnit.textContent = na ? 'N/A' : unit;
+        if (lon){
+          if (na){ lon.value = ''; lon.disabled = true; lon.readOnly = true; }
+          else { lon.disabled = false; lon.readOnly = false; if (rec.longitud) lon.value = rec.longitud; }
+        }
+        const serialBadgeTd = findRowParamEl(/^\s*Serial\b/i);
+        if (serialBadgeTd){
+          // Activar Visible/No Visible según haya serial
+          const visible = !!(rec.serial && rec.serial.trim());
+          selectBadgeIn(serialBadgeTd, visible ? 'Visible' : 'No Visible');
+        }
+        if (serialSpan) serialSpan.textContent = rec.serial || '';
+        updateEvaluation();
+        refreshObservaciones();
+      }
+    })();
+  </script>
+  
 </body>
 </html>
