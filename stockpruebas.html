@@ -1,0 +1,522 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Stock Pruebas</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header>
+      <div class="logo"><img src="img/logopctch.png" alt="Logo" /></div>
+      <button class="menu-toggle" aria-label="Abrir menú" aria-controls="primary-nav" aria-expanded="false">☰</button>
+      <nav id="primary-nav">
+        <ul>
+          <li><a href="index.html">Dashboard</a></li>
+          <li class="nav-dropdown"><details><summary>Pruebas</summary><ul>
+            <li><a href="pruebas.html">Pruebas</a></li>
+            <li><a class="active" href="stockpruebas.html">Stock de pruebas</a></li>
+            <li><a href="listapruebas.html">Lista de pruebas</a></li>
+          </ul></details></li>
+          <li><a href="tareas.html">Tareas</a></li>
+          <li><a href="inspeccion.html">Inspección</a></li>
+          <li><a href="ingral.html">Inventario</a></li>
+          <li><a href="actividad.html">Actividad</a></li>
+          <li><a href="reportes.html">Reportes</a></li>
+        </ul>
+      </nav>
+      <div class="user-box">
+        <span id="user-email"></span>
+        <a id="login-link" href="login.html">Login</a>
+        <button id="logout-btn" type="button" style="display:none">Salir</button>
+      </div>
+    </header>
+    <main class="wide">
+      <h1 style="margin-bottom: 1rem;">Stock Pruebas</h1>
+      <div id="inventory-tools" class="toolbar">
+        <div class="group">
+          <button id="btn-clear-filters" class="btn-primary">Limpiar filtros</button>
+          <button id="btn-export-csv" class="btn-primary">Exportar CSV</button>
+        </div>
+        <div id="inventory-count" class="toolbar-count">0 resultados</div>
+      </div>
+      <div class="table-responsive" id="inventory-wrapper">
+        <div id="inventory-scroll-top" class="scrollbar-x"><div class="scrollbar-content"></div></div>
+        <div id="inventory-scroll-body" class="table-scroll">
+          <div id="inventory-loading" style="padding: 0.75rem;">Cargando pruebas...</div>
+          <table id="inventory-table" class="inventory" style="display:none;"></table>
+        </div>
+      </div>
+
+      <h2 style="margin-top:1.5rem;">Historial de Inspecciones</h2>
+      <div id="insp-tools" class="toolbar" style="margin-bottom:0.5rem;">
+        <div id="insp-count" class="toolbar-count">0 inspecciones</div>
+      </div>
+      <div class="table-responsive" id="insp-wrapper">
+        <div id="insp-scroll-top" class="scrollbar-x"><div class="scrollbar-content"></div></div>
+        <div id="insp-scroll-body" class="table-scroll">
+          <div id="insp-loading" style="padding: 0.75rem;">Cargando historial...</div>
+          <table id="inspections-table" class="inventory" style="display:none;"></table>
+        </div>
+      </div>
+    </main>
+    
+    <footer></footer>
+
+    <script>
+      (function () {
+        const CSV_URL = 'docs/inventario.csv';
+
+        function parseCSVLine(line) {
+          const out = [];
+          const regex = /(?:^|,)(?:"([^"]*(?:""[^"]*)*)"|([^",]*))/g;
+          let match;
+          while ((match = regex.exec(line)) !== null) {
+            let value = match[1] !== undefined ? match[1].replace(/""/g, '"') : match[2];
+            out.push(value ?? '');
+          }
+          return out;
+        }
+
+        function parseCSV(text) {
+          const lines = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n');
+          const rows = [];
+          for (const line of lines) {
+            if (line.trim() === '') continue;
+            rows.push(parseCSVLine(line));
+          }
+          return rows;
+        }
+
+        let ALL_ROWS = [];
+        let HEADERS = [];
+        let LATEST_FECHA_BY_EQUIPO = new Map(); // equipo -> fecha string
+        let FILTERS = {};
+        let SORT = { index: -1, dir: 1 };
+
+        function applyFilters(rows) {
+          const entries = Object.entries(FILTERS).filter(([, v]) => v !== undefined && v !== null && String(v).trim() !== '');
+          if (entries.length === 0) return rows;
+          return rows.filter((row) => {
+            for (const [colName, val] of entries) {
+              const colIdx = HEADERS.indexOf(colName);
+              if (colIdx === -1) continue;
+              const raw = row[colIdx] != null ? String(row[colIdx]).toLowerCase() : '';
+              const needle = String(val).toLowerCase();
+              if (needle && !raw.includes(needle)) return false;
+            }
+            return true;
+          });
+        }
+
+        function sortRows(rows) {
+          if (SORT.index < 0) return rows;
+          const idx = SORT.index;
+          const dir = SORT.dir;
+          const copy = rows.slice();
+          copy.sort((a, b) => {
+            const av = a[idx] ?? '';
+            const bv = b[idx] ?? '';
+            const an = parseFloat(av);
+            const bn = parseFloat(bv);
+            const aNum = !Number.isNaN(an) && String(an) === String(av).replace(',', '.');
+            const bNum = !Number.isNaN(bn) && String(bn) === String(bv).replace(',', '.');
+            if (aNum && bNum) return (an - bn) * dir;
+            return String(av).localeCompare(String(bv), 'es', { numeric: true, sensitivity: 'base' }) * dir;
+          });
+          return copy;
+        }
+
+        function getCurrentViewRows() {
+          const filtered = applyFilters(ALL_ROWS);
+          return sortRows(filtered);
+        }
+
+        // Top filters UI removed; inline filters will be rendered in table header
+
+        function normHeaderName(s){
+          return String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\s+/g,' ').replace(/[\/]/g,'/').trim();
+        }
+        function pickIndex(headers, candidates){
+          const map = new Map();
+          headers.forEach((h,i)=> map.set(normHeaderName(h), i));
+          for (const c of candidates){ const idx = map.get(normHeaderName(c)); if (idx!=null && idx>=0) return idx; }
+          return -1;
+        }
+
+        function mergeFechasIntoRows(headers, dataRows){
+          try{
+            const idxEquipo = pickIndex(headers, ['equipo / activo','equipo/activo','equipo activo','equipo','activo']);
+            if (idxEquipo < 0) return { headers, rows: dataRows };
+            const fechaCandidates = ['fecha de realizacion','fecha de realización','fecha realizacion','fecha inspeccion','fecha de inspeccion','fecha de inspección'];
+            let idxFecha = pickIndex(headers, fechaCandidates);
+            let outHeaders = headers.slice();
+            let outRows = dataRows.map(r => r.slice());
+            if (idxFecha === -1){
+              outHeaders = outHeaders.concat(['Fecha de realización']);
+              idxFecha = outHeaders.length - 1;
+              outRows = outRows.map(r => { r.push(''); return r; });
+            }
+            for (let i=0;i<outRows.length;i++){
+              const r = outRows[i];
+              const eq = String(r[idxEquipo]||'').trim();
+              if (!eq) continue;
+              const fecha = LATEST_FECHA_BY_EQUIPO.get(eq);
+              if (fecha){ r[idxFecha] = fecha; }
+            }
+            return { headers: outHeaders, rows: outRows };
+          }catch(e){ console.error(e); return { headers, rows: dataRows }; }
+        }
+
+        function renderTable(rows) {
+          if (!rows || rows.length === 0) return;
+          const table = document.getElementById('inventory-table');
+          const loading = document.getElementById('inventory-loading');
+          if (loading) loading.remove();
+
+          const headers = rows[0];
+          let dataRows = rows.slice(1);
+          // Integrar fechas por equipo
+          const merged = mergeFechasIntoRows(headers, dataRows);
+          HEADERS = merged.headers.slice();
+          dataRows = merged.rows;
+          // Header row: sortable column headers
+          let theadHTML = '<thead><tr>' + HEADERS.map((h, i) => {
+            const sortAttr = (SORT.index === i) ? (SORT.dir === 1 ? ' data-sort="asc"' : ' data-sort="desc"') : '';
+            return `<th data-col="${i}" role="button"${sortAttr}>${escapeHtml(h)}</th>`;
+          }).join('') + '</tr></thead>';
+
+          ALL_ROWS = dataRows;
+          const finalRows = getCurrentViewRows();
+
+          let bodyParts = new Array(finalRows.length);
+          for (let i = 0; i < finalRows.length; i++) {
+            const row = finalRows[i];
+            let tds = new Array(HEADERS.length);
+            for (let c = 0; c < HEADERS.length; c++) {
+              const val = row[c] != null ? String(row[c]) : '';
+              const title = `${HEADERS[c]} | Fila ${i + 1}`;
+              tds[c] = `<td title="${escapeAttr(title)}">${escapeHtml(val)}</td>`;
+            }
+            bodyParts[i] = `<tr>${tds.join('')}</tr>`;
+          }
+          const tbodyHTML = `<tbody>${bodyParts.join('')}</tbody>`;
+          table.innerHTML = theadHTML + tbodyHTML;
+          table.style.display = '';
+
+          // Sorting interactions
+          const ths = table.querySelectorAll('thead th');
+          ths.forEach((th) => {
+            th.addEventListener('click', () => {
+              const idx = parseInt(th.getAttribute('data-col'), 10);
+              if (SORT.index === idx) {
+                SORT.dir = -SORT.dir;
+              } else {
+                SORT.index = idx; SORT.dir = 1;
+              }
+              refresh();
+            });
+          });
+
+          // No header filter inputs; sorting only
+
+          // Update results counter
+          const counter = document.getElementById('inventory-count');
+          if (counter) counter.textContent = `${finalRows.length} resultados`;
+
+          syncScrollBars();
+        }
+
+        function escapeHtml(str) {
+          return String(str)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+        }
+
+        function escapeAttr(str) {
+          return escapeHtml(str);
+        }
+
+        function refresh() {
+          if (!ALL_ROWS.length) return;
+          const table = document.getElementById('inventory-table');
+          const rows = [HEADERS, ...ALL_ROWS];
+          renderTable(rows);
+        }
+
+        // ---- Modal Crear Prueba ----
+        function buildCreateFormFields() {
+          const host = document.getElementById('create-form-fields');
+          if (!host) return;
+          host.innerHTML = '';
+          const headers = Array.isArray(HEADERS) ? HEADERS : [];
+          for (const h of headers){
+            const field = document.createElement('div');
+            field.className = 'form-field';
+            const label = document.createElement('label');
+            label.textContent = String(h||'').trim();
+            const input = document.createElement('input');
+            input.type = 'text';
+            input.name = String(h||'').trim();
+            input.placeholder = String(h||'').trim();
+            field.appendChild(label);
+            field.appendChild(input);
+            host.appendChild(field);
+          }
+        }
+
+        function openCreateModal(){
+          buildCreateFormFields();
+          const modal = document.getElementById('create-modal');
+          if (modal){ modal.classList.add('show'); modal.setAttribute('aria-hidden','false'); }
+        }
+        function closeCreateModal(){
+          const modal = document.getElementById('create-modal');
+          if (modal){ modal.classList.remove('show'); modal.setAttribute('aria-hidden','true'); }
+        }
+
+        async function loadCSV() {
+          try {
+            const res = await fetch(CSV_URL, { cache: 'no-store' });
+            if (!res.ok) throw new Error('No se pudo cargar el CSV');
+            const text = await res.text();
+            const rows = parseCSV(text);
+            HEADERS = rows[0].slice();
+            ALL_ROWS = rows.slice(1);
+            renderTable(rows);
+          } catch (err) {
+            console.error(err);
+            const loading = document.getElementById('inventory-loading');
+            if (loading) loading.textContent = 'Error al cargar el pruebas.';
+          }
+        }
+
+        function clearFilters() {
+          FILTERS = {};
+          SORT = { index: -1, dir: 1 };
+          renderTable([HEADERS, ...ALL_ROWS]);
+        }
+
+        function exportCSV() {
+          const rows = getCurrentViewRows();
+          const data = [HEADERS, ...rows];
+          const csv = data.map(r => r.map((v) => {
+            const s = v == null ? '' : String(v);
+            const needsQuote = /[",\n]/.test(s);
+            const escaped = s.replace(/"/g, '""');
+            return needsQuote ? `"${escaped}"` : escaped;
+          }).join(',')).join('\n');
+          const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = 'inventario_filtrado.csv';
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+        }
+
+        function setWrapperHeight() {
+          try {
+            const header = document.querySelector('header');
+            const footer = document.querySelector('footer');
+            const bodyScroll = document.getElementById('inventory-scroll-body');
+            const inspBody = document.getElementById('insp-scroll-body');
+            const h = header ? header.offsetHeight : 0;
+            const f = footer ? footer.offsetHeight : 0;
+            const pad = 16; // margen interno aproximado
+            const available = window.innerHeight - h - f - pad * 2;
+            if (available > 200) {
+              bodyScroll.style.maxHeight = available + 'px';
+              bodyScroll.style.height = available + 'px';
+              if (inspBody){ inspBody.style.maxHeight = available + 'px'; inspBody.style.height = available + 'px'; }
+            }
+          } catch (e) { /* noop */ }
+        }
+        function ensureTopScrollbar() {
+          const top = document.getElementById('inventory-scroll-top');
+          return top;
+        }
+
+        let isSyncing = false;
+        let lastSource = null;
+        let scrollHandlers = { onTopScroll: null, onBodyScroll: null };
+        function syncScrollBars() {
+          const bodyScroll = document.getElementById('inventory-scroll-body');
+          const table = document.getElementById('inventory-table');
+          const top = ensureTopScrollbar();
+          const topContent = top.querySelector('.scrollbar-content');
+          topContent.style.width = table.scrollWidth + 'px';
+          // Align positions initially
+          top.scrollLeft = bodyScroll.scrollLeft;
+
+          // Remove previous handlers if any to avoid duplicates
+          if (scrollHandlers.onTopScroll) top.removeEventListener('scroll', scrollHandlers.onTopScroll);
+          if (scrollHandlers.onBodyScroll) bodyScroll.removeEventListener('scroll', scrollHandlers.onBodyScroll);
+
+          const onTopScroll = () => {
+            lastSource = 'top';
+            if (isSyncing) return;
+            isSyncing = true;
+            bodyScroll.scrollLeft = top.scrollLeft;
+            isSyncing = false;
+          };
+          const onBodyScroll = () => {
+            lastSource = 'wrap';
+            if (isSyncing) return;
+            isSyncing = true;
+            top.scrollLeft = bodyScroll.scrollLeft;
+            isSyncing = false;
+          };
+
+          scrollHandlers.onTopScroll = onTopScroll;
+          scrollHandlers.onBodyScroll = onBodyScroll;
+          top.addEventListener('scroll', onTopScroll, { passive: true });
+          bodyScroll.addEventListener('scroll', onBodyScroll, { passive: true });
+        }
+
+        // ----- Historial de Inspecciones (Firestore) -----
+        let INSP_HEADERS = ['Fecha', 'Equipo/Activo', 'Tipo', 'Diámetro', 'Conexión', 'Longitud', 'Serial Visible', 'Serial', 'Evaluación', 'Observaciones'];
+        let INSP_ROWS = [];
+
+        async function ready(){
+          const max = 60; for (let i=0;i<max;i++){ if (window.db) return true; await new Promise(r=>setTimeout(r,50)); } return !!window.db;
+        }
+        async function waitForAuth(){
+          const app = window.firebase?.app?.();
+          const auth = window.firebase?.auth?.();
+          if (!app || !auth) return null;
+          return new Promise((resolve)=>{
+            const unsub = auth.onAuthStateChanged((u)=>{ unsub(); resolve(u||null); });
+          });
+        }
+
+        let INSP_UNSUB = null;
+        async function loadInspections(){
+          try{
+            const ok = await ready();
+            if (!ok) throw new Error('Firestore no disponible');
+            const db = window.db;
+            const user = await waitForAuth();
+            if (!user){
+              const loading = document.getElementById('insp-loading');
+              if (loading) loading.textContent = 'Inicie sesión para ver el historial de inspecciones.';
+              return;
+            }
+            if (INSP_UNSUB) { try{ INSP_UNSUB(); }catch{} INSP_UNSUB = null; }
+            INSP_UNSUB = db.collection('inspections').orderBy('fechaTs','desc').limit(1000)
+              .onSnapshot((snap)=>{
+                const rows = [];
+                const latest = new Map();
+                snap.forEach(doc=>{
+                  const d = doc.data()||{};
+                  const p = d.parametros||{};
+                  const obs = Array.isArray(d.observaciones) ? d.observaciones.join(' | ') : '';
+                  const eq = String(d.equipoActivo||'').trim();
+                  const f = String(d.fecha||'').trim();
+                  if (eq && f && !latest.has(eq)) latest.set(eq, f);
+                  rows.push([
+                    d.fecha||'',
+                    d.equipoActivo||'',
+                    d.tipo||'',
+                    p.diametro||'',
+                    p.conexion||'',
+                    (p.longitud||'') + (p.longitudUnidad? ` ${p.longitudUnidad}`:'') ,
+                    p.serialVisible? 'Sí':'No',
+                    p.serial||'',
+                    d.evaluacion||'',
+                    obs
+                  ]);
+                });
+                INSP_ROWS = rows;
+                LATEST_FECHA_BY_EQUIPO = latest;
+                renderInspectionsTable();
+                // Refrescar inventario para inyectar fecha de realización
+                try { refresh(); } catch {}
+              }, (err)=>{
+                console.error(err);
+                const loading = document.getElementById('insp-loading');
+                if (loading) loading.textContent = (err && /permission/i.test(String(err))) ? 'Permisos insuficientes para leer historial. Verifique sus reglas de Firestore.' : 'Error al cargar historial.';
+              });
+          }catch(e){
+            console.error(e);
+            const loading = document.getElementById('insp-loading');
+            if (loading) loading.textContent = 'Error al cargar historial.';
+          }
+        }
+
+        function renderInspectionsTable(){
+          const table = document.getElementById('inspections-table');
+          const loading = document.getElementById('insp-loading');
+          if (!table) return;
+          if (loading) loading.remove();
+          const thead = '<thead><tr>' + INSP_HEADERS.map(h=>`<th>${escapeHtml(h)}</th>`).join('') + '</tr></thead>';
+          const body = '<tbody>' + INSP_ROWS.map(row=>'<tr>' + row.map((v,i)=>`<td title="${escapeAttr(INSP_HEADERS[i])}">${escapeHtml(v)}</td>`).join('') + '</tr>').join('') + '</tbody>';
+          table.innerHTML = thead + body;
+          table.style.display = '';
+          const counter = document.getElementById('insp-count');
+          if (counter) counter.textContent = `${INSP_ROWS.length} inspecciones`;
+          syncInspScrollBars();
+        }
+
+        function syncInspScrollBars(){
+          const bodyScroll = document.getElementById('insp-scroll-body');
+          const table = document.getElementById('inspections-table');
+          const top = document.getElementById('insp-scroll-top');
+          const topContent = top.querySelector('.scrollbar-content');
+          topContent.style.width = table.scrollWidth + 'px';
+          top.scrollLeft = bodyScroll.scrollLeft;
+          const onTop = ()=>{ bodyScroll.scrollLeft = top.scrollLeft; };
+          const onBody = ()=>{ top.scrollLeft = bodyScroll.scrollLeft; };
+          top.addEventListener('scroll', onTop, { passive: true });
+          bodyScroll.addEventListener('scroll', onBody, { passive: true });
+        }
+
+        function init() {
+          setWrapperHeight();
+          loadCSV();
+          loadInspections();
+          ensureTopScrollbar();
+          syncScrollBars();
+          syncInspScrollBars();
+          window.addEventListener('resize', setWrapperHeight);
+          window.addEventListener('resize', syncScrollBars);
+          window.addEventListener('resize', syncInspScrollBars);
+          // Wheel over top scrollbar should move horizontally
+          const top = document.getElementById('inventory-scroll-top');
+          if (top) {
+            top.addEventListener('wheel', (e) => {
+              if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
+                const bodyScroll = document.getElementById('inventory-scroll-body');
+                bodyScroll.scrollLeft += e.deltaY;
+                e.preventDefault();
+              }
+            }, { passive: false });
+          }
+          const btnClear = document.getElementById('btn-clear-filters');
+          const btnExport = document.getElementById('btn-export-csv');
+          btnClear?.addEventListener('click', clearFilters);
+          btnExport?.addEventListener('click', exportCSV);
+
+          // creación de pruebas se realiza en pruebas.html
+        }
+
+        if (document.readyState === 'loading') {
+          document.addEventListener('DOMContentLoaded', init);
+        } else {
+          init();
+        }
+      })();
+    </script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.11/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.11/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.11/firebase-firestore-compat.js"></script>
+    <script src="firebase-config.js"></script>
+    <script src="firebase-init.js"></script>
+    <script src="script.js"></script>
+  </body>
+  </html>

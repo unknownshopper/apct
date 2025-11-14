@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Listado de Pruebas</title>
+    <link rel="stylesheet" href="styles.css" />
+    <style>
+      .toolbar { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:.75rem; }
+      .toolbar .group { display:flex; gap:8px; align-items:center; }
+      .table-responsive { position: relative; border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden; }
+      .table-scroll { overflow: auto; max-height: 60vh; }
+      table.inventory { width: 100%; border-collapse: separate; border-spacing: 0; }
+      table.inventory th, table.inventory td { padding: 6px 8px; border-bottom: 1px solid #e5e7eb; font-size: 12px; text-align: left; }
+      table.inventory th { background: #f9fafb; position: sticky; top: 0; z-index: 1; }
+      #search { border: 1px solid #e5e7eb; border-radius: 8px; padding: 8px 10px; }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div class="logo"><img src="img/logopctch.png" alt="Logo" /></div>
+      <button class="menu-toggle" aria-label="Abrir menú" aria-controls="primary-nav" aria-expanded="false">☰</button>
+      <nav id="primary-nav">
+        <ul>
+          <li><a href="index.html">Dashboard</a></li>
+          <li class="nav-dropdown"><details><summary>Pruebas</summary><ul>
+            <li><a href="pruebas.html">Pruebas</a></li>
+            <li><a href="stockpruebas.html">Stock de pruebas</a></li>
+            <li><a class="active" href="listapruebas.html">Lista de pruebas</a></li>
+          </ul></details></li>
+          <li><a href="tareas.html">Tareas</a></li>
+          <li><a href="inspeccion.html">Inspección</a></li>
+          <li><a href="ingral.html">Inventario</a></li>
+          <li><a href="actividad.html">Actividad</a></li>
+          <li><a href="reportes.html">Reportes</a></li>
+        </ul>
+      </nav>
+      <div class="user-box">
+        <span id="user-email"></span>
+        <a id="login-link" href="login.html">Login</a>
+        <button id="logout-btn" type="button" style="display:none">Salir</button>
+      </div>
+    </header>
+
+    <main class="wide">
+      <h1 style="margin-bottom: 1rem;">Listado de Pruebas</h1>
+      <div class="toolbar">
+        <div class="group">
+          <a class="btn-primary" href="pruebas.html">Crear prueba</a>
+          <input id="search" type="text" placeholder="Buscar..." />
+          <button id="btn-clear" type="button">Limpiar</button>
+        </div>
+        <div id="count" class="toolbar-count">0 pruebas</div>
+      </div>
+
+      <div class="table-responsive">
+        <div class="table-scroll">
+          <table id="pruebas-table" class="inventory"></table>
+        </div>
+      </div>
+    </main>
+
+    <footer></footer>
+
+    <script>
+      (function(){
+        const CSV_URL = 'docs/inventario.csv';
+        let HEADERS = [];
+        let DATA = [];
+        let VIEW = [];
+
+        function parseCSV(text){
+          const lines = text.replace(/\r\n?/g,'\n').split('\n').filter(l=>l.length);
+          const rows = lines.map(line=>{
+            const out = []; const regex = /(?:^|,)(?:"([^"]*(?:""[^"]*)*)"|([^",]*))/g; let m;
+            while ((m = regex.exec(line)) !== null) {
+              let v = m[1] !== undefined ? m[1].replace(/""/g,'"') : m[2];
+              out.push(v ?? '');
+            }
+            return out;
+          });
+          return rows;
+        }
+
+        function renderTable(){
+          const table = document.getElementById('pruebas-table');
+          const thead = document.createElement('thead');
+          const htr = document.createElement('tr');
+          for (const h of HEADERS){
+            const th = document.createElement('th'); th.textContent = h; htr.appendChild(th);
+          }
+          thead.appendChild(htr);
+          const tbody = document.createElement('tbody');
+          for (const row of VIEW){
+            const tr = document.createElement('tr');
+            for (const h of HEADERS){
+              const td = document.createElement('td');
+              td.textContent = (row.data && row.data[h]) ? String(row.data[h]) : '';
+              tr.appendChild(td);
+            }
+            tbody.appendChild(tr);
+          }
+          table.innerHTML = '';
+          table.appendChild(thead);
+          table.appendChild(tbody);
+          document.getElementById('count').textContent = VIEW.length + ' pruebas';
+        }
+
+        function applyFilter(){
+          const q = (document.getElementById('search').value || '').toLowerCase();
+          if (!q){ VIEW = DATA.slice(); return; }
+          VIEW = DATA.filter(doc => {
+            const vals = HEADERS.map(h => (doc.data && doc.data[h]) ? String(doc.data[h]) : '').join(' | ').toLowerCase();
+            return vals.includes(q);
+          });
+        }
+
+        async function loadHeaders(){
+          const res = await fetch(CSV_URL, { cache: 'no-store' });
+          if (!res.ok) throw new Error('No se pudo cargar el CSV');
+          const txt = await res.text();
+          const rows = parseCSV(txt);
+          HEADERS = rows[0].slice();
+        }
+
+        async function loadPruebas(){
+          const snap = await window.db.collection('pruebas').orderBy('createdAt','desc').limit(1000).get();
+          DATA = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+          VIEW = DATA.slice();
+        }
+
+        async function init(){
+          try {
+            await loadHeaders();
+            await loadPruebas();
+            applyFilter();
+            renderTable();
+          } catch (e){
+            console.error(e);
+          }
+          document.getElementById('search').addEventListener('input', ()=>{ applyFilter(); renderTable(); });
+          document.getElementById('btn-clear').addEventListener('click', ()=>{ document.getElementById('search').value=''; applyFilter(); renderTable(); });
+        }
+
+        if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
+      })();
+    </script>
+
+    <script src="https://www.gstatic.com/firebasejs/9.6.11/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.11/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.11/firebase-firestore-compat.js"></script>
+    <script src="firebase-config.js"></script>
+    <script src="firebase-init.js"></script>
+  </body>
+</html>

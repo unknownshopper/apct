@@ -22,7 +22,11 @@
     <nav id="primary-nav">
       <ul>
         <li><a href="index.html">Dashboard</a></li>
-        <li><a href="pruebas.html">Pruebas</a></li>
+        <li class="nav-dropdown"><details><summary>Pruebas</summary><ul>
+          <li><a href="pruebas.html">Pruebas</a></li>
+          <li><a href="stockpruebas.html">Stock de pruebas</a></li>
+          <li><a href="listapruebas.html">Lista de pruebas</a></li>
+        </ul></details></li>
         <li><a href="tareas.html">Tareas</a></li>
         <li><a href="inspeccion.html">Inspección</a></li>
         <li><a href="ingral.html">Inventario</a></li>
@@ -382,9 +386,13 @@
         '#',
         'EQUIPO / ACTIVO','EQUIPO/ACTIVO','EQUIPO ACTIVO',
         'CLIENTE','AREA DEL CLIENTE','UBICACIÓN',
+        'FACTURA',
+        // Variantes comunes para Orden de compra (debe ir entre FACTURA y FECHA EMBARQUE)
+        'ORDEN DE COMPRA','ORDEN COMPRA','NO. ORDEN DE COMPRA','NO ORDEN DE COMPRA','NÚMERO DE ORDEN','NUMERO DE ORDEN','OC','ORDEN DE COMRA',
         'FECHA EMBARQUE',
         'INICIO DEL SERVICIO','CONTINUACION DEL SERVICIO','FIN PARCIAL DEL SERVICIO','TERMINACION DEL SERVICIO','FECHA DE DEVOLUCION',
-        'DIAS EN SERVICIO'
+        'DIAS EN SERVICIO',
+        'INGRESO ACUMULADO','INGRESO ACUMULDDO','RENTA ACUMULADA'
       ];
       const normHeaders = headers.map(h=>normalizeHeader(h).toUpperCase());
       const order = [];
@@ -401,6 +409,15 @@
         if (idx>=0 && !seen.has(idx)){ order.push(idx); labels.push(headers[idx]); seen.add(idx); }
       });
       if (!order.length){ visibleCols = null; return; }
+      // Normalizar etiquetas visibles para variantes conocidas
+      const normLabel = (s)=> normalizeHeader(s).toUpperCase();
+      const ocVariants = new Set(['ORDEN DE COMPRA','ORDEN COMPRA','NO. ORDEN DE COMPRA','NO ORDEN DE COMPRA','NÚMERO DE ORDEN','NUMERO DE ORDEN','OC','ORDEN DE COMRA']);
+      const ingresoTypo = 'INGRESO ACUMULDDO';
+      for (let k=0; k<labels.length; k++){
+        const lnorm = normLabel(labels[k]);
+        if (ocVariants.has(lnorm)) labels[k] = 'ORDEN DE COMPRA';
+        if (lnorm === ingresoTypo) labels[k] = 'INGRESO ACUMULADO';
+      }
       visibleCols = { order, labels };
       propiedadIdx = normHeaders.indexOf('PROPIEDAD');
       computeVisibleIndices();
@@ -792,6 +809,8 @@
         const valCliente = eget(['CLIENTE'])?.value || '';
         const valArea = eget(['AREA DEL CLIENTE','ÁREA DEL CLIENTE'])?.value || '';
         const valUbic = eget(['UBICACION','UBICACIÓN'])?.value || '';
+        const valFactura = eget(['FACTURA'])?.value || '';
+        const valOC = eget(['ORDEN DE COMPRA','ORDEN COMPRA','NO. ORDEN DE COMPRA','NO ORDEN DE COMPRA','NÚMERO DE ORDEN','NUMERO DE ORDEN','OC'])?.value || '';
         const valEmbarque = eget(['FECHA EMBARQUE','FECHA DE EMBARQUE'])?.value || '';
         const sInicio = eget(['INICIO DEL SERVICIO'])?.value || '';
         const sTerm = eget(['TERMINACION DEL SERVICIO','TERMINACIÓN DEL SERVICIO'])?.value || '';
@@ -808,6 +827,8 @@
         const iCLIENTE = idx(['CLIENTE']);
         const iAREA = idx(['AREA DEL CLIENTE','ÁREA DEL CLIENTE']);
         const iUBIC = idx(['UBICACION','UBICACIÓN']);
+        const iFACT = idx(['FACTURA']);
+        const iOC = idx(['ORDEN DE COMPRA','ORDEN COMPRA','NO. ORDEN DE COMPRA','NO ORDEN DE COMPRA','NÚMERO DE ORDEN','NUMERO DE ORDEN','OC']);
         const iEMB = idx(['FECHA EMBARQUE','FECHA DE EMBARQUE']);
         const iINI = idx(['INICIO DEL SERVICIO']);
         const iCONT = idx(['CONTINUACION DEL SERVICIO','CONTINUACIÓN DEL SERVICIO']);
@@ -823,6 +844,8 @@
           if (iCLIENTE>=0) r[iCLIENTE] = valCliente;
           if (iAREA>=0) r[iAREA] = valArea;
           if (iUBIC>=0) r[iUBIC] = valUbic;
+          if (iFACT>=0) r[iFACT] = valFactura;
+          if (iOC>=0) r[iOC] = valOC;
           if (iEMB>=0) r[iEMB] = valEmbarque;
         }
 
