@@ -30,11 +30,41 @@
     </header>
     <div class="page-logo"><img src="img/logopctch.png" alt="PCT"></div>
     <main>
-      <section class="actions">
-        <button class="action-btn" data-action="create">Crear</button>
-        <button class="action-btn" data-action="view">Ver</button>
-        <button class="action-btn" data-action="edit">Editar</button>
-        <button class="action-btn" data-action="destroy">Eliminar</button>
+      <section class="dashboard">
+        <div class="cards">
+          <div class="card">
+            <div class="kpi-label">Inventario</div>
+            <div id="kpi-inventario" class="kpi">—</div>
+          </div>
+          <div class="card">
+            <div class="kpi-label">Inspecciones</div>
+            <div id="kpi-inspecciones" class="kpi">—</div>
+          </div>
+          <div class="card">
+            <div class="kpi-label">Últimos 7 días</div>
+            <div id="kpi-ult7" class="kpi">—</div>
+          </div>
+          <div class="card">
+            <div class="kpi-label">Por vencer 30 días</div>
+            <div id="kpi-vencer30" class="kpi">—</div>
+          </div>
+          <div class="card">
+            <div class="kpi-label">Por vencer 60 días</div>
+            <div id="kpi-vencer60" class="kpi">—</div>
+          </div>
+        </div>
+        <div class="timeline">
+          <div class="timeline-header">
+            <div class="title">Barra de tiempo</div>
+            <div class="legend">
+              <span class="dot overdue"></span>Vencidas
+              <span class="dot soon7"></span>7 días
+              <span class="dot soon30"></span>30 días
+              <span class="dot ok"></span>>30 días
+            </div>
+          </div>
+          <div id="timeline-bar" class="timeline-bar"></div>
+        </div>
       </section>
     </main>
     
@@ -49,6 +79,90 @@
   <!-- Your Firebase config: create firebase-config.js from firebase-config.sample.js -->
   <script src="firebase-config.js"></script>
   <script src="firebase-init.js"></script>
+  <script>
+  (function(){
+    const INVENTARIO_SRC = 'docs/INVENTARIO GENERAL PCT 2025 NOV.csv';
+    function fmt(n){ try { return n.toLocaleString('es-MX'); } catch { return String(n); } }
+    async function countInventario(){
+      try{
+        const res = await fetch(INVENTARIO_SRC + '?t=' + Date.now(), { cache:'no-store' });
+        if (!res.ok) return 0;
+        const t = await res.text();
+        const lines = t.replace(/\r\n/g,'\n').replace(/\r/g,'\n').split('\n').filter(l=>l.trim().length>0);
+        return Math.max(0, lines.length - 1);
+      }catch{ return 0; }
+    }
+    async function getInspecciones(){
+      const db = window.db;
+      if (!db) return { total:0, last7:0, byEquipo:new Map() };
+      const snap = await db.collection('inspections').orderBy('fechaTs','desc').limit(5000).get();
+      const now = Date.now();
+      const seven = 7*24*3600*1000;
+      let total = snap.size;
+      let last7 = 0;
+      const byEq = new Map();
+      snap.forEach(doc=>{
+        const d = doc.data()||{};
+        const eq = String(d.equipoActivo||'').trim();
+        const ts = typeof d.fechaTs==='number' ? d.fechaTs : (d.created_at||0);
+        if (now - ts <= seven) last7++;
+        if (eq && (!byEq.has(eq) || ts > byEq.get(eq))) byEq.set(eq, ts);
+      });
+      return { total, last7, byEquipo: byEq };
+    }
+    function classifyDue(byEquipo){
+      const now = Date.now();
+      const day = 24*3600*1000;
+      const dueMs = 60*day;
+      let overdue=0, soon7=0, soon30=0, ok=0;
+      const items = [];
+      for (const [eq, ts] of byEquipo.entries()){
+        const next = ts + dueMs;
+        const delta = Math.floor((next - now)/day);
+        let status = 'ok';
+        if (delta < 0) { status = 'overdue'; overdue++; }
+        else if (delta <= 7) { status = 'soon7'; soon7++; }
+        else if (delta <= 30) { status = 'soon30'; soon30++; }
+        else { ok++; }
+        items.push({ eq, next, delta, status });
+      }
+      items.sort((a,b)=> a.next - b.next);
+      return { overdue, soon7, soon30, ok, items };
+    }
+    function renderTimeline(items){
+      const bar = document.getElementById('timeline-bar');
+      if (!bar) return;
+      bar.innerHTML = '';
+      const now = Date.now();
+      const start = now - 7*24*3600*1000;
+      const end = now + 60*24*3600*1000;
+      const range = end - start;
+      items.forEach(it=>{
+        const pos = Math.max(0, Math.min(1, (it.next - start)/range));
+        const dot = document.createElement('span');
+        dot.className = 'tl-dot ' + it.status;
+        dot.style.left = (pos*100) + '%';
+        dot.title = it.eq + ' • ' + (it.delta<0?('vencida ' + Math.abs(it.delta) + ' d'):('en ' + it.delta + ' d'));
+        bar.appendChild(dot);
+      });
+    }
+    async function init(){
+      const inv = await countInventario();
+      const insp = await getInspecciones();
+      const due = classifyDue(insp.byEquipo);
+      const elInv = document.getElementById('kpi-inventario'); if (elInv) elInv.textContent = fmt(inv);
+      const elInsp = document.getElementById('kpi-inspecciones'); if (elInsp) elInsp.textContent = fmt(insp.total);
+      const el7 = document.getElementById('kpi-ult7'); if (el7) el7.textContent = fmt(insp.last7);
+      const within30 = due.items.filter(it => it.delta >= 0 && it.delta <= 30).length;
+      const within60 = due.items.filter(it => it.delta >= 31 && it.delta <= 60).length;
+      const elV30 = document.getElementById('kpi-vencer30'); if (elV30) elV30.textContent = fmt(within30);
+      const elV60 = document.getElementById('kpi-vencer60'); if (elV60) elV60.textContent = fmt(within60);
+      renderTimeline(due.items);
+      window.addEventListener('resize', ()=>renderTimeline(due.items));
+    }
+    if (document.readyState==='loading') document.addEventListener('DOMContentLoaded', init); else init();
+  })();
+  </script>
   <script src="script.js"></script>
 </body>
 </html>
