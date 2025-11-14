@@ -56,14 +56,25 @@
         </div>
       </form>
     </main>
-    <footer></footer>
+  <footer></footer>
 
+    <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
     <script>
       (function(){
         const CSV_URL = 'docs/inventario.csv';
+        const GEN_INV_URL = 'docs/INVENTARIO%20GENERAL%20PCT%202025%20NOV.csv';
+        const GEN_INV_URL_PLAIN = 'docs/INVENTARIO GENERAL PCT 2025 NOV.csv';
+        const GEN_INV2_URL = 'docs/INVENTARIO%20GENERAL%20PCT%202025%20NOV2.csv';
+        const GEN_INV2_URL_PLAIN = 'docs/INVENTARIO GENERAL PCT 2025 NOV2.csv';
         let HEADERS = [];
         let ALL_ROWS = [];
         let EQUIPO_IDX = -1;
+        // Inventario general (ingral.html) como respaldo para serie
+        let GEN_HEADERS = [];
+        let GEN_ROWS = [];
+        let GEN_EQUIPO_IDX = -1;
+        let GEN_SERIE_IDX = -1;
+        const serieByEquipo = new Map();
 
         function parseCSV(text){
           const lines = text.replace(/\r\n?/g,'\n').split('\n').filter(l=>l.length);
@@ -81,6 +92,16 @@
         function headerIndexByVariants(variantList){
           const norm = (s)=> String(s||'').toUpperCase();
           const headersNorm = HEADERS.map(h=>norm(h));
+          for (const v of variantList){
+            const idx = headersNorm.indexOf(norm(v));
+            if (idx>=0) return idx;
+          }
+          return -1;
+        }
+
+        function headerIndexByVariantsGen(variantList){
+          const norm = (s)=> String(s||'').toUpperCase();
+          const headersNorm = GEN_HEADERS.map(h=>norm(h));
           for (const v of variantList){
             const idx = headersNorm.indexOf(norm(v));
             if (idx>=0) return idx;
@@ -117,6 +138,50 @@
           if (idxPrueba>=0) setIf(idxPrueba, HEADERS[idxPrueba]);
           if (idxTipo>=0) setIf(idxTipo, HEADERS[idxTipo]);
           if (idxArea>=0) setIf(idxArea, HEADERS[idxArea]);
+          // Popular '#' con número de serie si existe
+          const hashInput = getInputByHeader('#');
+          if (hashInput){
+            let serieVal = '';
+            // Buscar SOLO en inventario general (ingral)
+            const normKey = (s)=> String(s||'').toUpperCase().replace(/[^A-Z0-9]/g,'');
+            const key = normKey(val);
+            const hasKey = serieByEquipo.has(key);
+            console.log('[pruebas] lookup serie', { input: val, key, hasKey, mapSize: serieByEquipo.size });
+            if (hasKey) serieVal = String(serieByEquipo.get(key)||'');
+            if (serieVal) {
+              hashInput.value = serieVal;
+              console.log('[pruebas] Serie encontrada para', val, '=>', serieVal);
+            } else {
+              // búsqueda laxa por contiene
+              const candidates = [];
+              for (const [k,v] of serieByEquipo.entries()){
+                if (k.includes(key)) candidates.push([k,v]);
+              }
+              if (candidates.length){
+                hashInput.value = String(candidates[0][1]||'');
+                console.log('[pruebas] Serie aproximada usada para', val, '=>', candidates[0]);
+              } else {
+                // Fallback directo escaneando GEN_ROWS por si el mapa no se llenó como esperamos
+                if (GEN_EQUIPO_IDX>=0 && GEN_SERIE_IDX>=0 && GEN_ROWS.length){
+                  const direct = GEN_ROWS.find(r => {
+                    const ge = String(r[GEN_EQUIPO_IDX]||'');
+                    return ge.toUpperCase().trim() === val.toUpperCase().trim()
+                      || normKey(ge) === key;
+                  });
+                  if (direct){
+                    const vdir = String(direct[GEN_SERIE_IDX]||'').trim();
+                    if (vdir){
+                      hashInput.value = vdir;
+                      console.log('[pruebas] Serie encontrada via fallback directo para', val, '=>', vdir);
+                      return;
+                    }
+                  }
+                }
+                console.log('[pruebas] Serie NO encontrada para', val, '(sin candidatos ni fallback)');
+              }
+            }
+          }
+          console.log('[pruebas] buildForm inputs', { equipoHeader: HEADERS.find(h=>/EQUIPO\s*\/\s*ACTIVO|^EQUIPO\s*ACTIVO$|^EQUIPO$/i.test(String(h).replace(/\s*\/\s*/g,'/')) || String(h).trim().toUpperCase()==='EQUIPO / ACTIVO'), hasHash: !!getInputByHeader('#') });
         }
 
         function ensureDatalist(id, opts){
@@ -136,7 +201,15 @@
             const labelText = String(h||'').trim();
             const wrap = document.createElement('div'); wrap.className = 'form-field';
             const label = document.createElement('label'); label.textContent = labelText; label.htmlFor = 'fld-' + btoa(labelText).replace(/[^a-z0-9]/gi,'');
-            const input = document.createElement('input'); input.type='text'; input.id=label.htmlFor; input.name=labelText; input.placeholder=labelText;
+            let input;
+            const normAll = labelText.toUpperCase();
+            if (normAll === 'EJECUCCION'){
+              const sel = document.createElement('select'); sel.id = label.htmlFor; sel.name = labelText;
+              sel.innerHTML = '<option value="INTERNO">INTERNO</option><option value="EXTERNO">EXTERNO</option>';
+              input = sel;
+            } else {
+              input = document.createElement('input'); input.type='text'; input.id=label.htmlFor; input.name=labelText; input.placeholder=labelText;
+            }
             const norm = labelText.toUpperCase().replace(/\s*\/\s*/g,'/');
             const isEquipo = /^(EQUIPO\/ACTIVO|EQUIPO\s*ACTIVO|EQUIPO)$/.test(norm) || labelText.trim().toUpperCase()==='EQUIPO / ACTIVO';
             if (isEquipo){
@@ -159,6 +232,7 @@
           // Si ya hay un valor prellenado en EQUIPO/ACTIVO, disparar autofill
           const equipoHeader = HEADERS.find(h=>/EQUIPO\s*\/\s*ACTIVO|^EQUIPO\s*ACTIVO$|^EQUIPO$/i.test(String(h).replace(/\s*\/\s*/g,'/')) || String(h).trim().toUpperCase()==='EQUIPO / ACTIVO');
           const eqInput = equipoHeader ? getInputByHeader(equipoHeader) : null;
+          console.debug('[pruebas] buildForm inputs', { equipoHeader, hasHash: !!getInputByHeader('#') });
           if (eqInput && eqInput.value) autofillFromEquipo(eqInput.value);
         }
 
@@ -179,11 +253,60 @@
               const H = norm(h);
               if (H==='EQUIPO/ACTIVO' || variants.has(H)) { EQUIPO_IDX = i; break; }
             }
+            console.log('[pruebas] HEADERS cargados', { EQUIPO_IDX, HEADERS });
+            // Cargar inventario general para respaldo de serie
+            await loadGeneralInventory();
             buildForm();
           }catch(err){
             console.error(err);
             document.getElementById('status').textContent = 'Error cargando encabezados';
           }
+        }
+
+        function parseCSVGeneral(text){
+          try {
+            if (window.Papa){
+              const res = Papa.parse(text, { delimiter: ',', quoteChar: '"', escapeChar: '"', skipEmptyLines: true });
+              return Array.isArray(res?.data) ? res.data : [];
+            }
+          } catch(e){ console.error('[pruebas] Papa.parse error', e); }
+          return parseCSV(text);
+        }
+
+        async function loadGeneralInventory(){
+          try{
+            const tries = [GEN_INV_URL, GEN_INV_URL_PLAIN, GEN_INV2_URL, GEN_INV2_URL_PLAIN];
+            let res = null; let lastErr = null; let usedUrl = null;
+            for (const url of tries){
+              try {
+                const r = await fetch(url, { cache: 'no-store' });
+                if (r.ok){ res = r; usedUrl = url; break; }
+                lastErr = 'HTTP ' + r.status;
+              } catch(ex){ lastErr = ex?.message || String(ex); }
+            }
+            if (!res) { console.log('[pruebas] Fetch general inventory failed on all candidates', { lastErr, tries }); return; }
+            const txt = await res.text();
+            const rows = parseCSVGeneral(txt);
+            if (!rows.length) return;
+            GEN_HEADERS = rows[0].slice();
+            GEN_ROWS = rows.slice(1);
+            // índices para equipo y serie en inventario general
+            GEN_EQUIPO_IDX = headerIndexByVariantsGen(['EQUIPO / ACTIVO','EQUIPO/ACTIVO','EQUIPO ACTIVO','EQUIPO']);
+            GEN_SERIE_IDX = headerIndexByVariantsGen(['SERIE','NUMERO DE SERIE','NÚMERO DE SERIE','SERIAL','SERIAL NO','NO. SERIE']);
+            console.log('[pruebas] GEN indices', { usedUrl, GEN_EQUIPO_IDX, GEN_SERIE_IDX, headers: GEN_HEADERS });
+            try { document.getElementById('status').textContent = `Inventario general: ${usedUrl || ''} (equip:${GEN_EQUIPO_IDX}, serie:${GEN_SERIE_IDX})`; } catch {}
+            if (GEN_EQUIPO_IDX>=0 && GEN_SERIE_IDX>=0){
+              serieByEquipo.clear();
+              const norm = (s)=> String(s||'').trim().toUpperCase().replace(/[^A-Z0-9]/g,'');
+              for (const r of GEN_ROWS){
+                const k = norm(r[GEN_EQUIPO_IDX]);
+                const v = String(r[GEN_SERIE_IDX]||'').trim();
+                if (k && v && !serieByEquipo.has(k)) serieByEquipo.set(k, v);
+              }
+              console.log('[pruebas] Serie map size:', serieByEquipo.size);
+              try { document.getElementById('status').textContent += ` | series:${serieByEquipo.size}`; } catch {}
+            }
+          }catch(e){ console.error('[pruebas] loadGeneralInventory error', e); }
         }
 
         function getCurrentUser(){
@@ -195,7 +318,7 @@
           const status = document.getElementById('status'); status.textContent = 'Guardando...';
           const form = document.getElementById('prueba-form');
           const data = {};
-          form.querySelectorAll('input').forEach(inp => { data[inp.name||''] = inp.value || ''; });
+          form.querySelectorAll('input, select, textarea').forEach(inp => { data[inp.name||''] = inp.value || ''; });
           try{
             const user = getCurrentUser();
             if (!user){ status.textContent = 'Debes iniciar sesión para guardar'; alert('Inicia sesión para crear pruebas'); btn.disabled = false; return; }
