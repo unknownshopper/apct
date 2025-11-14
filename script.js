@@ -48,10 +48,23 @@ document.addEventListener('DOMContentLoaded', () => {
   };
 
   const page = {
-    isIndex: !!document.querySelector('main .actions'),
+    isIndex: !!document.querySelector('section.dashboard'),
     isLogin: !!document.getElementById('login-form'),
     isInspection: !!document.getElementById('inspection-form'),
   };
+
+  function setAppVisible(v){
+    try{
+      const header = document.querySelector('header');
+      const main = document.querySelector('main');
+      const footer = document.querySelector('footer');
+      if (header) header.style.visibility = v ? '' : 'hidden';
+      if (main) main.style.visibility = v ? '' : 'hidden';
+      if (footer) footer.style.visibility = v ? '' : 'hidden';
+    }catch{}
+  }
+
+  if (!page.isLogin) { setAppVisible(false); }
 
   // Cache for current email (driven by Firebase Auth state)
   const getCurrentEmail = () => localStorage.getItem('currentUserEmail');
@@ -129,6 +142,10 @@ document.addEventListener('DOMContentLoaded', () => {
         }
       } catch (e) {
         console.error('Error al cerrar sesión', e);
+      } finally {
+        try { setCurrentEmail(null); } catch {}
+        try { window.currentUser = null; window.dispatchEvent(new CustomEvent('auth:changed', { detail: { user: null } })); } catch {}
+        window.location.href = 'login.html';
       }
     });
   }
@@ -231,7 +248,30 @@ document.addEventListener('DOMContentLoaded', () => {
   function bindAuthState() {
     if (window.auth && window.auth.onAuthStateChanged) {
       window.auth.onAuthStateChanged(async (user) => {
-        setCurrentEmail(user?.email || null);
+        const isLogin = page.isLogin;
+        // Exponer usuario global y notificar
+        try { window.currentUser = user || null; } catch {}
+        try { window.dispatchEvent(new CustomEvent('auth:changed', { detail: { user: user || null } })); } catch {}
+
+        if (!user) {
+          setCurrentEmail(null);
+          if (!isLogin) {
+            setAppVisible(false);
+            window.location.href = 'login.html';
+            return;
+          } else {
+            // En login sin sesión, mostrar solo login
+            setAppVisible(true);
+          }
+        } else {
+          setCurrentEmail(user.email || null);
+          if (isLogin) {
+            window.location.href = 'index.html';
+            return;
+          } else {
+            setAppVisible(true);
+          }
+        }
         refreshUserBox();
         applyIndexPermissions();
         applyInspectionGuard();
@@ -240,7 +280,11 @@ document.addEventListener('DOMContentLoaded', () => {
         await applyHeaderVisibility();
       });
     } else {
-      // Fallback (no Firebase): keep prior local state
+      // Fallback (sin Firebase): bloquear vistas no login
+      if (!page.isLogin) {
+        window.location.href = 'login.html';
+        return;
+      }
       refreshUserBox();
       applyIndexPermissions();
       applyInspectionGuard();
@@ -250,6 +294,20 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
   bindAuthState();
+
+  // Revalidar al volver desde BFCache/atrás para evitar mostrar vistas en caché tras logout
+  window.addEventListener('pageshow', (e) => {
+    try{
+      if (e && e.persisted) {
+        const isLogin = page.isLogin;
+        const hasAuth = !!(window.auth && window.auth.currentUser);
+        if (!hasAuth && !isLogin) {
+          setAppVisible(false);
+          window.location.replace('login.html');
+        }
+      }
+    }catch{}
+  });
 
   // Optional: close mobile nav when clicking a nav link
   document.querySelectorAll('#primary-nav a').forEach((a) => {

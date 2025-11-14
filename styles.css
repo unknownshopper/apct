@@ -460,7 +460,8 @@ table.inventory thead th {
   border-bottom: 1px solid #e5e7eb;
   border-right: 1px solid #e5e7eb;
   padding: 0.6rem 0.75rem;
-  z-index: 1;
+  z-index: 10;
+  box-shadow: 0 1px 0 rgba(0,0,0,0.04);
 }
 
 table.inventory thead th[role="button"] {
@@ -483,27 +484,116 @@ table.inventory tbody td {
   border-right: 1px solid #f1f5f9;
   vertical-align: top;
   color: #111827;
+  position: relative;
+  z-index: 1;
 }
+/* Separación visual bajo encabezado */
+table.inventory tbody tr:first-child td { border-top: 1px solid #e5e7eb; }
 
 table.inventory thead th,
 table.inventory tbody td {
   white-space: nowrap;
 }
 
-table.inventory th:first-child,
-table.inventory td:first-child {
+/* Ya no se necesita padding extra en la primera fila: lo provee el separador */
+#actTable tbody tr:first-child > * { padding-top: 0 !important; }
+
+#actTable th:first-child,
+#actTable td:first-child {
   position: sticky;
   left: 0;
   background: #fff;
+  
 }
 
-table.inventory th:first-child {
-  top: 14px;
-  z-index: 4;
+#actTable th:first-child {
+  top: 0; /* alinear con thead específico de actividad */
+  z-index: 6; /* por encima de las celdas de cuerpo sticky */
 }
 
-table.inventory td:first-child {
+#actTable td:first-child {
   z-index: 2;
+}
+
+/* Selector de categoría en primera columna (actividad) */
+#actTable th:first-child { width: 280px; }
+#actTable td:first-child { width: 280px; }
+#actTable td:first-child select {
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  box-sizing: border-box;
+  height: 34px;
+  padding: 6px 10px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #fff;
+  color: var(--text-100);
+  font-weight: 500;
+  font-size: 0.9rem;
+  box-shadow: inset 0 0 0 1px rgba(11, 179, 217, 0.12);
+  width: 100%;
+  max-width: 100%;
+  line-height: 1.2;
+  text-transform: none;
+  letter-spacing: normal;
+  background-image: none;
+  outline: none;
+}
+#actTable td:first-child select:focus {
+  border-color: rgba(2,132,199,0.45);
+  box-shadow: 0 0 0 3px rgba(11,179,217,0.12), inset 0 0 0 1px rgba(11,179,217,0.18);
+  outline: none;
+}
+
+/* Inputs dentro de la tabla de actividad: alto y tipografía consistentes */
+#actTable td input[type="text"],
+#actTable td input[list] {
+  box-sizing: border-box;
+  height: 32px;
+  padding: 4px 8px;
+  border: 1px solid #dfe3e8;
+  border-radius: 6px;
+  background: #fff;
+  color: var(--text-100);
+  font-size: 0.9rem;
+  line-height: 1.2;
+  width: 100%;
+  max-width: 100%;
+}
+#actTable td input[type="text"]::placeholder,
+#actTable td input[list]::placeholder {
+  color: #98a2b3;
+}
+@media (max-width: 768px) {
+  #actTable th:first-child,
+  #actTable td:first-child { width: 220px; }
+}
+
+#actTable .date-editor {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+#actTable .date-editor > span { /* separadores ' / ' fijos */
+  color: var(--steel-600);
+  font-weight: 600;
+}
+#actTable .date-editor select {
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  height: 34px;
+  padding: 6px 10px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #fff;
+  color: var(--text-100);
+  font-size: 0.9rem;
+}
+#actTable .date-editor select:disabled {
+  background: #f8fafc;
+  color: var(--steel-600);
 }
 
 #inventory-wrapper.dragging {
@@ -544,7 +634,8 @@ table.inventory tbody tr:hover td {
 [data-page="tareas"] .table-wrap { overflow: auto; border: 1px solid var(--steel-400); border-radius: 10px; background: #fff; }
 [data-page="tareas"] table.list { width: 100%; border-collapse: collapse; min-width: 820px; table-layout: fixed; }
 [data-page="tareas"] table.list th, [data-page="tareas"] table.list td { padding: 10px 12px; border-bottom: 1px solid rgba(15,23,42,0.08); text-align: left; vertical-align: top; }
-[data-page="tareas"] table.list thead th { position: sticky; top: 0; background: var(--bg-800); z-index: 1; }
+[data-page="tareas"] table.list thead th { position: sticky; top: 0; background: var(--bg-800); z-index: 10; box-shadow: 0 1px 0 rgba(0,0,0,0.04); }
+[data-page="tareas"] table.list tbody tr:first-child td { border-top: 1px solid rgba(15,23,42,0.12); }
 [data-page="tareas"] h1 { margin: 8px 0 12px; }
 [data-page="tareas"] .dmg-list { margin: 0; padding-left: 18px; }
 [data-page="tareas"] .dmg-list li { margin: 2px 0; }
@@ -566,7 +657,24 @@ table.inventory tbody tr:hover td {
 [data-page="inspeccion"] .kbd { display: inline-block; padding: 2px 8px; border: 1px solid rgba(124, 244, 255, 0.25); border-radius: 8px; font-size: 0.85rem; color: var(--text-300); background: linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.01)); }
 [data-page="inspeccion"] .table-wrap { overflow: auto; border: 1px solid var(--steel-400); border-radius: 10px; background: #ffffff; }
 [data-page="inspeccion"] table.inspection { width: 100%; border-collapse: collapse; min-width: 720px; }
-[data-page="inspeccion"] table.inspection thead th { position: sticky; top: 0; background: var(--bg-800); z-index: 1; }
+[data-page="inspeccion"] table.inventory thead th {
+  position: sticky;
+  top: 0; /* alineado al borde superior del contenedor scroll */
+  background: #f8fafc;
+  z-index: 5; /* por encima del contenido */
+  box-shadow: 0 1px 0 rgba(0,0,0,0.04);
+  padding-top: 8px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+/* Separador visual consistente de 18px ANTES del tbody para empujar la primera fila */
+table.inventory tbody::before {
+  content: "";
+  display: block;
+  height: 18px;
+}
+[data-page="inspeccion"] table.inspection tbody tr:first-child td { border-top: 1px solid rgba(15,23,42,0.12); }
 [data-page="inspeccion"] table.inspection th, 
 [data-page="inspeccion"] table.inspection td { padding: 10px 12px; border-bottom: 1px solid rgba(15,23,42,0.08); text-align: left; }
 [data-page="inspeccion"] table.inspection th { color: var(--text-300); font-weight: 600; letter-spacing: .2px; }

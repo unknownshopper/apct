@@ -170,6 +170,18 @@
         for (let i=0;i<maxTries;i++){ if (window.db) return true; await new Promise(r=>setTimeout(r,50)); }
         return !!window.db;
       }
+      async function waitForAuth(){
+        const maxTries = 60;
+        for (let i=0;i<maxTries;i++){
+          if (window.auth) break;
+          await new Promise(r=>setTimeout(r,50));
+        }
+        if (!window.auth) return null;
+        if (window.auth.currentUser) return window.auth.currentUser;
+        return new Promise((resolve)=>{
+          const unsub = window.auth.onAuthStateChanged((u)=>{ try{unsub();}catch{} resolve(u||null); });
+        });
+      }
 
       async function loadData(){
         await ready();
@@ -200,7 +212,8 @@
 
       async function start(){
         const hint = document.getElementById('authHint');
-        const isAuthed = !!window.currentUser;
+        const user = await waitForAuth();
+        const isAuthed = !!user;
         if (!isAuthed) { if (hint) hint.style.display = ''; }
         try {
           let items = await loadData();

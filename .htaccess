@@ -1,0 +1,38 @@
+# Security headers
+<IfModule mod_headers.c>
+  Header set X-Content-Type-Options "nosniff"
+  Header set X-Frame-Options "SAMEORIGIN"
+  Header set Referrer-Policy "strict-origin-when-cross-origin"
+  Header set Permissions-Policy "geolocation=(), microphone=(), camera=(), payment=()"
+  # Ajustar CSP según orígenes usados
+  Header set Content-Security-Policy "default-src 'self' https://www.gstatic.com https://www.googleapis.com https://*.firebaseio.com https://firestore.googleapis.com https://cdn.jsdelivr.net; img-src 'self' data:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; script-src 'self' 'unsafe-inline' https://www.gstatic.com https://cdn.jsdelivr.net; connect-src 'self' https://www.googleapis.com https://*.firebaseio.com https://firestore.googleapis.com https://www.gstatic.com;"
+</IfModule>
+
+# Cache: no-store para HTML
+<FilesMatch "\.(html|htm)$">
+  <IfModule mod_headers.c>
+    Header set Cache-Control "no-store, no-cache, must-revalidate"
+    Header set Pragma "no-cache"
+    Header set Expires "0"
+  </IfModule>
+</FilesMatch>
+
+# Cache razonable para assets estáticos
+<FilesMatch "\.(css|js|png|jpg|jpeg|gif|svg|webp|ico)$">
+  <IfModule mod_headers.c>
+    Header set Cache-Control "public, max-age=2592000, immutable"
+  </IfModule>
+</FilesMatch>
+
+# CSV: cache corto, usamos cache-busting en cliente
+<FilesMatch "\.(csv)$">
+  <IfModule mod_headers.c>
+    Header set Cache-Control "public, max-age=600"
+    AddType text/csv .csv
+  </IfModule>
+</FilesMatch>
+
+# Manifest mime
+<IfModule mod_mime.c>
+  AddType application/manifest+json .webmanifest
+</IfModule>

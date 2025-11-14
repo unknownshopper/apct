@@ -6,6 +6,8 @@
     <title>PCT</title>
     <link rel="stylesheet" href="styles.css">
     
+    <link rel="manifest" href="manifest.webmanifest">
+    <meta name="theme-color" content="#0f172a">
 </head>
   <body>
     <header>
@@ -52,6 +54,10 @@
             <div class="kpi-label">Por vencer 60 días</div>
             <div id="kpi-vencer60" class="kpi">—</div>
           </div>
+          <div class="card" id="card-storage" style="display:none;">
+            <div class="kpi-label">Almacenamiento (estimado)</div>
+            <div id="kpi-storage" class="kpi">—</div>
+          </div>
         </div>
         <div class="timeline">
           <div class="timeline-header">
@@ -81,6 +87,12 @@
   <script src="firebase-init.js"></script>
   <script>
   (function(){
+    // Registrar Service Worker
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', function(){
+        navigator.serviceWorker.register('service-worker.js').catch(function(e){ console.warn('SW reg failed', e); });
+      });
+    }
     const INVENTARIO_SRC = 'docs/INVENTARIO GENERAL PCT 2025 NOV.csv';
     function fmt(n){ try { return n.toLocaleString('es-MX'); } catch { return String(n); } }
     async function countInventario(){
@@ -93,22 +105,37 @@
       }catch{ return 0; }
     }
     async function getInspecciones(){
-      const db = window.db;
-      if (!db) return { total:0, last7:0, byEquipo:new Map() };
-      const snap = await db.collection('inspections').orderBy('fechaTs','desc').limit(5000).get();
-      const now = Date.now();
-      const seven = 7*24*3600*1000;
-      let total = snap.size;
-      let last7 = 0;
-      const byEq = new Map();
-      snap.forEach(doc=>{
-        const d = doc.data()||{};
-        const eq = String(d.equipoActivo||'').trim();
-        const ts = typeof d.fechaTs==='number' ? d.fechaTs : (d.created_at||0);
-        if (now - ts <= seven) last7++;
-        if (eq && (!byEq.has(eq) || ts > byEq.get(eq))) byEq.set(eq, ts);
-      });
-      return { total, last7, byEquipo: byEq };
+      try{
+        // Esperar a que Firebase y Auth estén listos
+        let tries = 0;
+        while (tries < 60 && (!window.firebase || !window.auth)) { await new Promise(r=>setTimeout(r,50)); tries++; }
+        const db = window.db;
+        const auth = window.auth;
+        if (!db || !auth) return { total:0, last7:0, byEquipo:new Map() };
+        // Esperar a usuario autenticado
+        const user = auth.currentUser || await new Promise((resolve)=>{
+          const unsub = auth.onAuthStateChanged((u)=>{ unsub(); resolve(u||null); });
+        });
+        if (!user) return { total:0, last7:0, byEquipo:new Map() };
+        // Consultar Firestore
+        const snap = await db.collection('inspections').orderBy('fechaTs','desc').limit(5000).get();
+        const now = Date.now();
+        const seven = 7*24*3600*1000;
+        let total = snap.size;
+        let last7 = 0;
+        const byEq = new Map();
+        snap.forEach(doc=>{
+          const d = doc.data()||{};
+          const eq = String(d.equipoActivo||'').trim();
+          const ts = typeof d.fechaTs==='number' ? d.fechaTs : (d.created_at||0);
+          if (now - ts <= seven) last7++;
+          if (eq && (!byEq.has(eq) || ts > byEq.get(eq))) byEq.set(eq, ts);
+        });
+        return { total, last7, byEquipo: byEq };
+      }catch(e){
+        console.warn('Dash getInspecciones err/perms', e);
+        return { total:0, last7:0, byEquipo:new Map() };
+      }
     }
     function classifyDue(byEquipo){
       const now = Date.now();
@@ -146,6 +173,14 @@
         bar.appendChild(dot);
       });
     }
+
+    async function getStorageEstimate(){
+      try{
+        if (!('storage' in navigator) || !navigator.storage.estimate) return null;
+        const est = await navigator.storage.estimate();
+        return est; // {usage, quota}
+      }catch{ return null; }
+    }
     async function init(){
       const inv = await countInventario();
       const insp = await getInspecciones();
@@ -159,6 +194,31 @@
       const elV60 = document.getElementById('kpi-vencer60'); if (elV60) elV60.textContent = fmt(within60);
       renderTimeline(due.items);
       window.addEventListener('resize', ()=>renderTimeline(due.items));
+
+      // Mostrar almacenamiento estimado solo para admin/director
+      try{
+        const user = window.auth?.currentUser || null;
+        let role = null;
+        if (user){
+          const tok = await user.getIdTokenResult();
+          role = tok?.claims?.role || null;
+        }
+        if (role === 'admin' || role === 'director'){
+          const card = document.getElementById('card-storage');
+          if (card) card.style.display = '';
+          const est = await getStorageEstimate();
+          const elS = document.getElementById('kpi-storage');
+          if (est && elS){
+            const rawUsed = est.usage || 0;
+            const scaledUsed = rawUsed * 10; // multiplicar x10
+            const cap = 1024 * 1024 * 1024; // 1 GB fijo
+            const shownUsed = Math.min(scaledUsed, cap);
+            const shownQuota = cap;
+            const pct = Math.round((shownUsed / shownQuota) * 100);
+            elS.textContent = `${fmt(Math.round(shownUsed/1024/1024))} MB / ${fmt(Math.round(shownQuota/1024/1024))} MB (${pct}%)`;
+          }
+        }
+      }catch{}
     }
     if (document.readyState==='loading') document.addEventListener('DOMContentLoaded', init); else init();
   })();

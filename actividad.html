@@ -35,15 +35,26 @@
       <a id="login-link" href="login.html">Login</a>
       <button id="logout-btn" type="button" style="display:none">Salir</button>
     </div>
+
+    <section id="activity-kpis" class="dashboard" style="margin: 10px 0 6px; display:none;">
+      <div class="cards" id="activity-cards"></div>
+    </section>
   </header>
   <main class="wide">
     <h1>Registro de Actividad</h1>
     <div class="page-logo"><img src="img/logopctch.png" alt="PCT"></div>
 
+    <section id="summary" class="dashboard" style="margin-bottom: 10px; display:none;">
+      <div class="cards" id="summary-cards"></div>
+    </section>
+
     <div class="toolbar" role="region" aria-label="Herramientas de tabla">
       <div class="group">
         <input id="q" type="text" placeholder="Buscar..." aria-label="Buscar" />
         <button id="clearQ" class="btn-primary" type="button">Limpiar</button>
+        <button id="newRowBtn" class="btn-primary" type="button">Nuevo registro</button>
+        <button id="saveRowBtn" class="btn-primary" type="button" style="display:none; opacity:.6; pointer-events:none;">Guardar</button>
+        <button id="cancelRowBtn" type="button" style="display:none;">Cancelar</button>
       </div>
       <div class="toolbar-count" id="count">0 registros</div>
     </div>
@@ -72,36 +83,178 @@
   <script>
   (function(){
     const SRC = 'docs/REGISTRO DE ACTIVIDAD PCT 2025.csv';
+    const INVENT_SRC = 'docs/INVENTARIO GENERAL PCT 2025 NOV.csv';
     const thead = document.getElementById('thead');
     const tbody = document.getElementById('tbody');
+    const summary = document.getElementById('summary');
+    const summaryCards = document.getElementById('summary-cards');
     const q = document.getElementById('q');
     const clearQ = document.getElementById('clearQ');
+    const newRowBtn = document.getElementById('newRowBtn');
+    const saveRowBtn = document.getElementById('saveRowBtn');
+    const cancelRowBtn = document.getElementById('cancelRowBtn');
     const count = document.getElementById('count');
     const table = document.getElementById('actTable');
+    const activityKpis = document.getElementById('activity-kpis');
+    const activityCards = document.getElementById('activity-cards');
 
     let rows = [];
     let headers = [];
     let view = [];
     let sortCol = -1;
     let sortDir = 'asc';
+    // Proyección de columnas visibles en orden (índices calculados post parse)
+    let visibleCols = null; // { order: number[], labels: string[] }
+    let propiedadIdx = -1; // índice de la columna PROPIEDAD
+    let diasServicioVisibleIdx = -1; // índice visible (no contando la columna de selección)
+    let equipoVisibleIdx = -1; // índice visible para EQUIPO/ACTIVO
+    let inventoryOptions = []; // opciones de inventario para internos
+    let inventorySet = new Set(); // para verificación rápida de pertenencia
+    let externalOptionsByProvider = new Map(); // proveedor -> Set de claves sugeridas
 
     function fmt(n){ return n.toLocaleString('es-MX'); }
 
+    function ensureDatalist(id, options){
+      let dl = document.getElementById(id);
+      if (!dl){ dl = document.createElement('datalist'); dl.id = id; document.body.appendChild(dl); }
+      dl.innerHTML = '';
+      (options||[]).forEach(opt=>{ const o=document.createElement('option'); o.value=opt; dl.appendChild(o); });
+      return dl;
+    }
+
+    function endOfMonth(dt){
+      const d = new Date(dt.getFullYear(), dt.getMonth()+1, 0);
+      d.setHours(0,0,0,0);
+      return d;
+    }
+    // Corte administrativo: día 25 de cada mes
+    function cutoff25(dt){
+      const d = new Date(dt.getFullYear(), dt.getMonth(), 25);
+      d.setHours(0,0,0,0);
+      if (dt > d){
+        // pasar al 25 del siguiente mes
+        return new Date(dt.getFullYear(), dt.getMonth()+1, 25);
+      }
+      return d;
+    }
+    // Continuación: día 27 de ese mismo mes (2 días de gracia)
+    function continuation27From(dateOn25){
+      const d = new Date(dateOn25.getFullYear(), dateOn25.getMonth(), 27);
+      d.setHours(0,0,0,0);
+      return d;
+    }
+    function addDays(dt, n){ const d=new Date(dt); d.setDate(d.getDate()+n); d.setHours(0,0,0,0); return d; }
+    function minDate(a,b){ return a<=b ? a : b; }
+    function daysInclusive(a,b){ return Math.max(0, Math.ceil((b - a)/(1000*60*60*24)) + 1); }
+
     function renderHead(){
       const tr = document.createElement('tr');
-      headers.forEach((h, idx)=>{
+      // Columna virtual inicial (no ordenable)
+      const thSel = document.createElement('th');
+      thSel.textContent = 'SELECCIÓN';
+      tr.appendChild(thSel);
+      const labels = visibleCols ? visibleCols.labels : headers;
+      labels.forEach((h, vIdx)=>{
         const th = document.createElement('th');
         th.textContent = h;
         th.setAttribute('role','button');
         th.tabIndex = 0;
-        th.dataset.index = String(idx);
-        if (idx === sortCol) th.dataset.sort = sortDir;
-        th.addEventListener('click', ()=>toggleSort(idx));
-        th.addEventListener('keydown', (ev)=>{ if (ev.key==='Enter' || ev.key===' ') { ev.preventDefault(); toggleSort(idx); } });
+        th.dataset.index = String(vIdx);
+        if (vIdx === sortCol) th.dataset.sort = sortDir;
+        th.addEventListener('click', ()=>toggleSort(vIdx));
+        th.addEventListener('keydown', (ev)=>{ if (ev.key==='Enter' || ev.key===' ') { ev.preventDefault(); toggleSort(vIdx); } });
         tr.appendChild(th);
       });
       thead.innerHTML = '';
       thead.appendChild(tr);
+    }
+
+    function computeVisibleIndices(){
+      if (!visibleCols){ diasServicioVisibleIdx = -1; equipoVisibleIdx = -1; return; }
+      const labels = visibleCols.labels.map(h=>normalizeHeader(h).toUpperCase());
+      diasServicioVisibleIdx = labels.indexOf('DIAS EN SERVICIO');
+      // Variantes para EQUIPO / ACTIVO
+      const variants = ['EQUIPO / ACTIVO','EQUIPO/ACTIVO','EQUIPO ACTIVO','EQUIPO'];
+      equipoVisibleIdx = labels.findIndex(l => variants.includes(l));
+    }
+
+    function rebuildEquipoCellForRow(tr){
+      if (equipoVisibleIdx < 0) return;
+      const cells = tr.children;
+      // primera columna es selección, así que sumamos 1
+      const td = cells[1 + equipoVisibleIdx];
+      if (!td) return;
+      const firstCell = cells[0];
+      const selEl = firstCell.querySelector('select');
+      const tipo = selEl ? selEl.value : (firstCell.textContent||'EQUIPOS INTERNOS');
+      const oldVal = (td.querySelector('input')?.value) || td.textContent || '';
+      td.innerHTML = '';
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.value = String(oldVal||'').trim();
+      if (tipo === 'EQUIPOS INTERNOS'){
+        ensureDatalist('dl-inventory-equipos', inventoryOptions||[]);
+        input.setAttribute('list', 'dl-inventory-equipos');
+        input.placeholder = 'Equipo/Activo (inventario)';
+      } else {
+        input.placeholder = 'Clave del proveedor';
+        // detectar proveedor según PROPIEDAD del dataset de la fila (si existe)
+        let prov = '';
+        try {
+          // Buscar valor PROPIEDAD de esta fila en el array 'view'
+          const rowIndex = Array.from(tbody.children).indexOf(tr);
+          const dataRow = view[rowIndex] || [];
+          prov = propiedadIdx>=0 ? String(dataRow[propiedadIdx]||'').trim().toUpperCase() : '';
+        } catch {}
+        const dlid = 'dl-prov-' + (prov||'GEN');
+        const opts = externalOptionsByProvider.get(prov) ? Array.from(externalOptionsByProvider.get(prov).values()) : [];
+        ensureDatalist(dlid, opts);
+        input.setAttribute('list', dlid);
+      }
+      td.appendChild(input);
+      try { input.focus(); input.select(); } catch {}
+    }
+
+    function updateActivityKpis(){
+      // Si no hay filas, ocultar
+      if (!tbody.children.length){ activityKpis.style.display='none'; activityCards.innerHTML=''; return; }
+      let total = 0, internos = 0, externos = 0;
+      const rowsEl = tbody.querySelectorAll('tr');
+      rowsEl.forEach(tr=>{
+        const cells = tr.children;
+        if (!cells || cells.length === 0) return;
+        const sel = cells[0].querySelector('select');
+        let tipo = 'EQUIPOS INTERNOS';
+        if (sel) tipo = sel.value;
+        else tipo = (cells[0].textContent||'EQUIPOS INTERNOS').trim();
+        // Obtener días en servicio desde columna visible
+        let dias = 0;
+        if (diasServicioVisibleIdx >= 0){
+          const td = cells[1 + diasServicioVisibleIdx];
+          if (td){
+            const s = String(td.textContent||'').replace(/,/g,'').trim();
+            const n = parseFloat(s);
+            if (!isNaN(n)) dias = n;
+          }
+        }
+        if (dias > 0){
+          total++;
+          if (tipo === 'EQUIPOS INTERNOS') internos++; else externos++;
+        }
+      });
+      activityCards.innerHTML = '';
+      const data = [
+        { label: 'Equipos totales en servicio', val: total },
+        { label: 'Equipos internos en servicio', val: internos },
+        { label: 'Equipos externos en servicio', val: externos }
+      ];
+      data.forEach(k=>{
+        const card = document.createElement('div'); card.className='card';
+        const l = document.createElement('div'); l.className='kpi-label'; l.textContent = k.label;
+        const v = document.createElement('div'); v.className='kpi'; v.textContent = fmt(k.val);
+        card.appendChild(l); card.appendChild(v); activityCards.appendChild(card);
+      });
+      activityKpis.style.display = '';
     }
 
     function renderBody(data){
@@ -109,10 +262,77 @@
       for (let i=0;i<data.length;i++){
         const tr = document.createElement('tr');
         const row = data[i];
-        for (let j=0;j<headers.length;j++){
+        // Celda de selección por fila (solo en filas 1 y 4 visibles)
+        const tdSel = document.createElement('td');
+        // Determinar tipo por PROPIEDAD
+        let pre = 'EQUIPOS INTERNOS';
+        if (propiedadIdx >= 0){
+          const prop = String(row[propiedadIdx]||'').trim().toUpperCase();
+          if (prop === 'PCT') pre = 'EQUIPOS INTERNOS';
+          else if (prop) pre = 'EQUIPOS EXTERNOS';
+        }
+        if (i === 0 || i === 3){
+          const select = document.createElement('select');
+          select.innerHTML = `
+            <option value="EQUIPOS INTERNOS">EQUIPOS INTERNOS</option>
+            <option value="EQUIPOS EXTERNOS">EQUIPOS EXTERNOS</option>
+          `;
+          select.value = pre;
+          tdSel.appendChild(select);
+        } else {
+          const tag = document.createElement('span');
+          tag.className = 'sel-tag readonly';
+          tag.textContent = pre;
+          tdSel.appendChild(tag);
+        }
+        tr.appendChild(tdSel);
+        const order = visibleCols ? visibleCols.order : headers.map((_,k)=>k);
+        for (let j=0;j<order.length;j++){
           const td = document.createElement('td');
-          const v = row[j] == null ? '' : row[j];
-          td.textContent = v;
+          const idx = order[j];
+          let v = row[idx] == null ? '' : row[idx];
+          // Formateo de fechas dd/mm/yy -> dd/mm/yyyy
+          const label = (visibleCols ? visibleCols.labels[j] : headers[j]) || '';
+          if (/fecha\s|inicio del servicio|continuacion del servicio|fin parcial del servicio|terminacion del servicio|devolucion/i.test(label)){
+            const s = String(v).trim();
+            const m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
+            if (m){
+              let d = parseInt(m[1],10), M = parseInt(m[2],10), y = parseInt(m[3],10);
+              if (y < 100) y += 2000;
+              const dd = String(d).padStart(2,'0');
+              const MM = String(M).padStart(2,'0');
+              const yy = String(y % 100).padStart(2,'0');
+              v = `${dd}/${MM}/${yy}`;
+            }
+          }
+          // Render editable para EQUIPO / ACTIVO
+          const isEquipoCol = /^(EQUIPO\s*\/\s*ACTIVO|EQUIPO\s*ACTIVO|EQUIPO)$/i.test(normalizeHeader(label).toUpperCase());
+          if (isEquipoCol){
+            // Interno/Externo según la primera celda
+            const selCell = tdSel;
+            const selEl = selCell.querySelector('select');
+            const tipo = selEl ? selEl.value : (selCell.textContent||'EQUIPOS INTERNOS');
+            const input = document.createElement('input');
+            input.type = 'text';
+            input.value = String(v||'');
+            if (tipo === 'EQUIPOS INTERNOS'){
+              // Autocompletar desde inventario
+              ensureDatalist('dl-inventory-equipos', inventoryOptions||[]);
+              input.setAttribute('list', 'dl-inventory-equipos');
+              input.placeholder = 'Equipo/Activo (inventario)';
+            } else {
+              // Autocompletar por proveedor
+              input.placeholder = 'Clave del proveedor';
+              const prov = propiedadIdx>=0 ? String(row[propiedadIdx]||'').trim().toUpperCase() : '';
+              const dlid = 'dl-prov-' + (prov||'GEN');
+              const opts = externalOptionsByProvider.get(prov) ? Array.from(externalOptionsByProvider.get(prov).values()) : [];
+              ensureDatalist(dlid, opts);
+              input.setAttribute('list', dlid);
+            }
+            td.appendChild(input);
+          } else {
+            td.textContent = v;
+          }
           tr.appendChild(td);
         }
         frag.appendChild(tr);
@@ -121,6 +341,9 @@
       tbody.appendChild(frag);
       count.textContent = fmt(data.length) + ' registros';
       syncScrollbar();
+      // recomputar índices visibles y KPIs
+      computeVisibleIndices();
+      updateActivityKpis();
     }
 
     function applyFilter(){
@@ -142,15 +365,46 @@
 
     function applySort(){
       const dir = sortDir === 'asc' ? 1 : -1;
+      const order = visibleCols ? visibleCols.order : headers.map((_,k)=>k);
+      const idx = order[sortCol] ?? sortCol;
       view = [...view].sort((a,b)=>{
-        const av = a[sortCol] ?? '';
-        const bv = b[sortCol] ?? '';
+        const av = a[idx] ?? '';
+        const bv = b[idx] ?? '';
         const an = parseFloat(String(av).replace(/,/g,''));
         const bn = parseFloat(String(bv).replace(/,/g,''));
         const bothNum = !isNaN(an) && !isNaN(bn);
         if (bothNum) return (an>bn?1:an<bn?-1:0)*dir;
         return String(av).localeCompare(String(bv), 'es', { sensitivity:'base' }) * dir;
       });
+    }
+
+    function buildVisibleColumns(){
+      const wanted = [
+        '#',
+        'EQUIPO / ACTIVO','EQUIPO/ACTIVO','EQUIPO ACTIVO',
+        'CLIENTE','AREA DEL CLIENTE','UBICACIÓN',
+        'FECHA EMBARQUE',
+        'INICIO DEL SERVICIO','CONTINUACION DEL SERVICIO','FIN PARCIAL DEL SERVICIO','TERMINACION DEL SERVICIO','FECHA DE DEVOLUCION',
+        'DIAS EN SERVICIO'
+      ];
+      const normHeaders = headers.map(h=>normalizeHeader(h).toUpperCase());
+      const order = [];
+      const labels = [];
+      // helper para añadir si existe
+      function addOne(name){
+        const idx = normHeaders.indexOf(normalizeHeader(name).toUpperCase());
+        if (idx>=0){ order.push(idx); labels.push(headers[idx]); }
+      }
+      // construir orden sin duplicar
+      const seen = new Set();
+      wanted.forEach(name=>{
+        const idx = normHeaders.indexOf(normalizeHeader(name).toUpperCase());
+        if (idx>=0 && !seen.has(idx)){ order.push(idx); labels.push(headers[idx]); seen.add(idx); }
+      });
+      if (!order.length){ visibleCols = null; return; }
+      visibleCols = { order, labels };
+      propiedadIdx = normHeaders.indexOf('PROPIEDAD');
+      computeVisibleIndices();
     }
 
     function syncScrollbar(){
@@ -168,7 +422,102 @@
     }
 
     function normalizeHeader(h){
-      return String(h||'').trim();
+      return String(h||'')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g,'')
+        .replace(/\s+/g,' ')
+        .trim();
+    }
+
+    function isLikelyHeaderRow(row){
+      const norm = row.map(normalizeHeader);
+      const hope = ['equipo / activo','equipo/activo','equipo activo','descripcion','descripción','producto'];
+      let hits = 0;
+      for (const h of hope){ if (norm.some(c => c.toLowerCase() === h)) hits++; }
+      return hits >= 2; // al menos 2 columnas clave
+    }
+
+    function parseSummary(data){
+      const kv = {};
+      const want = [
+        'INGRESOS ACUMULADOS EN EL MES',
+        'EQUIPOS TOTALES EN SERVICIO',
+        'EQUIPOS PROPIOS EN SERVICIO',
+        'EQUIPOS DE TERCEROS EN SERVICIO'
+      ];
+      for (const row of data){
+        const label = (row[0]||'').toString().trim();
+        const labelNorm = normalizeHeader(label).toUpperCase();
+        if (!labelNorm) continue;
+        if (want.includes(labelNorm)){
+          // buscar primer numero en la fila
+          let val = null;
+          for (let j=1;j<row.length;j++){
+            const s = String(row[j]||'').replace(/,/g,'');
+            const n = parseFloat(s);
+            if (!isNaN(n)) { val = n; break; }
+          }
+          if (val != null) kv[labelNorm] = val;
+        }
+      }
+      return kv;
+    }
+
+    function renderSummaryCards(kv){
+      const mapTitles = {
+        'INGRESOS ACUMULADOS EN EL MES': 'Ingresos acumulados (mes)',
+        'EQUIPOS TOTALES EN SERVICIO': 'Equipos en servicio (total)',
+        'EQUIPOS PROPIOS EN SERVICIO': 'Propios en servicio',
+        'EQUIPOS DE TERCEROS EN SERVICIO': 'Terceros en servicio'
+      };
+      const items = Object.keys(kv);
+      if (!items.length){ summary.style.display='none'; summaryCards.innerHTML=''; return; }
+      summary.style.display='';
+      summaryCards.innerHTML = '';
+      items.forEach(key => {
+        const card = document.createElement('div');
+        card.className = 'card';
+        const label = document.createElement('div'); label.className='kpi-label'; label.textContent = mapTitles[key] || key;
+        const val = document.createElement('div'); val.className='kpi'; val.textContent = (kv[key]).toLocaleString('es-MX');
+        card.appendChild(label); card.appendChild(val);
+        summaryCards.appendChild(card);
+      });
+    }
+
+    function buildExternalOptionsBase(){
+      externalOptionsByProvider.clear();
+      const idxEquipo = headers.findIndex(h=>/^EQUIPO\s*\/\s*ACTIVO|EQUIPO\s*ACTIVO|EQUIPO$/i.test(normalizeHeader(h).toUpperCase()));
+      for (const r of rows){
+        const prov = propiedadIdx>=0 ? String(r[propiedadIdx]||'').trim().toUpperCase() : '';
+        const key = idxEquipo>=0 ? String(r[idxEquipo]||'').trim() : '';
+        if (!prov || !key) continue;
+        if (!externalOptionsByProvider.has(prov)) externalOptionsByProvider.set(prov, new Set());
+        externalOptionsByProvider.get(prov).add(key);
+      }
+    }
+
+    function loadInventoryOptions(){
+      Papa.parse(INVENT_SRC, { download:true, skipEmptyLines:'greedy', complete:(res)=>{
+        try{
+          const rows = res.data || [];
+          if (!rows.length) { inventoryOptions = []; return; }
+          const hdr = rows[0].map(h=>String(h||''));
+          let idxEq = -1;
+          for (let i=0;i<hdr.length;i++){
+            const h = hdr[i];
+            if (/^EQUIPO\s*\/\s*ACTIVO|EQUIPO\s*ACTIVO|EQUIPO$/i.test(normalizeHeader(h).toUpperCase())) { idxEq = i; break; }
+          }
+          const set = new Set();
+          for (let i=1;i<rows.length;i++){
+            const v = String(rows[i][idxEq]||'').trim();
+            if (v) set.add(v);
+          }
+          inventoryOptions = Array.from(set.values()).sort((a,b)=>a.localeCompare(b,'es'));
+          inventorySet = new Set(inventoryOptions);
+          // Evitar re-render si hay una fila en edición (new-row)
+          if (tbody.children.length && !tbody.querySelector('tr.new-row')) renderBody(view);
+        } catch(e){ inventoryOptions = []; }
+      }});
     }
 
     function load(){
@@ -177,15 +526,360 @@
         skipEmptyLines: 'greedy',
         complete: (res)=>{
           const data = res.data || [];
-          if (!data.length){ headers=[]; rows=[]; view=[]; renderHead(); renderBody([]); return; }
-          headers = data[0].map(normalizeHeader);
-          rows = data.slice(1);
+          if (!data.length){ headers=[]; rows=[]; view=[]; renderHead(); renderBody([]); renderSummaryCards({}); return; }
+          // Buscar fila de cabecera real
+          let headerIdx = -1;
+          for (let i=0;i<Math.min(data.length, 20); i++){
+            if (isLikelyHeaderRow(data[i])) { headerIdx = i; break; }
+          }
+          // Extraer resumen de las filas previas
+          const pre = headerIdx>0 ? data.slice(0, headerIdx) : [];
+          const summaryKV = parseSummary(pre);
+          renderSummaryCards(summaryKV);
+
+          // Cabecera y filas de detalle
+          if (headerIdx >= 0){
+            headers = data[headerIdx].map(h=>String(h||'').trim());
+            rows = data.slice(headerIdx+1);
+          } else {
+            headers = data[0].map(h=>String(h||'').trim());
+            rows = data.slice(1);
+          }
+          buildVisibleColumns();
           view = rows;
+          buildExternalOptionsBase();
           renderHead();
           renderBody(view);
+          // Escuchar cambios en selects para refrescar KPIs y actualizar editor de EQUIPO/ACTIVO en sitio
+          tbody.addEventListener('change', (e)=>{
+            if (!e.target) return;
+            if (e.target.tagName === 'SELECT'){
+              // Si cambia el tipo Interno/Externo, actualizar solo la fila
+              const tr = e.target.closest('tr');
+              if (tr) rebuildEquipoCellForRow(tr);
+              updateActivityKpis();
+            }
+          });
+          // Escuchar entradas en EQUIPO/ACTIVO para actualizar etiqueta gris
+          tbody.addEventListener('input', (e)=>{
+            const target = e.target;
+            if (!(target instanceof HTMLInputElement)) return;
+            // localizar la fila y su primera celda
+            const tr = target.closest('tr');
+            if (!tr) return;
+            const firstCell = tr.children[0];
+            if (!firstCell) return;
+            const tag = firstCell.querySelector('span.sel-tag.readonly');
+            if (!tag) return; // solo auto-actualizamos en filas sin selector
+            const val = String(target.value||'').trim();
+            if (!val){ tag.textContent = 'EQUIPOS INTERNOS'; return; }
+            const isInternal = inventorySet.has(val);
+            tag.textContent = isInternal ? 'EQUIPOS INTERNOS' : 'EQUIPOS EXTERNOS';
+          });
         }
       });
+      // Cargar opciones de inventario en paralelo
+      loadInventoryOptions();
     }
+
+    // Utilidades para fechas
+    function parseDMY(s){
+      const m = String(s||'').trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
+      if (!m) return null;
+      let d = parseInt(m[1],10), M = parseInt(m[2],10)-1, y = parseInt(m[3],10); if (y<100) y+=2000;
+      const dt = new Date(y, M, d);
+      return isNaN(dt.getTime()) ? null : dt;
+    }
+    function formatDMY(dt){
+      const d = String(dt.getDate()).padStart(2,'0');
+      const m = String(dt.getMonth()+1).padStart(2,'0');
+      const y2 = String(dt.getFullYear() % 100).padStart(2,'0');
+      return `${d}/${m}/${y2}`;
+    }
+
+    function headerIndex(nameVariants){
+      const hdr = headers.map(h=>normalizeHeader(h).toUpperCase());
+      for (const v of nameVariants){
+        const i = hdr.indexOf(v); if (i>=0) return i;
+      }
+      return -1;
+    }
+
+    // Editor de fecha con 3 selects y diagonales fijas
+    function buildDateEditor(disabled=false, presetStr=''){
+      // presetStr puede venir como dd/mm/aa o dd/mm/aaaa
+      const preset = parseDMY(presetStr) || new Date();
+      const wrap = document.createElement('span');
+      wrap.className = 'date-editor';
+      const selD = document.createElement('select'); selD.className='date-dd';
+      const selM = document.createElement('select'); selM.className='date-mm';
+      const selY = document.createElement('select'); selY.className='date-yy';
+      for (let d=1; d<=31; d++){ const o=document.createElement('option'); o.value=String(d).padStart(2,'0'); o.textContent=o.value; selD.appendChild(o); }
+      for (let m=1; m<=12; m++){ const o=document.createElement('option'); o.value=String(m).padStart(2,'0'); o.textContent=o.value; selM.appendChild(o); }
+      const yearFull = preset.getFullYear(); const start=yearFull-2, end=yearFull+5;
+      for (let y=start; y<=end; y++){ const o=document.createElement('option'); const yy=String(y%100).padStart(2,'0'); o.value=yy; o.textContent=yy; selY.appendChild(o); }
+      const sep1=document.createElement('span'); sep1.textContent=' / ';
+      const sep2=document.createElement('span'); sep2.textContent=' / ';
+      const hidden = document.createElement('input'); hidden.type='hidden';
+      function syncHidden(){ hidden.value = `${selD.value}/${selM.value}/${selY.value}`; hidden.dispatchEvent(new Event('input', {bubbles:true})); }
+      selD.value = String(preset.getDate()).padStart(2,'0');
+      selM.value = String(preset.getMonth()+1).padStart(2,'0');
+      selY.value = String(preset.getFullYear()%100).padStart(2,'0');
+      selD.addEventListener('change', syncHidden);
+      selM.addEventListener('change', syncHidden);
+      selY.addEventListener('change', syncHidden);
+      wrap.appendChild(selD); wrap.appendChild(sep1); wrap.appendChild(selM); wrap.appendChild(sep2); wrap.appendChild(selY); wrap.appendChild(hidden);
+      if (disabled){ selD.disabled = selM.disabled = selY.disabled = true; wrap.title = 'Se calcula automáticamente (regla 25/27)'; }
+      // inicializar
+      syncHidden();
+      return { wrap, hidden };
+    }
+
+    // Estado de edición actual
+    let currentNewRowEl = null;
+    let currentEditors = null;
+    let currentSelTipo = null;
+    let currentProvInput = null;
+
+    function setToolbarEditing(on){
+      if (on){
+        saveRowBtn.style.display='';
+        saveRowBtn.disabled = true;
+        saveRowBtn.style.opacity='.6';
+        cancelRowBtn.style.display='';
+        newRowBtn.disabled = true;
+        newRowBtn.style.opacity='.5';
+      } else {
+        saveRowBtn.style.display='none';
+        saveRowBtn.disabled = false;
+        saveRowBtn.style.opacity='1';
+        cancelRowBtn.style.display='none';
+        newRowBtn.disabled = false;
+        newRowBtn.style.opacity='1';
+      }
+    }
+
+    // Helper: obtener editor por variantes de nombre (usando normalización de encabezados)
+    function getEditorByVariants(eds, variants){
+      if (!eds) return null;
+      const keys = Object.keys(eds);
+      for (const v of variants){
+        const nv = normalizeHeader(v).toUpperCase();
+        for (const k of keys){ if (k === nv) return eds[k]; }
+      }
+      return null;
+    }
+
+    function isValidNewRow(){
+      if (!currentEditors || !currentSelTipo) return false;
+      const tipo = currentSelTipo.value;
+      const equipo = getEditorByVariants(currentEditors, ['EQUIPO / ACTIVO','EQUIPO/ACTIVO','EQUIPO ACTIVO','EQUIPO'])?.value || '';
+      const inicio = getEditorByVariants(currentEditors, ['INICIO DEL SERVICIO'])?.value || '';
+      const term = getEditorByVariants(currentEditors, ['TERMINACION DEL SERVICIO','TERMINACIÓN DEL SERVICIO'])?.value || '';
+      if (!equipo || !inicio || !term) return false;
+      if (tipo==='EQUIPOS EXTERNOS' && currentProvInput && !currentProvInput.value) return false;
+      const di = parseDMY(inicio); const dt = parseDMY(term);
+      if (!di || !dt || dt < di) return false;
+      return true;
+    }
+
+    function updateSaveEnabled(){
+      const ok = isValidNewRow();
+      saveRowBtn.disabled = !ok;
+      saveRowBtn.style.opacity = ok ? '1' : '.6';
+    }
+
+    function insertNewEditableRow(){
+      // Evitar múltiples filas nuevas simultáneas
+      if (tbody.querySelector('tr.new-row')) return;
+      const tr = document.createElement('tr');
+      tr.className = 'new-row';
+
+      // Primera celda: selección + proveedor (si externo) + acciones
+      const tdSel = document.createElement('td');
+      tdSel.className = 'sel-cell';
+      const sel = document.createElement('select');
+      sel.innerHTML = '<option value="EQUIPOS INTERNOS">EQUIPOS INTERNOS</option><option value="EQUIPOS EXTERNOS">EQUIPOS EXTERNOS</option>';
+      sel.name = 'tipoSeleccion'; sel.id = 'tipoSeleccion';
+      sel.value = 'EQUIPOS INTERNOS';
+      const provInput = document.createElement('input');
+      provInput.type = 'text'; provInput.placeholder = 'Proveedor'; provInput.name='proveedor'; provInput.id='proveedor';
+      provInput.style.marginLeft='6px'; provInput.style.display='none';
+      sel.addEventListener('change', ()=>{ provInput.style.display = sel.value==='EQUIPOS EXTERNOS' ? '' : 'none'; rebuildEquipoCellForRow(tr); updateSaveEnabled(); });
+      tdSel.appendChild(sel); tdSel.appendChild(provInput);
+      tr.appendChild(tdSel);
+
+      // Construir celdas visibles con inputs
+      const order = visibleCols ? visibleCols.order : headers.map((_,k)=>k);
+      const labels = visibleCols ? visibleCols.labels : headers;
+      const editors = {};
+      for (let j=0;j<order.length;j++){
+        const td = document.createElement('td');
+        const label = labels[j] || '';
+        const norm = normalizeHeader(label).toUpperCase();
+        let input;
+        if (/^(EQUIPO\s*\/\s*ACTIVO|EQUIPO\s*ACTIVO|EQUIPO)$/.test(norm)){
+          input = document.createElement('input'); input.type='text'; input.placeholder='Equipo/Activo'; input.name='equipoActivo'; input.id='equipoActivo';
+          // aplicar datalist según tipo
+          ensureDatalist('dl-inventory-equipos', inventoryOptions||[]);
+          input.setAttribute('list', sel.value==='EQUIPOS INTERNOS' ? 'dl-inventory-equipos' : '');
+          sel.addEventListener('change', ()=>{
+            if (sel.value==='EQUIPOS INTERNOS') input.setAttribute('list','dl-inventory-equipos'); else input.removeAttribute('list');
+          });
+        } else if (/^(CLIENTE|AREA DEL CLIENTE|UBICACION|UBICACIÓN)$/.test(norm)){
+          input = document.createElement('input'); input.type='text'; input.placeholder=label; input.name=normalizeHeader(label); input.id=normalizeHeader(label);
+        } else if (/fecha|inicio del servicio|continuacion del servicio|fin parcial del servicio|terminacion del servicio|devolucion/i.test(label)){
+          const isCont = /continuacion del servicio/i.test(label);
+          const isFinP = /fin parcial del servicio/i.test(label);
+          const ed = buildDateEditor((isCont||isFinP));
+          if (isCont) { ed.wrap.style.visibility = 'hidden'; }
+          input = ed.hidden; input.name=normalizeHeader(label); input.id=normalizeHeader(label);
+          td.appendChild(ed.wrap);
+          tr.appendChild(td);
+          editors[norm] = input;
+          input.addEventListener('input', updateSaveEnabled);
+          input.addEventListener('change', updateSaveEnabled);
+          continue; // ya añadimos td y listeners
+        } else if (norm === 'DIAS EN SERVICIO'){
+          input = document.createElement('input'); input.type='number'; input.min='0'; input.placeholder='0'; input.name='diasServicio'; input.id='diasServicio';
+        } else {
+          input = document.createElement('input'); input.type='text'; input.placeholder=label; input.name=normalizeHeader(label); input.id=normalizeHeader(label);
+        }
+        td.appendChild(input);
+        tr.appendChild(td);
+        editors[norm] = input;
+        input.addEventListener('input', updateSaveEnabled);
+        input.addEventListener('change', updateSaveEnabled);
+      }
+
+      // Insertar al inicio de tbody
+      if (tbody.firstChild) tbody.insertBefore(tr, tbody.firstChild); else tbody.appendChild(tr);
+      // reconstruir celda equipo según tipo
+      rebuildEquipoCellForRow(tr);
+      setToolbarEditing(true);
+      currentNewRowEl = tr; currentEditors = editors; currentSelTipo = sel; currentProvInput = provInput;
+      updateSaveEnabled();
+
+      // Auto-cálculo de días en servicio cuando cambian fechas
+      const inicio = editors['INICIO DEL SERVICIO'];
+      const termin = editors['TERMINACION DEL SERVICIO'];
+      const dias = editors['DIAS EN SERVICIO'];
+      function recomputeDias(){
+        if (!inicio || !termin || !dias) return;
+        const di = parseDMY(inicio.value); const dt = parseDMY(termin.value);
+        if (!di || !dt) { dias.value = ''; return; }
+        const today = new Date(); today.setHours(0,0,0,0);
+        if (today < di){
+          // cuenta regresiva negativa hasta el día de inicio
+          const neg = -Math.ceil((di - today)/(1000*60*60*24));
+          dias.value = String(neg);
+        } else {
+          // días en servicio transcurridos hasta hoy o terminación (lo que ocurra primero)
+          const upto = today <= dt ? today : dt;
+          const diff = Math.ceil((upto - di)/(1000*60*60*24)) + 1; // inclusivo desde inicio
+          dias.value = String(diff);
+        }
+      }
+      if (inicio) inicio.addEventListener('change', recomputeDias);
+      if (termin) termin.addEventListener('change', recomputeDias);
+      // inicializar si ya hubiera presets
+      recomputeDias();
+
+      // Guardar desde toolbar
+      saveRowBtn.onclick = ()=>{
+        const baseProp = sel.value==='EQUIPOS INTERNOS' ? 'PCT' : (provInput.value||'');
+        const eget = (vars)=> getEditorByVariants(editors, vars);
+        const valEquipo = eget(['EQUIPO / ACTIVO','EQUIPO/ACTIVO','EQUIPO ACTIVO','EQUIPO'])?.value || '';
+        const valCliente = eget(['CLIENTE'])?.value || '';
+        const valArea = eget(['AREA DEL CLIENTE','ÁREA DEL CLIENTE'])?.value || '';
+        const valUbic = eget(['UBICACION','UBICACIÓN'])?.value || '';
+        const valEmbarque = eget(['FECHA EMBARQUE','FECHA DE EMBARQUE'])?.value || '';
+        const sInicio = eget(['INICIO DEL SERVICIO'])?.value || '';
+        const sTerm = eget(['TERMINACION DEL SERVICIO','TERMINACIÓN DEL SERVICIO'])?.value || '';
+        const dInicio = parseDMY(sInicio);
+        const dTerm = parseDMY(sTerm);
+        if (!dInicio || !dTerm || dTerm < dInicio){
+          alert('Verifica fechas: Inicio y Terminación son requeridas y deben estar en orden.');
+          return;
+        }
+
+        const idx = (variants)=> headerIndex(variants);
+        const iPROPIEDAD = idx(['PROPIEDAD']);
+        const iEQUIPO = idx(['EQUIPO / ACTIVO','EQUIPO/ACTIVO','EQUIPO ACTIVO','EQUIPO']);
+        const iCLIENTE = idx(['CLIENTE']);
+        const iAREA = idx(['AREA DEL CLIENTE','ÁREA DEL CLIENTE']);
+        const iUBIC = idx(['UBICACION','UBICACIÓN']);
+        const iEMB = idx(['FECHA EMBARQUE','FECHA DE EMBARQUE']);
+        const iINI = idx(['INICIO DEL SERVICIO']);
+        const iCONT = idx(['CONTINUACION DEL SERVICIO','CONTINUACIÓN DEL SERVICIO']);
+        const iFINP = idx(['FIN PARCIAL DEL SERVICIO']);
+        const iTERM = idx(['TERMINACION DEL SERVICIO','TERMINACIÓN DEL SERVICIO']);
+        const iDEV = idx(['FECHA DE DEVOLUCION','FECHA DE DEVOLUCIÓN']);
+        const iDIAS = idx(['DIAS EN SERVICIO','DÍAS EN SERVICIO']);
+
+        function makeRow(){ return new Array(headers.length).fill(''); }
+        function fillCommon(r){
+          if (iPROPIEDAD>=0) r[iPROPIEDAD] = baseProp;
+          if (iEQUIPO>=0) r[iEQUIPO] = valEquipo;
+          if (iCLIENTE>=0) r[iCLIENTE] = valCliente;
+          if (iAREA>=0) r[iAREA] = valArea;
+          if (iUBIC>=0) r[iUBIC] = valUbic;
+          if (iEMB>=0) r[iEMB] = valEmbarque;
+        }
+
+        const newRows = [];
+        let segStart = new Date(dInicio);
+        while (true){
+          // Determinar corte 25
+          const cut = cutoff25(segStart);
+          const segEnd = minDate(cut, dTerm);
+          const r = makeRow();
+          fillCommon(r);
+          if (segStart.getTime() === dInicio.getTime()){
+            if (iINI>=0) r[iINI] = formatDMY(segStart);
+          } else {
+            if (iCONT>=0) r[iCONT] = formatDMY(segStart);
+          }
+          if (segEnd.getTime() === dTerm.getTime()){
+            if (iTERM>=0) r[iTERM] = formatDMY(segEnd);
+            if (iDEV>=0) {
+              const dev = new Date(segEnd.getFullYear(), segEnd.getMonth(), segEnd.getDate()+1);
+              r[iDEV] = formatDMY(dev);
+            }
+          } else {
+            if (iFINP>=0) r[iFINP] = formatDMY(segEnd); // día 25
+          }
+          if (iDIAS>=0) r[iDIAS] = String(daysInclusive(segStart, segEnd));
+          newRows.push(r);
+          if (segEnd.getTime() === dTerm.getTime()) break;
+          // Continuación el 27 del mismo mes del corte
+          const cont = continuation27From(cut);
+          // Si terminación es antes de la continuación, terminar en terminación
+          segStart = cont <= dTerm ? cont : dTerm;
+          if (segStart > dTerm) break;
+        }
+
+        // Insertar nuevas filas al inicio, manteniendo orden cronológico dentro de lo insertado
+        rows = [...newRows, ...rows];
+        view = rows;
+        tr.remove();
+        buildExternalOptionsBase();
+        renderHead();
+        renderBody(view);
+        // limpiar estado toolbar
+        currentNewRowEl = null; currentEditors = null; currentSelTipo = null; currentProvInput = null;
+        setToolbarEditing(false);
+      };
+
+      // Cancelar desde toolbar
+      cancelRowBtn.onclick = ()=>{
+        tr.remove(); updateActivityKpis();
+        currentNewRowEl = null; currentEditors = null; currentSelTipo = null; currentProvInput = null;
+        setToolbarEditing(false);
+      };
+    }
+
+    newRowBtn.addEventListener('click', insertNewEditableRow);
 
     q.addEventListener('input', applyFilter);
     clearQ.addEventListener('click', ()=>{ q.value=''; applyFilter(); q.focus(); });
