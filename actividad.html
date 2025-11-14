@@ -86,7 +86,10 @@
   <script>
   (function(){
     const SRC = 'docs/REGISTRO DE ACTIVIDAD PCT 2025.csv';
-    const INVENT_SRC = 'docs/INVENTARIO GENERAL PCT 2025 NOV.csv';
+    const INVENT_SRC_1 = 'docs/INVENTARIO GENERAL PCT 2025 NOV.csv';
+    const INVENT_SRC_1_ENC = 'docs/INVENTARIO%20GENERAL%20PCT%202025%20NOV.csv';
+    const INVENT_SRC_2 = 'docs/INVENTARIO GENERAL PCT 2025 NOV2.csv';
+    const INVENT_SRC_2_ENC = 'docs/INVENTARIO%20GENERAL%20PCT%202025%20NOV2.csv';
     const thead = document.getElementById('thead');
     const tbody = document.getElementById('tbody');
     const summary = document.getElementById('summary');
@@ -111,6 +114,10 @@
     let propiedadIdx = -1; // índice de la columna PROPIEDAD
     let diasServicioVisibleIdx = -1; // índice visible (no contando la columna de selección)
     let equipoVisibleIdx = -1; // índice visible para EQUIPO/ACTIVO
+    let descripcionVisibleIdx = -1; // índice visible para DESCRIPCION
+    let hashVisibleIdx = -1; // índice visible para '#'
+    let invDescByEquipo = new Map(); // mapa EQUIPO -> DESCRIPCION desde inventario
+    let invSerialByEquipo = new Map(); // mapa EQUIPO -> SERIAL desde inventario
     let inventoryOptions = []; // opciones de inventario para internos
     let inventorySet = new Set(); // para verificación rápida de pertenencia
     let externalOptionsByProvider = new Map(); // proveedor -> Set de claves sugeridas
@@ -179,6 +186,8 @@
       // Variantes para EQUIPO / ACTIVO
       const variants = ['EQUIPO / ACTIVO','EQUIPO/ACTIVO','EQUIPO ACTIVO','EQUIPO'];
       equipoVisibleIdx = labels.findIndex(l => variants.includes(l));
+      descripcionVisibleIdx = labels.indexOf('DESCRIPCION') >= 0 ? labels.indexOf('DESCRIPCION') : labels.indexOf('DESCRIPCIÓN');
+      hashVisibleIdx = labels.indexOf('#');
     }
 
     function rebuildEquipoCellForRow(tr){
@@ -293,7 +302,7 @@
         for (let j=0;j<order.length;j++){
           const td = document.createElement('td');
           const idx = order[j];
-          let v = row[idx] == null ? '' : row[idx];
+          let v = idx == null || idx < 0 ? '' : (row[idx] == null ? '' : row[idx]);
           // Formateo de fechas dd/mm/yy -> dd/mm/yyyy
           const label = (visibleCols ? visibleCols.labels[j] : headers[j]) || '';
           if (/fecha\s|inicio del servicio|continuacion del servicio|fin parcial del servicio|terminacion del servicio|devolucion/i.test(label)){
@@ -334,7 +343,32 @@
             }
             td.appendChild(input);
           } else {
-            td.textContent = v;
+            // Autorelleno de DESCRIPCION para internos desde inventario
+            const isDescCol = /^DESCRIPCION$/i.test(normalizeHeader(label).toUpperCase()) || /^DESCRIPCIÓN$/i.test(normalizeHeader(label).toUpperCase());
+            if (isDescCol){
+              // Determinar tipo por primera celda y equipo de la fila
+              const selCell = tdSel;
+              const selEl = selCell.querySelector('select');
+              const tipo = selEl ? selEl.value : (selCell.textContent||'EQUIPOS INTERNOS');
+              // Obtener valor de equipo desde la fila base (headers)
+              const idxEquipoHeader = headers.findIndex(h=>/^EQUIPO\s*\/\s*ACTIVO|EQUIPO\s*ACTIVO|EQUIPO$/i.test(normalizeHeader(h).toUpperCase()));
+              const equipoVal = idxEquipoHeader>=0 ? String(row[idxEquipoHeader]||'').trim() : '';
+              const descInv = invDescByEquipo.get(equipoVal) || invDescByEquipo.get(equipoVal.toUpperCase()) || '';
+              if (tipo === 'EQUIPOS INTERNOS' && descInv){ v = descInv; console.log('[actividad] DESC autofill', { equipo: equipoVal, desc: v }); }
+              td.textContent = v;
+            } else if (normalizeHeader(label).toUpperCase() === '#'){
+              // Autorelleno de SERIAL para internos desde inventario
+              const selCell = tdSel;
+              const selEl = selCell.querySelector('select');
+              const tipo = selEl ? selEl.value : (selCell.textContent||'EQUIPOS INTERNOS');
+              const idxEquipoHeader = headers.findIndex(h=>/^EQUIPO\s*\/\s*ACTIVO|EQUIPO\s*ACTIVO|EQUIPO$/i.test(normalizeHeader(h).toUpperCase()));
+              const equipoVal = idxEquipoHeader>=0 ? String(row[idxEquipoHeader]||'').trim() : '';
+              const serialInv = invSerialByEquipo.get(equipoVal) || invSerialByEquipo.get(equipoVal.toUpperCase()) || '';
+              if (tipo === 'EQUIPOS INTERNOS' && serialInv){ v = serialInv; console.log('[actividad] SERIAL autofill', { equipo: equipoVal, serial: v }); }
+              td.textContent = v;
+            } else {
+              td.textContent = v;
+            }
           }
           tr.appendChild(td);
         }
@@ -385,6 +419,7 @@
       const wanted = [
         '#',
         'EQUIPO / ACTIVO','EQUIPO/ACTIVO','EQUIPO ACTIVO',
+        'DESCRIPCION','DESCRIPCIÓN',
         'CLIENTE','AREA DEL CLIENTE','UBICACIÓN',
         'FACTURA',
         // Variantes comunes para Orden de compra (debe ir entre FACTURA y FECHA EMBARQUE)
@@ -417,6 +452,14 @@
         const lnorm = normLabel(labels[k]);
         if (ocVariants.has(lnorm)) labels[k] = 'ORDEN DE COMPRA';
         if (lnorm === ingresoTypo) labels[k] = 'INGRESO ACUMULADO';
+      }
+      // Si no existe DESCRIPCION en headers, insertar columna sintética justo después de EQUIPO / ACTIVO
+      const hasDesc = labels.some(l=>normLabel(l)==='DESCRIPCION');
+      if (!hasDesc){
+        const eqIdx = labels.findIndex(l=>['EQUIPO / ACTIVO','EQUIPO/ACTIVO','EQUIPO ACTIVO','EQUIPO'].includes(normLabel(l)));
+        const insertAt = eqIdx>=0 ? eqIdx+1 : 1;
+        labels.splice(insertAt, 0, 'DESCRIPCION');
+        order.splice(insertAt, 0, -1); // índice sintético
       }
       visibleCols = { order, labels };
       propiedadIdx = normHeaders.indexOf('PROPIEDAD');
@@ -513,27 +556,54 @@
     }
 
     function loadInventoryOptions(){
-      Papa.parse(INVENT_SRC, { download:true, skipEmptyLines:'greedy', complete:(res)=>{
-        try{
-          const rows = res.data || [];
-          if (!rows.length) { inventoryOptions = []; return; }
-          const hdr = rows[0].map(h=>String(h||''));
-          let idxEq = -1;
-          for (let i=0;i<hdr.length;i++){
-            const h = hdr[i];
-            if (/^EQUIPO\s*\/\s*ACTIVO|EQUIPO\s*ACTIVO|EQUIPO$/i.test(normalizeHeader(h).toUpperCase())) { idxEq = i; break; }
-          }
-          const set = new Set();
-          for (let i=1;i<rows.length;i++){
-            const v = String(rows[i][idxEq]||'').trim();
-            if (v) set.add(v);
-          }
-          inventoryOptions = Array.from(set.values()).sort((a,b)=>a.localeCompare(b,'es'));
-          inventorySet = new Set(inventoryOptions);
-          // Evitar re-render si hay una fila en edición (new-row)
-          if (tbody.children.length && !tbody.querySelector('tr.new-row')) renderBody(view);
-        } catch(e){ inventoryOptions = []; }
-      }});
+      const candidates = [INVENT_SRC_2, INVENT_SRC_2_ENC, INVENT_SRC_1, INVENT_SRC_1_ENC];
+      let usedUrl = null;
+      function tryNext(i){
+        if (i >= candidates.length){ console.log('[actividad] Inventario general no disponible en candidatos', candidates); return; }
+        const url = candidates[i];
+        Papa.parse(url, { download:true, skipEmptyLines:'greedy', complete:(res)=>{
+          try{
+            const r = res?.data || [];
+            if (!r.length){ console.log('[actividad] Inventario vacío', url); return tryNext(i+1); }
+            usedUrl = url;
+            const hdr = r[0].map(h=>String(h||''));
+            let idxEq = -1, idxDesc = -1, idxSerial = -1;
+            for (let k=0;k<hdr.length;k++){
+              const h = hdr[k];
+              if (/^EQUIPO\s*\/\s*ACTIVO|EQUIPO\s*ACTIVO|EQUIPO$/i.test(normalizeHeader(h).toUpperCase())) { idxEq = k; break; }
+            }
+            for (let k=0;k<hdr.length;k++){
+              const h = hdr[k];
+              if (/^DESCRIPCION|DESCRIPCIÓN$/i.test(normalizeHeader(h).toUpperCase())) { idxDesc = k; break; }
+            }
+            for (let k=0;k<hdr.length;k++){
+              const h = hdr[k];
+              if (/^(SERIE|NUMERO DE SERIE|NÚMERO DE SERIE|SERIAL|SERIAL NO|NO\. SERIE)$/i.test(normalizeHeader(h).toUpperCase())) { idxSerial = k; break; }
+            }
+            const set = new Set();
+            invDescByEquipo.clear();
+            invSerialByEquipo.clear();
+            for (let rIdx=1;rIdx<r.length;rIdx++){
+              const v = String(r[rIdx][idxEq]||'').trim();
+              if (v) set.add(v);
+              if (idxEq>=0 && idxDesc>=0){
+                const desc = String(r[rIdx][idxDesc]||'').trim();
+                if (v && desc) invDescByEquipo.set(v, desc);
+              }
+              if (idxEq>=0 && idxSerial>=0){
+                const serial = String(r[rIdx][idxSerial]||'').trim();
+                if (v && serial) invSerialByEquipo.set(v, serial);
+              }
+            }
+            inventoryOptions = Array.from(set.values()).sort((a,b)=>a.localeCompare(b,'es'));
+            inventorySet = new Set(inventoryOptions);
+            console.log('[actividad] Inventario cargado', { usedUrl, equipos: inventoryOptions.length, desc: invDescByEquipo.size, serial: invSerialByEquipo.size, idxEq, idxDesc, idxSerial });
+            // Evitar re-render si hay una fila en edición (new-row)
+            if (tbody.children.length && !tbody.querySelector('tr.new-row')) renderBody(view);
+          } catch(e){ console.error('[actividad] Error parse inventario', e); tryNext(i+1); }
+        }, error:(e)=>{ console.log('[actividad] Papa.parse error', { url, error:e }); tryNext(i+1); }});
+      }
+      tryNext(0);
     }
 
     function load(){
@@ -555,10 +625,10 @@
 
           // Cabecera y filas de detalle
           if (headerIdx >= 0){
-            headers = data[headerIdx].map(h=>String(h||'').trim());
+            headers = data[headerIdx].map(h=>String(h||''));
             rows = data.slice(headerIdx+1);
           } else {
-            headers = data[0].map(h=>String(h||'').trim());
+            headers = data[0].map(h=>String(h||''));
             rows = data.slice(1);
           }
           buildVisibleColumns();
@@ -591,27 +661,45 @@
             if (!val){ tag.textContent = 'EQUIPOS INTERNOS'; return; }
             const isInternal = inventorySet.has(val);
             tag.textContent = isInternal ? 'EQUIPOS INTERNOS' : 'EQUIPOS EXTERNOS';
+            // Si se está editando EQUIPO/ACTIVO y la columna DESCRIPCION existe, auto-rellenar para internos
+            const headerLabels = (visibleCols ? visibleCols.labels : headers).map(x=>normalizeHeader(x).toUpperCase());
+            const isEquipoInput = target && headerLabels[(Array.from(tr.children).indexOf(target.closest('td')) - 1)] && /^(EQUIPO \/ ACTIVO|EQUIPO\/ACTIVO|EQUIPO ACTIVO|EQUIPO)$/.test(headerLabels[(Array.from(tr.children).indexOf(target.closest('td')) - 1)]);
+            if (isEquipoInput && descripcionVisibleIdx >= 0){
+              const descTd = tr.children[1 + descripcionVisibleIdx];
+              if (descTd){
+                const newDesc = (isInternal && invDescByEquipo.get(val)) ? invDescByEquipo.get(val) : (descTd.textContent||'');
+                descTd.textContent = newDesc; if (isInternal) console.log('[actividad] DESC onInput', { equipo: val, desc: newDesc });
+              }
+            }
+            // Si se está editando EQUIPO/ACTIVO y existe columna '#', auto-rellenar serial para internos
+            if (isEquipoInput && hashVisibleIdx >= 0){
+              const hashTd = tr.children[1 + hashVisibleIdx];
+              if (hashTd){
+                const newSerial = (isInternal && invSerialByEquipo.get(val)) ? invSerialByEquipo.get(val) : (hashTd.textContent||'');
+                hashTd.textContent = newSerial; if (isInternal) console.log('[actividad] SERIAL onInput', { equipo: val, serial: newSerial });
+              }
+            }
           });
+          // Cargar opciones de inventario en paralelo
+          loadInventoryOptions();
         }
       });
-      // Cargar opciones de inventario en paralelo
-      loadInventoryOptions();
     }
-
-    // Utilidades para fechas
-    function parseDMY(s){
-      const m = String(s||'').trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
-      if (!m) return null;
-      let d = parseInt(m[1],10), M = parseInt(m[2],10)-1, y = parseInt(m[3],10); if (y<100) y+=2000;
-      const dt = new Date(y, M, d);
-      return isNaN(dt.getTime()) ? null : dt;
-    }
-    function formatDMY(dt){
-      const d = String(dt.getDate()).padStart(2,'0');
-      const m = String(dt.getMonth()+1).padStart(2,'0');
-      const y2 = String(dt.getFullYear() % 100).padStart(2,'0');
-      return `${d}/${m}/${y2}`;
-    }
+      // Utilidades para fechas
+      function parseDMY(s){
+        const m = String(s||'').trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
+        if (!m) return null;
+        let d = parseInt(m[1],10), M = parseInt(m[2],10)-1, y = parseInt(m[3],10);
+        if (y<100) y+=2000;
+        const dt = new Date(y, M, d);
+        return isNaN(dt.getTime()) ? null : dt;
+      }
+      function formatDMY(dt){
+        const d = String(dt.getDate()).padStart(2,'0');
+        const m = String(dt.getMonth()+1).padStart(2,'0');
+        const y2 = String(dt.getFullYear() % 100).padStart(2,'0');
+        return `${d}/${m}/${y2}`;
+      }
 
     function headerIndex(nameVariants){
       const hdr = headers.map(h=>normalizeHeader(h).toUpperCase());
