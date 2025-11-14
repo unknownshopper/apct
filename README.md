@@ -23,6 +23,22 @@ Sistema web estático (GitHub Pages) con backend serverless en Firebase para ges
 - pruebas.html: inventario dinámico desde CSV + historial de inspecciones (onSnapshot) y fecha de última inspección por equipo.
 - ingral.html: vista de inventario general desde `docs/INVENTARIO GENERAL PCT 2025 NOV.csv` con búsqueda/ordenamiento.
 - actividad.html: registro de actividad desde `docs/REGISTRO DE ACTIVIDAD PCT 2025.csv` con búsqueda/ordenamiento.
+  - Columna de selección “EQUIPOS INTERNOS/EXTERNOS”.
+  - `EQUIPO / ACTIVO` con autocompletado:
+    - Internos: catálogo desde inventario CSV.
+    - Externos: claves por proveedor.
+  - Botón “Nuevo registro”: inserta fila editable superior (toolbar “Guardar/Cancelar”).
+  - Editor de fechas con 3 selects (día/mes/año) y diagonales fijas.
+  - Regla administrativa mensual 25/27:
+    - Fin Parcial: día 25.
+    - Continuación: día 27 (2 días de gracia), visible en la siguiente fila.
+    - Repite hasta “Terminación del servicio”.
+    - “Fecha de devolución” = Terminación + 1 día.
+  - “Días en servicio” dinámico:
+    - Valor negativo en cuenta regresiva si hoy < inicio.
+    - Desde el inicio: días transcurridos hasta hoy o terminación (inclusive).
+  - Cabecera sticky sin solapamiento; estilos persistentes tras refresh.
+  - Primera fila en blanco (espaciado visual) fija.
 - tareas.html: resumen programable de inspecciones con daño; soporta refresco y agregación de fuentes.
 - reportes.html: placeholder de reportes.
 - login.html: autenticación con Firebase Auth.
@@ -60,6 +76,40 @@ Navbar unificado en todas las páginas: Dashboard, Pruebas, Tareas, Inspección,
 - Configuración Firebase:
   - Copiar `firebase-config.sample.js` a `firebase-config.js` y rellenar credenciales web.
   - No commitear llaves de servicio (Admin SDK) en el frontend.
+
+## Guía de hosting en IONOS (Apache)
+
+- Service Worker (PWA):
+  - El SW (`/service-worker.js`) puede cachear CSS/JS; tras cambios, hacer hard refresh (Ctrl+F5) o subir con query params de versión (`styles.css?v=YYYYMMDDHH`).
+  - En IONOS, asegurarse que el SW se sirva con `Service-Worker-Allowed: /` cuando aplique (opcional).
+- Cache-Control y compresión:
+  - Usar `.htaccess` incluido para:
+    - `Cache-Control: no-cache` en CSV (`docs/*.csv`) para evitar stale data.
+    - `Cache-Control: max-age=31536000, immutable` para assets versionados `*.css?v=...` y `*.js?v=...`.
+    - Habilitar compresión `mod_deflate`/`mod_brotli` si está disponible.
+- Tipo MIME correcto:
+  - Asegurar `text/csv; charset=utf-8` para archivos CSV.
+  - `text/javascript` para `.js` y `text/css` para `.css`.
+- Rutas y base path:
+  - El sitio asume raíz `/apct/`. En subcarpetas, verificar `<base href="/apct/">` si se usa.
+  - Asegurar que rutas relativas a `docs/` sean accesibles públicamente.
+- CORS (si el CSV está en otro dominio):
+  - Habilitar `Access-Control-Allow-Origin: *` o el dominio específico.
+- Firebase Auth en dominio personalizado:
+  - Agregar el dominio de IONOS a `Authorized domains` en Firebase Auth.
+  - Verificar que el `redirect_uri` sea HTTPS y coincida con el host de IONOS.
+- Seguridad de contenido (CSP):
+  - Si IONOS aplica CSP, incluir `connect-src` a `https://*.firebaseio.com https://*.googleapis.com` y `script-src` para Firebase CDN y GitHub Pages si aplica.
+
+## Operación en IONOS
+
+- Actualización de estilos/JS:
+  - Incrementar el query param de versión al desplegar (`?v=act-YYYYMMDDHH`) para invalidar caché.
+- CSV actualizados:
+  - Subir los CSV a `docs/` y verificar que el navegador no los sirva desde caché (usar Ctrl+F5 o cambiar el timestamp en la URL).
+- Problemas comunes:
+  - Encabezado se superpone al contenido: revisar `styles.css` y confirmar que no haya otro CSS inyectado por IONOS.
+  - “Guardar” no responde: revisar consola y limpiar SW/caché; confirmar que los campos obligatorios tengan `name/id`.
 
 ## Operación
 - Asignación de roles (una vez por usuario) vía Admin SDK:
