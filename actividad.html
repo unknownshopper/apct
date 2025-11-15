@@ -85,7 +85,8 @@
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
   <script>
   (function(){
-    const SRC = 'docs/REGISTRO DE ACTIVIDAD PCT 2025.csv';
+    const SRC_BASE = 'docs/REGISTRO DE ACTIVIDAD PCT 2025.csv';
+    const SRC = SRC_BASE + '?t=' + Date.now();
     const INVENT_SRC_1 = 'docs/INVENTARIO GENERAL PCT 2025 NOV.csv';
     const INVENT_SRC_1_ENC = 'docs/INVENTARIO%20GENERAL%20PCT%202025%20NOV.csv';
     const INVENT_SRC_2 = 'docs/INVENTARIO GENERAL PCT 2025 NOV2.csv';

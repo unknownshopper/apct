@@ -132,7 +132,7 @@ header {
     justify-content: space-between;
     align-items: center;
     padding: 1rem;
-    background-color: #333;
+    background-color: rgb(174, 72, 13);
     color: #fff;
 }
 
@@ -226,6 +226,32 @@ footer {
     text-align: center;
     background-color: #333;
     color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+}
+
+footer a {
+    color: #fff !important;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.3rem;
+}
+
+footer a:visited {
+    color: #fff !important;
+}
+
+footer a:hover {
+    text-decoration: underline;
+}
+
+footer img {
+    height: 18px;
+    vertical-align: middle;
 }
 
 /* Dashboard */
@@ -668,11 +694,12 @@ table.inventory tbody tr:hover td {
   border-bottom: 1px solid #e5e7eb;
 }
 
-/* Separador visual consistente de 18px ANTES del tbody para empujar la primera fila */
+/* Separador visual consistente ANTES del tbody para empujar la primera fila
+   (mayor a la altura del scrollbar horizontal + sombra del encabezado) */
 table.inventory tbody::before {
   content: "";
   display: block;
-  height: 18px;
+  height: 24px;
 }
 [data-page="inspeccion"] table.inspection tbody tr:first-child td { border-top: 1px solid rgba(15,23,42,0.12); }
 [data-page="inspeccion"] table.inspection th, 
