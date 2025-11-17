@@ -3,8 +3,15 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
   <title>Registro de Actividad</title>
-  <link rel="stylesheet" href="styles.css">
+  <script>
+    const CSS_VERSION = Date.now();
+    document.write('<link rel="stylesheet" href="styles.css?v=' + CSS_VERSION + '">');
+    console.log('[actividad] CSS cargado con versión:', CSS_VERSION);
+  </script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
@@ -28,7 +35,10 @@
           <li><a href="listapruebas.html">Lista de pruebas</a></li>
         </ul></details></li>
         <li><a href="tareas.html">Tareas</a></li>
-        <li><a href="inspeccion.html">Inspección</a></li>
+        <li class="nav-dropdown"><details><summary>Inspección</summary><ul>
+          <li><a href="inspeccion.html">Inspección primaria</a></li>
+          <li><a href="reginspecciones.html">Registro de inspecciones</a></li>
+        </ul></details></li>
         <li><a href="ingral.html">Inventario</a></li>
         <li><a class="active" href="actividad.html">Actividad</a></li>
         <li><a href="reportes.html">Reportes</a></li>
@@ -71,26 +81,42 @@
         </table>
       </div>
     </div>
+
+    <section id="activity-log" aria-label="Actividades registradas" style="margin-top:18px;">
+      <h2 style="font-size:1rem; margin-bottom:8px;">Actividades registradas</h2>
+      <ul id="activity-log-list" style="list-style:none; padding:0; margin:0; font-size:0.9rem; color:#334155;"></ul>
+    </section>
   </main>
   <footer>
     <a href="https://unknownshoppers.com" target="_blank" rel="noopener noreferrer">Powered by <img src="img/logotus.jpg" alt="Unknown Shoppers" style="height:18px; vertical-align:middle"></a>
   </footer>
 
+  <!-- Desregistrar service workers para evitar caché persistente en desarrollo -->
+  <script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.getRegistrations().then(function(registrations) {
+        for(let registration of registrations) {
+          registration.unregister();
+        }
+      });
+    }
+  </script>
   <script src="https://www.gstatic.com/firebasejs/9.6.11/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.6.11/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.6.11/firebase-firestore-compat.js"></script>
   <script src="firebase-config.js"></script>
   <script src="firebase-init.js"></script>
-  <script src="script.js"></script>
+  <script>
+    // Cache-busting para script.js en desarrollo
+    const SCRIPT_VERSION = Date.now();
+    document.write('<script src="script.js?v=' + SCRIPT_VERSION + '"><\/script>');
+  </script>
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
   <script>
   (function(){
     const SRC_BASE = 'docs/REGISTRO DE ACTIVIDAD PCT 2025.csv';
     const SRC = SRC_BASE + '?t=' + Date.now();
-    const INVENT_SRC_1 = 'docs/INVENTARIO GENERAL PCT 2025 NOV.csv';
-    const INVENT_SRC_1_ENC = 'docs/INVENTARIO%20GENERAL%20PCT%202025%20NOV.csv';
-    const INVENT_SRC_2 = 'docs/INVENTARIO GENERAL PCT 2025 NOV2.csv';
-    const INVENT_SRC_2_ENC = 'docs/INVENTARIO%20GENERAL%20PCT%202025%20NOV2.csv';
+    const INVENT_SRC = 'docs/INVENTARIO GENERAL PCT 2025 UNIFICADO.csv';
     const thead = document.getElementById('thead');
     const tbody = document.getElementById('tbody');
     const summary = document.getElementById('summary');
@@ -116,7 +142,7 @@
     let diasServicioVisibleIdx = -1; // índice visible (no contando la columna de selección)
     let equipoVisibleIdx = -1; // índice visible para EQUIPO/ACTIVO
     let descripcionVisibleIdx = -1; // índice visible para DESCRIPCION
-    let hashVisibleIdx = -1; // índice visible para '#'
+    let serialVisibleIdx = -1; // índice visible para SERIAL
     let invDescByEquipo = new Map(); // mapa EQUIPO -> DESCRIPCION desde inventario
     let invSerialByEquipo = new Map(); // mapa EQUIPO -> SERIAL desde inventario
     let inventoryOptions = []; // opciones de inventario para internos
@@ -188,7 +214,9 @@
       const variants = ['EQUIPO / ACTIVO','EQUIPO/ACTIVO','EQUIPO ACTIVO','EQUIPO'];
       equipoVisibleIdx = labels.findIndex(l => variants.includes(l));
       descripcionVisibleIdx = labels.indexOf('DESCRIPCION') >= 0 ? labels.indexOf('DESCRIPCION') : labels.indexOf('DESCRIPCIÓN');
-      hashVisibleIdx = labels.indexOf('#');
+      // Buscar SERIAL (o '#' para compatibilidad)
+      serialVisibleIdx = labels.indexOf('SERIAL');
+      if (serialVisibleIdx < 0) serialVisibleIdx = labels.indexOf('#');
     }
 
     function rebuildEquipoCellForRow(tr){
@@ -357,7 +385,7 @@
               const descInv = invDescByEquipo.get(equipoVal) || invDescByEquipo.get(equipoVal.toUpperCase()) || '';
               if (tipo === 'EQUIPOS INTERNOS' && descInv){ v = descInv; console.log('[actividad] DESC autofill', { equipo: equipoVal, desc: v }); }
               td.textContent = v;
-            } else if (normalizeHeader(label).toUpperCase() === '#'){
+            } else if (/^(SERIAL|#)$/i.test(normalizeHeader(label).toUpperCase())){
               // Autorelleno de SERIAL para internos desde inventario
               const selCell = tdSel;
               const selEl = selCell.querySelector('select');
@@ -418,16 +446,22 @@
 
     function buildVisibleColumns(){
       const wanted = [
-        '#',
+        'SERIAL','#',
         'EQUIPO / ACTIVO','EQUIPO/ACTIVO','EQUIPO ACTIVO',
         'DESCRIPCION','DESCRIPCIÓN',
         'CLIENTE','AREA DEL CLIENTE','UBICACIÓN',
-        'FACTURA',
-        // Variantes comunes para Orden de compra (debe ir entre FACTURA y FECHA EMBARQUE)
-        'ORDEN DE COMPRA','ORDEN COMPRA','NO. ORDEN DE COMPRA','NO ORDEN DE COMPRA','NÚMERO DE ORDEN','NUMERO DE ORDEN','OC','ORDEN DE COMRA',
         'FECHA EMBARQUE',
         'INICIO DEL SERVICIO','CONTINUACION DEL SERVICIO','FIN PARCIAL DEL SERVICIO','TERMINACION DEL SERVICIO','FECHA DE DEVOLUCION',
         'DIAS EN SERVICIO',
+        // Precio debe estar visible para poder calcular ingresos/renta
+        'PRECIO',
+        // Cotización / estimación (se mostrará como EST-COT) debe ir justo antes de FACTURA
+        'COT / ESTIMACION',
+        'FACTURA',
+        // ORDEN DE SERVICIO (columna "O. S." en el CSV) debe ir antes de ORDEN DE COMPRA
+        'O. S.',
+        // Variantes comunes para Orden de compra (debe ir entre FACTURA y FECHA EMBARQUE)
+        'ORDEN DE COMPRA','ORDEN COMPRA','NO. ORDEN DE COMPRA','NO ORDEN DE COMPRA','NÚMERO DE ORDEN','NUMERO DE ORDEN','OC','ORDEN DE COMRA',
         'INGRESO ACUMULADO','INGRESO ACUMULDDO','RENTA ACUMULADA'
       ];
       const normHeaders = headers.map(h=>normalizeHeader(h).toUpperCase());
@@ -449,10 +483,15 @@
       const normLabel = (s)=> normalizeHeader(s).toUpperCase();
       const ocVariants = new Set(['ORDEN DE COMPRA','ORDEN COMPRA','NO. ORDEN DE COMPRA','NO ORDEN DE COMPRA','NÚMERO DE ORDEN','NUMERO DE ORDEN','OC','ORDEN DE COMRA']);
       const ingresoTypo = 'INGRESO ACUMULDDO';
+      const estCotVariants = new Set(['COT / ESTIMACION','COT/ESTIMACION','COT ESTIMACION','EST-COT']);
+      const osVariants = new Set(['O. S.','O.S.','ORDEN DE SERVICIO']);
       for (let k=0; k<labels.length; k++){
         const lnorm = normLabel(labels[k]);
+        if (lnorm === '#') labels[k] = 'SERIAL';
         if (ocVariants.has(lnorm)) labels[k] = 'ORDEN DE COMPRA';
         if (lnorm === ingresoTypo) labels[k] = 'INGRESO ACUMULADO';
+        if (estCotVariants.has(lnorm)) labels[k] = 'EST-COT';
+        if (osVariants.has(lnorm)) labels[k] = 'ORDEN DE SERVICIO';
       }
       // Si no existe DESCRIPCION en headers, insertar columna sintética justo después de EQUIPO / ACTIVO
       const hasDesc = labels.some(l=>normLabel(l)==='DESCRIPCION');
@@ -479,6 +518,33 @@
       bar.addEventListener('mousedown', (e)=>{ dragging=true; startX=e.clientX; startLeft=bar.scrollLeft; document.getElementById('inventory-wrapper').classList.add('dragging'); });
       window.addEventListener('mousemove', (e)=>{ if(!dragging) return; const dx=e.clientX-startX; bar.scrollLeft = startLeft + dx; });
       window.addEventListener('mouseup', ()=>{ if(dragging){ dragging=false; document.getElementById('inventory-wrapper').classList.remove('dragging'); }});
+    }
+
+    // Recalculo diferido para evitar desajuste inicial de la primera columna (fuentes/estilos asíncronos)
+    function deferReflowFix(){
+      // Múltiples intentos con delays incrementales para asegurar render correcto
+      const rerender = () => { renderHead(); renderBody(view); syncScrollbar(); };
+      
+      // Ajustes inmediatos
+      requestAnimationFrame(rerender);
+      requestAnimationFrame(() => requestAnimationFrame(rerender));
+      
+      // Delays progresivos (50ms, 150ms, 300ms, 500ms)
+      [50, 150, 300, 500].forEach(delay => setTimeout(rerender, delay));
+      
+      // Cuando terminen de cargar las fuentes web
+      if (document.fonts && document.fonts.ready){
+        document.fonts.ready.then(() => {
+          rerender();
+          setTimeout(rerender, 100);
+        });
+      }
+      
+      // Al cargar completamente la ventana (último recurso)
+      window.addEventListener('load', () => {
+        rerender();
+        setTimeout(rerender, 100);
+      }, { once:true });
     }
 
     function normalizeHeader(h){
@@ -557,54 +623,58 @@
     }
 
     function loadInventoryOptions(){
-      const candidates = [INVENT_SRC_2, INVENT_SRC_2_ENC, INVENT_SRC_1, INVENT_SRC_1_ENC];
-      let usedUrl = null;
-      function tryNext(i){
-        if (i >= candidates.length){ console.log('[actividad] Inventario general no disponible en candidatos', candidates); return; }
-        const url = candidates[i];
-        Papa.parse(url, { download:true, skipEmptyLines:'greedy', complete:(res)=>{
-          try{
-            const r = res?.data || [];
-            if (!r.length){ console.log('[actividad] Inventario vacío', url); return tryNext(i+1); }
-            usedUrl = url;
-            const hdr = r[0].map(h=>String(h||''));
-            let idxEq = -1, idxDesc = -1, idxSerial = -1;
+      const url = INVENT_SRC;
+      Papa.parse(url, { download:true, skipEmptyLines:'greedy', complete:(res)=>{
+        try{
+          const r = res?.data || [];
+          if (!r.length){ console.log('[actividad] Inventario vacío', url); return; }
+          const hdr = r[0].map(h=>String(h||''));
+          let idxEq = -1, idxDesc = -1, idxSerial = -1;
+          for (let k=0;k<hdr.length;k++){
+            const h = hdr[k];
+            if (/^EQUIPO\s*\/\s*ACTIVO|EQUIPO\s*ACTIVO|EQUIPO$/i.test(normalizeHeader(h).toUpperCase())) { idxEq = k; break; }
+          }
+          for (let k=0;k<hdr.length;k++){
+            const h = hdr[k];
+            if (/^DESCRIPCION|DESCRIPCIÓN$/i.test(normalizeHeader(h).toUpperCase())) { idxDesc = k; break; }
+          }
+          for (let k=0;k<hdr.length;k++){
+            const h = hdr[k];
+            const hnorm = normalizeHeader(h).toUpperCase();
+            // Priorizar SERIAL sobre otras variantes, excluir # ya que es ID de fila
+            if (hnorm === 'SERIAL') { idxSerial = k; break; }
+          }
+          if (idxSerial < 0){
             for (let k=0;k<hdr.length;k++){
               const h = hdr[k];
-              if (/^EQUIPO\s*\/\s*ACTIVO|EQUIPO\s*ACTIVO|EQUIPO$/i.test(normalizeHeader(h).toUpperCase())) { idxEq = k; break; }
+              if (/^(SERIE|NUMERO DE SERIE|NÚMERO DE SERIE|SERIAL NO|NO\. SERIE|NO DE SERIE|N DE SERIE|NUM DE SERIE)$/i.test(normalizeHeader(h).toUpperCase())) { idxSerial = k; break; }
             }
-            for (let k=0;k<hdr.length;k++){
-              const h = hdr[k];
-              if (/^DESCRIPCION|DESCRIPCIÓN$/i.test(normalizeHeader(h).toUpperCase())) { idxDesc = k; break; }
+          }
+          const set = new Set();
+          invDescByEquipo.clear();
+          invSerialByEquipo.clear();
+          for (let rIdx=1;rIdx<r.length;rIdx++){
+            const v = String(r[rIdx][idxEq]||'').trim();
+            if (v) set.add(v);
+            if (idxEq>=0 && idxDesc>=0){
+              const desc = String(r[rIdx][idxDesc]||'').trim();
+              if (v && desc) invDescByEquipo.set(v, desc);
             }
-            for (let k=0;k<hdr.length;k++){
-              const h = hdr[k];
-              if (/^(SERIE|NUMERO DE SERIE|NÚMERO DE SERIE|SERIAL|SERIAL NO|NO\. SERIE)$/i.test(normalizeHeader(h).toUpperCase())) { idxSerial = k; break; }
+            if (idxEq>=0 && idxSerial>=0){
+              const serial = String(r[rIdx][idxSerial]||'').trim();
+              if (v && serial) invSerialByEquipo.set(v, serial);
             }
-            const set = new Set();
-            invDescByEquipo.clear();
-            invSerialByEquipo.clear();
-            for (let rIdx=1;rIdx<r.length;rIdx++){
-              const v = String(r[rIdx][idxEq]||'').trim();
-              if (v) set.add(v);
-              if (idxEq>=0 && idxDesc>=0){
-                const desc = String(r[rIdx][idxDesc]||'').trim();
-                if (v && desc) invDescByEquipo.set(v, desc);
-              }
-              if (idxEq>=0 && idxSerial>=0){
-                const serial = String(r[rIdx][idxSerial]||'').trim();
-                if (v && serial) invSerialByEquipo.set(v, serial);
-              }
-            }
-            inventoryOptions = Array.from(set.values()).sort((a,b)=>a.localeCompare(b,'es'));
-            inventorySet = new Set(inventoryOptions);
-            console.log('[actividad] Inventario cargado', { usedUrl, equipos: inventoryOptions.length, desc: invDescByEquipo.size, serial: invSerialByEquipo.size, idxEq, idxDesc, idxSerial });
-            // Evitar re-render si hay una fila en edición (new-row)
-            if (tbody.children.length && !tbody.querySelector('tr.new-row')) renderBody(view);
-          } catch(e){ console.error('[actividad] Error parse inventario', e); tryNext(i+1); }
-        }, error:(e)=>{ console.log('[actividad] Papa.parse error', { url, error:e }); tryNext(i+1); }});
-      }
-      tryNext(0);
+          }
+          inventoryOptions = Array.from(set.values()).sort((a,b)=>a.localeCompare(b,'es'));
+          inventorySet = new Set(inventoryOptions);
+          console.log('[actividad] Inventario unificado cargado', { url, equipos: inventoryOptions.length, desc: invDescByEquipo.size, serial: invSerialByEquipo.size, idxEq, idxDesc, idxSerial });
+          // Evitar re-render si hay una fila en edición (new-row)
+          if (tbody.children.length && !tbody.querySelector('tr.new-row')) {
+            renderBody(view);
+            syncScrollbar();
+          }
+        } catch(e){ console.error('[actividad] Error parse inventario', e); }
+      }, error:(e)=>{ console.log('[actividad] Papa.parse error', { url, error:e }); }});
     }
 
     function load(){
@@ -634,9 +704,19 @@
           }
           buildVisibleColumns();
           view = rows;
+          // Mezclar registros guardados en localStorage (persistencia simple en cliente)
+          try{
+            const keyLS = 'actividad:newRows';
+            const extra = JSON.parse(localStorage.getItem(keyLS)||'[]');
+            if (Array.isArray(extra) && extra.length){
+              rows = [...extra, ...rows];
+            }
+          }catch{}
           buildExternalOptionsBase();
           renderHead();
           renderBody(view);
+          // Forzar reflujo para corregir ancho/alineación de primera columna sin hard reload
+          deferReflowFix();
           // Escuchar cambios en selects para refrescar KPIs y actualizar editor de EQUIPO/ACTIVO en sitio
           tbody.addEventListener('change', (e)=>{
             if (!e.target) return;
@@ -672,12 +752,12 @@
                 descTd.textContent = newDesc; if (isInternal) console.log('[actividad] DESC onInput', { equipo: val, desc: newDesc });
               }
             }
-            // Si se está editando EQUIPO/ACTIVO y existe columna '#', auto-rellenar serial para internos
-            if (isEquipoInput && hashVisibleIdx >= 0){
-              const hashTd = tr.children[1 + hashVisibleIdx];
-              if (hashTd){
-                const newSerial = (isInternal && invSerialByEquipo.get(val)) ? invSerialByEquipo.get(val) : (hashTd.textContent||'');
-                hashTd.textContent = newSerial; if (isInternal) console.log('[actividad] SERIAL onInput', { equipo: val, serial: newSerial });
+            // Si se está editando EQUIPO/ACTIVO y existe columna SERIAL, auto-rellenar serial para internos
+            if (isEquipoInput && serialVisibleIdx >= 0){
+              const serialTd = tr.children[1 + serialVisibleIdx];
+              if (serialTd){
+                const newSerial = (isInternal && invSerialByEquipo.get(val)) ? invSerialByEquipo.get(val) : (serialTd.textContent||'');
+                serialTd.textContent = newSerial; if (isInternal) console.log('[actividad] SERIAL onInput', { equipo: val, serial: newSerial });
               }
             }
           });
@@ -710,34 +790,55 @@
       return -1;
     }
 
-    // Editor de fecha con 3 selects y diagonales fijas
+    // Editor de fecha con máscara: usuario teclea 6 dígitos (ddmmyy) → muestra dd/mm/yy
     function buildDateEditor(disabled=false, presetStr=''){
       // presetStr puede venir como dd/mm/aa o dd/mm/aaaa
       const preset = parseDMY(presetStr) || new Date();
-      const wrap = document.createElement('span');
-      wrap.className = 'date-editor';
-      const selD = document.createElement('select'); selD.className='date-dd';
-      const selM = document.createElement('select'); selM.className='date-mm';
-      const selY = document.createElement('select'); selY.className='date-yy';
-      for (let d=1; d<=31; d++){ const o=document.createElement('option'); o.value=String(d).padStart(2,'0'); o.textContent=o.value; selD.appendChild(o); }
-      for (let m=1; m<=12; m++){ const o=document.createElement('option'); o.value=String(m).padStart(2,'0'); o.textContent=o.value; selM.appendChild(o); }
-      const yearFull = preset.getFullYear(); const start=yearFull-2, end=yearFull+5;
-      for (let y=start; y<=end; y++){ const o=document.createElement('option'); const yy=String(y%100).padStart(2,'0'); o.value=yy; o.textContent=yy; selY.appendChild(o); }
-      const sep1=document.createElement('span'); sep1.textContent=' / ';
-      const sep2=document.createElement('span'); sep2.textContent=' / ';
-      const hidden = document.createElement('input'); hidden.type='hidden';
-      function syncHidden(){ hidden.value = `${selD.value}/${selM.value}/${selY.value}`; hidden.dispatchEvent(new Event('input', {bubbles:true})); }
-      selD.value = String(preset.getDate()).padStart(2,'0');
-      selM.value = String(preset.getMonth()+1).padStart(2,'0');
-      selY.value = String(preset.getFullYear()%100).padStart(2,'0');
-      selD.addEventListener('change', syncHidden);
-      selM.addEventListener('change', syncHidden);
-      selY.addEventListener('change', syncHidden);
-      wrap.appendChild(selD); wrap.appendChild(sep1); wrap.appendChild(selM); wrap.appendChild(sep2); wrap.appendChild(selY); wrap.appendChild(hidden);
-      if (disabled){ selD.disabled = selM.disabled = selY.disabled = true; wrap.title = 'Se calcula automáticamente (regla 25/27)'; }
-      // inicializar
-      syncHidden();
-      return { wrap, hidden };
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.className = 'date-input-masked';
+      input.maxLength = 8; // dd/mm/yy
+      input.placeholder = 'dd/mm/yy';
+      
+      // Valor inicial formateado
+      const dd = String(preset.getDate()).padStart(2,'0');
+      const mm = String(preset.getMonth()+1).padStart(2,'0');
+      const yy = String(preset.getFullYear()%100).padStart(2,'0');
+      input.value = `${dd}/${mm}/${yy}`;
+      
+      // Máscara automática mientras escribe
+      input.addEventListener('input', (e) => {
+        let value = e.target.value.replace(/\D/g, ''); // Solo dígitos
+        if (value.length > 6) value = value.slice(0, 6); // Máximo 6 dígitos
+        
+        // Formatear automáticamente: ddmmyy → dd/mm/yy
+        let formatted = '';
+        if (value.length >= 1) formatted += value.slice(0, 2);
+        if (value.length >= 3) formatted += '/' + value.slice(2, 4);
+        if (value.length >= 5) formatted += '/' + value.slice(4, 6);
+        
+        e.target.value = formatted;
+      });
+      
+      // Permitir navegación con teclado sin interferir
+      input.addEventListener('keydown', (e) => {
+        // Permitir: backspace, delete, tab, escape, enter, flechas
+        if ([8, 9, 27, 13, 46, 37, 38, 39, 40].includes(e.keyCode)) return;
+        // Permitir: Ctrl+A, Ctrl+C, Ctrl+V, Ctrl+X
+        if ((e.ctrlKey || e.metaKey) && [65, 67, 86, 88].includes(e.keyCode)) return;
+        // Solo números
+        if ((e.keyCode < 48 || e.keyCode > 57) && (e.keyCode < 96 || e.keyCode > 105)) {
+          e.preventDefault();
+        }
+      });
+      
+      if (disabled) {
+        input.disabled = true;
+        input.title = 'Se calcula automáticamente (regla 25/27)';
+        input.style.opacity = '0.6';
+      }
+      
+      return { wrap: input, hidden: input }; // input actúa como wrap y hidden
     }
 
     // Estado de edición actual
@@ -776,15 +877,30 @@
     }
 
     function isValidNewRow(){
-      if (!currentEditors || !currentSelTipo) return false;
+      if (!currentEditors || !currentSelTipo) {
+        console.log('[actividad] Validación falló: no hay editores o tipo');
+        return false;
+      }
       const tipo = currentSelTipo.value;
       const equipo = getEditorByVariants(currentEditors, ['EQUIPO / ACTIVO','EQUIPO/ACTIVO','EQUIPO ACTIVO','EQUIPO'])?.value || '';
       const inicio = getEditorByVariants(currentEditors, ['INICIO DEL SERVICIO'])?.value || '';
       const term = getEditorByVariants(currentEditors, ['TERMINACION DEL SERVICIO','TERMINACIÓN DEL SERVICIO'])?.value || '';
-      if (!equipo || !inicio || !term) return false;
-      if (tipo==='EQUIPOS EXTERNOS' && currentProvInput && !currentProvInput.value) return false;
+      console.log('[actividad] Validación campos:', { equipo, inicio, term, tipo });
+      if (!equipo || !inicio || !term) {
+        console.log('[actividad] Validación falló: falta equipo, inicio o terminación');
+        return false;
+      }
+      if (tipo==='EQUIPOS EXTERNOS' && currentProvInput && !currentProvInput.value) {
+        console.log('[actividad] Validación falló: falta proveedor para equipo externo');
+        return false;
+      }
       const di = parseDMY(inicio); const dt = parseDMY(term);
-      if (!di || !dt || dt < di) return false;
+      console.log('[actividad] Fechas parseadas:', { inicio, di, term, dt, dtMenorDi: dt < di });
+      if (!di || !dt || dt < di) {
+        console.log('[actividad] Validación falló: fechas inválidas o terminación antes de inicio');
+        return false;
+      }
+      console.log('[actividad] ✅ Validación OK - Botón Guardar habilitado');
       return true;
     }
 
@@ -823,6 +939,38 @@
         const label = labels[j] || '';
         const norm = normalizeHeader(label).toUpperCase();
         let input;
+        
+        // SERIAL, DESCRIPCION y FECHA DE DEVOLUCION son solo lectura (texto plano, no inputs)
+        if (/^(SERIAL|#|DESCRIPCION|DESCRIPCIÓN)$/.test(norm)){
+          td.textContent = ''; // Se autocompletará desde el inventario
+          td.style.color = '#6b7280'; // Color más suave para indicar que es auto-generado
+          td.style.fontStyle = 'italic';
+          tr.appendChild(td);
+          editors[norm] = td; // Guardamos el td en lugar de input para poder actualizarlo
+          continue;
+        }
+        
+        // FECHA DE DEVOLUCION: auto-calculada como terminación + 1 día
+        if (/fecha de devolucion|fecha de devolución/i.test(label)){
+          td.textContent = ''; // Se calculará automáticamente
+          td.style.color = '#6b7280';
+          td.style.fontStyle = 'italic';
+          tr.appendChild(td);
+          editors[norm] = td;
+          continue;
+        }
+        
+        // INGRESO ACUMULADO y RENTA ACUMULADA: auto-calculados como días × precio
+        if (/ingreso acumulado|renta acumulada/i.test(label)){
+          td.textContent = ''; // Se calculará automáticamente
+          td.style.color = '#6b7280';
+          td.style.fontStyle = 'italic';
+          td.style.textAlign = 'right'; // Alinear montos a la derecha
+          tr.appendChild(td);
+          editors[norm] = td;
+          continue;
+        }
+        
         if (/^(EQUIPO\s*\/\s*ACTIVO|EQUIPO\s*ACTIVO|EQUIPO)$/.test(norm)){
           input = document.createElement('input'); input.type='text'; input.placeholder='Equipo/Activo'; input.name='equipoActivo'; input.id='equipoActivo';
           // aplicar datalist según tipo
@@ -847,6 +995,8 @@
           continue; // ya añadimos td y listeners
         } else if (norm === 'DIAS EN SERVICIO'){
           input = document.createElement('input'); input.type='number'; input.min='0'; input.placeholder='0'; input.name='diasServicio'; input.id='diasServicio';
+        } else if (norm === 'PRECIO'){
+          input = document.createElement('input'); input.type='number'; input.min='0'; input.step='0.01'; input.placeholder='0.00'; input.name='precio'; input.id='precio';
         } else {
           input = document.createElement('input'); input.type='text'; input.placeholder=label; input.name=normalizeHeader(label); input.id=normalizeHeader(label);
         }
@@ -857,18 +1007,45 @@
         input.addEventListener('change', updateSaveEnabled);
       }
 
+      // Auto-relleno desde inventario al cambiar Equipo/Activo
+      const equipoEditor = getEditorByVariants(editors, ['EQUIPO / ACTIVO','EQUIPO/ACTIVO','EQUIPO ACTIVO','EQUIPO']);
+      if (equipoEditor){
+        const autoFillFromEquipo = () => {
+          const keyRaw = String(equipoEditor.value||'').trim();
+          if (!keyRaw) return;
+          const keyUpper = keyRaw.toUpperCase();
+          const descEditor = getEditorByVariants(editors, ['DESCRIPCION','DESCRIPCIÓN']);
+          const serialEditor = getEditorByVariants(editors, ['SERIAL','#']);
+          const descInv = invDescByEquipo.get(keyRaw) || invDescByEquipo.get(keyUpper) || '';
+          const serialInv = invSerialByEquipo.get(keyRaw) || invSerialByEquipo.get(keyUpper) || '';
+          // Ahora son <td> no <input>, usar textContent
+          if (descEditor && descInv) descEditor.textContent = descInv;
+          if (serialEditor && serialInv) serialEditor.textContent = serialInv;
+          console.log('[actividad] Autofill nuevo registro', { equipo: keyRaw, desc: descInv, serial: serialInv });
+          updateSaveEnabled();
+        };
+        equipoEditor.addEventListener('change', autoFillFromEquipo);
+        equipoEditor.addEventListener('input', autoFillFromEquipo);
+      }
+
       // Insertar al inicio de tbody
       if (tbody.firstChild) tbody.insertBefore(tr, tbody.firstChild); else tbody.appendChild(tr);
-      // reconstruir celda equipo según tipo
-      rebuildEquipoCellForRow(tr);
+      // Nota: en la fila nueva NO llamamos a rebuildEquipoCellForRow(tr)
+      // para no reemplazar el input de EQUIPO/ACTIVO que ya tiene
+      // el listener que autocompleta DESCRIPCION y SERIAL desde inventario.
       setToolbarEditing(true);
       currentNewRowEl = tr; currentEditors = editors; currentSelTipo = sel; currentProvInput = provInput;
       updateSaveEnabled();
 
-      // Auto-cálculo de días en servicio cuando cambian fechas
+      // Auto-cálculo de días en servicio, fecha de devolución, ingreso y renta
       const inicio = editors['INICIO DEL SERVICIO'];
-      const termin = editors['TERMINACION DEL SERVICIO'];
+      const termin = editors['TERMINACION DEL SERVICIO'] || editors['TERMINACIÓN DEL SERVICIO'];
       const dias = editors['DIAS EN SERVICIO'];
+      const devolucion = editors['FECHA DE DEVOLUCION'] || editors['FECHA DE DEVOLUCIÓN'];
+      const precio = editors['PRECIO'];
+      const ingresoAcum = editors['INGRESO ACUMULADO'] || editors['INGRESO ACUMULDDO'];
+      const rentaAcum = editors['RENTA ACUMULADA'];
+      
       function recomputeDias(){
         if (!inicio || !termin || !dias) return;
         const di = parseDMY(inicio.value); const dt = parseDMY(termin.value);
@@ -885,15 +1062,65 @@
           dias.value = String(diff);
         }
       }
+      
+      function recomputeDevolucion(){
+        if (!termin || !devolucion) return;
+        const dt = parseDMY(termin.value);
+        if (!dt) { devolucion.textContent = ''; return; }
+        // Devolución = terminación + 1 día
+        const dDev = new Date(dt);
+        dDev.setDate(dDev.getDate() + 1);
+        devolucion.textContent = formatDMY(dDev);
+      }
+      
+      function recomputeIngresoRenta(){
+        if (!dias || !precio) return;
+        const d = parseFloat(dias.value) || 0;
+        const p = parseFloat(precio.value) || 0;
+        const total = d * p;
+        const tipo = sel.value;
+        
+        // INGRESO ACUMULADO para equipos internos
+        if (ingresoAcum){
+          if (tipo === 'EQUIPOS INTERNOS' && total > 0){
+            ingresoAcum.textContent = '$' + total.toLocaleString('es-MX', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+          } else {
+            ingresoAcum.textContent = '';
+          }
+        }
+        
+        // RENTA ACUMULADA para equipos externos
+        if (rentaAcum){
+          if (tipo === 'EQUIPOS EXTERNOS' && total > 0){
+            rentaAcum.textContent = '$' + total.toLocaleString('es-MX', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+          } else {
+            rentaAcum.textContent = '';
+          }
+        }
+      }
+      
       if (inicio) inicio.addEventListener('change', recomputeDias);
-      if (termin) termin.addEventListener('change', recomputeDias);
+      if (termin){
+        termin.addEventListener('change', () => {
+          recomputeDias();
+          recomputeDevolucion();
+          recomputeIngresoRenta();
+        });
+      }
+      if (dias) dias.addEventListener('input', recomputeIngresoRenta);
+      if (precio) precio.addEventListener('input', recomputeIngresoRenta);
+      sel.addEventListener('change', recomputeIngresoRenta);
+      
       // inicializar si ya hubiera presets
       recomputeDias();
+      recomputeDevolucion();
+      recomputeIngresoRenta();
 
       // Guardar desde toolbar
       saveRowBtn.onclick = ()=>{
         const baseProp = sel.value==='EQUIPOS INTERNOS' ? 'PCT' : (provInput.value||'');
         const eget = (vars)=> getEditorByVariants(editors, vars);
+        // Campos editables
         const valEquipo = eget(['EQUIPO / ACTIVO','EQUIPO/ACTIVO','EQUIPO ACTIVO','EQUIPO'])?.value || '';
         const valCliente = eget(['CLIENTE'])?.value || '';
         const valArea = eget(['AREA DEL CLIENTE','ÁREA DEL CLIENTE'])?.value || '';
@@ -901,6 +1128,13 @@
         const valFactura = eget(['FACTURA'])?.value || '';
         const valOC = eget(['ORDEN DE COMPRA','ORDEN COMPRA','NO. ORDEN DE COMPRA','NO ORDEN DE COMPRA','NÚMERO DE ORDEN','NUMERO DE ORDEN','OC'])?.value || '';
         const valEmbarque = eget(['FECHA EMBARQUE','FECHA DE EMBARQUE'])?.value || '';
+        const valPrecio = eget(['PRECIO'])?.value || '';
+        const valEstCot = eget(['EST-COT','COT / ESTIMACION','COT/ESTIMACION','COT ESTIMACION'])?.value || '';
+        const valOS = eget(['ORDEN DE SERVICIO','O. S.','O.S.'])?.value || '';
+        // Campos auto-generados (texto plano en td, no input)
+        const valSerial = eget(['SERIAL','#'])?.textContent || '';
+        const valDesc = eget(['DESCRIPCION','DESCRIPCIÓN'])?.textContent || '';
+        // Fechas
         const sInicio = eget(['INICIO DEL SERVICIO'])?.value || '';
         const sTerm = eget(['TERMINACION DEL SERVICIO','TERMINACIÓN DEL SERVICIO'])?.value || '';
         const dInicio = parseDMY(sInicio);
@@ -912,12 +1146,16 @@
 
         const idx = (variants)=> headerIndex(variants);
         const iPROPIEDAD = idx(['PROPIEDAD']);
+        const iSERIAL = idx(['SERIAL','#']);
         const iEQUIPO = idx(['EQUIPO / ACTIVO','EQUIPO/ACTIVO','EQUIPO ACTIVO','EQUIPO']);
+        const iDESC = idx(['DESCRIPCION','DESCRIPCIÓN']);
         const iCLIENTE = idx(['CLIENTE']);
         const iAREA = idx(['AREA DEL CLIENTE','ÁREA DEL CLIENTE']);
         const iUBIC = idx(['UBICACION','UBICACIÓN']);
         const iFACT = idx(['FACTURA']);
         const iOC = idx(['ORDEN DE COMPRA','ORDEN COMPRA','NO. ORDEN DE COMPRA','NO ORDEN DE COMPRA','NÚMERO DE ORDEN','NUMERO DE ORDEN','OC']);
+        const iESTCOT = idx(['EST-COT','COT / ESTIMACION','COT/ESTIMACION','COT ESTIMACION']);
+        const iOS = idx(['ORDEN DE SERVICIO','O. S.','O.S.']);
         const iEMB = idx(['FECHA EMBARQUE','FECHA DE EMBARQUE']);
         const iINI = idx(['INICIO DEL SERVICIO']);
         const iCONT = idx(['CONTINUACION DEL SERVICIO','CONTINUACIÓN DEL SERVICIO']);
@@ -925,17 +1163,25 @@
         const iTERM = idx(['TERMINACION DEL SERVICIO','TERMINACIÓN DEL SERVICIO']);
         const iDEV = idx(['FECHA DE DEVOLUCION','FECHA DE DEVOLUCIÓN']);
         const iDIAS = idx(['DIAS EN SERVICIO','DÍAS EN SERVICIO']);
+        const iPREC = idx(['PRECIO']);
+        const iINGR = idx(['INGRESO ACUMULADO','INGRESO ACUMULDDO']);
+        const iREN  = idx(['RENTA ACUMULADA']);
 
         function makeRow(){ return new Array(headers.length).fill(''); }
         function fillCommon(r){
           if (iPROPIEDAD>=0) r[iPROPIEDAD] = baseProp;
+          if (iSERIAL>=0) r[iSERIAL] = valSerial;
           if (iEQUIPO>=0) r[iEQUIPO] = valEquipo;
+          if (iDESC>=0) r[iDESC] = valDesc;
           if (iCLIENTE>=0) r[iCLIENTE] = valCliente;
           if (iAREA>=0) r[iAREA] = valArea;
           if (iUBIC>=0) r[iUBIC] = valUbic;
           if (iFACT>=0) r[iFACT] = valFactura;
           if (iOC>=0) r[iOC] = valOC;
+          if (iESTCOT>=0) r[iESTCOT] = valEstCot;
+          if (iOS>=0) r[iOS] = valOS;
           if (iEMB>=0) r[iEMB] = valEmbarque;
+          if (iPREC>=0) r[iPREC] = valPrecio;
         }
 
         const newRows = [];
@@ -961,6 +1207,14 @@
             if (iFINP>=0) r[iFINP] = formatDMY(segEnd); // día 25
           }
           if (iDIAS>=0) r[iDIAS] = String(daysInclusive(segStart, segEnd));
+          // Calcular ingreso/renta acumulados = dias * precio
+          const diasNum = iDIAS>=0 ? parseFloat(String(r[iDIAS]||'').replace(/,/g,'')) : NaN;
+          const precioNum = parseFloat(String(valPrecio||'').replace(/,/g,''));
+          if (!isNaN(diasNum) && !isNaN(precioNum)){
+            const monto = diasNum * precioNum;
+            if (iINGR>=0) r[iINGR] = String(monto);
+            if (iREN>=0)  r[iREN]  = String(monto);
+          }
           newRows.push(r);
           if (segEnd.getTime() === dTerm.getTime()) break;
           // Continuación el 27 del mismo mes del corte
@@ -977,6 +1231,29 @@
         buildExternalOptionsBase();
         renderHead();
         renderBody(view);
+        // Persistir en localStorage para mantener las nuevas filas en esta URL/sesión
+        try{
+          const keyLS = 'actividad:newRows';
+          const prev = JSON.parse(localStorage.getItem(keyLS)||'[]');
+          const next = Array.isArray(prev) ? [...newRows, ...prev] : [...newRows];
+          localStorage.setItem(keyLS, JSON.stringify(next));
+        }catch{}
+        // Agregar un registro visual al log inferior
+        try{
+          const ul = document.getElementById('activity-log-list');
+          if (ul){
+            const serial = invSerialByEquipo.get(valEquipo) || invSerialByEquipo.get(String(valEquipo||'').toUpperCase()) || '';
+            const li = document.createElement('li');
+            li.style.padding = '6px 8px';
+            li.style.borderTop = '1px solid #e5e7eb';
+            const labelCli = valCliente ? ` · Cliente: ${valCliente}` : '';
+            const labelOC = valOC ? ` · OC: ${valOC}` : '';
+            const labelFact = valFactura ? ` · Factura: ${valFactura}` : '';
+            const rango = `${formatDMY(dInicio)} – ${formatDMY(dTerm)}`;
+            li.textContent = `${valEquipo}${serial?` (SERIAL: ${serial})`:''} · ${rango}${labelCli}${labelOC}${labelFact}`;
+            ul.insertBefore(li, ul.firstChild);
+          }
+        }catch{}
         // limpiar estado toolbar
         currentNewRowEl = null; currentEditors = null; currentSelTipo = null; currentProvInput = null;
         setToolbarEditing(false);
@@ -994,7 +1271,14 @@
 
     q.addEventListener('input', applyFilter);
     clearQ.addEventListener('click', ()=>{ q.value=''; applyFilter(); q.focus(); });
-    document.addEventListener('DOMContentLoaded', load);
+    
+    // Usar window.load en lugar de DOMContentLoaded para asegurar que CSS esté completamente aplicado
+    if (document.readyState === 'complete') {
+      // Si ya está cargado (ej. navegación back), ejecutar inmediatamente
+      setTimeout(load, 0);
+    } else {
+      window.addEventListener('load', load);
+    }
   })();
   </script>
 </body>

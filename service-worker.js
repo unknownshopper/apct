@@ -1,7 +1,18 @@
-const CACHE_NAME = 'apct-cache-v1';
+const CACHE_NAME = 'apct-cache-v2';
 const CORE_ASSETS = [
   './',
   './index.html',
+  './inspeccion.html',
+  './reginspecciones.html',
+  './actividad.html',
+  './ingral.html',
+  './tareas.html',
+  './pruebas.html',
+  './listapruebas.html',
+  './stockpruebas.html',
+  './reportes.html',
+  './login.html',
+
   './styles.css',
   './script.js',
   './manifest.webmanifest',

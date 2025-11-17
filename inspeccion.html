@@ -25,7 +25,10 @@
           <li><a href="listapruebas.html">Lista de pruebas</a></li>
         </ul></details></li>
         <li><a href="tareas.html">Tareas</a></li>
-        <li><a class="active" href="inspeccion.html">Inspección</a></li>
+        <li class="nav-dropdown"><details><summary>Inspección</summary><ul>
+          <li><a class="active" href="inspeccion.html">Inspección primaria</a></li>
+          <li><a href="reginspecciones.html">Registro de inspecciones</a></li>
+        </ul></details></li>
         <li><a href="ingral.html">Inventario</a></li>
         <li><a href="actividad.html">Actividad</a></li>
         <li><a href="reportes.html">Reportes</a></li>
@@ -48,17 +51,6 @@
       <div>
         <div class="label">Usuario</div>
         <div class="value"><span id="userInfo">No autenticado</span></div>
-      </div>
-      <div>
-        <div class="label">Cliente</div>
-        <div class="value" id="clienteGroup" style="display:inline-flex; gap:12px; align-items:center; flex-wrap:wrap">
-          <label class="pill" style="cursor:pointer; user-select:none;">
-            <input id="clienteInterno" name="clienteTipo" type="radio" style="margin:0" checked> Interno
-          </label>
-          <label class="pill" style="cursor:pointer; user-select:none;">
-            <input id="clienteExterno" name="clienteTipo" type="radio" style="margin:0"> Externo
-          </label>
-        </div>
       </div>
       <div>
         <div class="label">Lugar</div>
@@ -389,8 +381,7 @@
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
   <script>
     (function(){
-      const INGRAL_SRC = 'docs/INVENTARIO GENERAL PCT 2025 NOV.csv';
-      const INGRAL_SRC2 = 'docs/INVENTARIO GENERAL PCT 2025 NOV2.csv';
+      const INGRAL_SRC = 'docs/INVENTARIO GENERAL PCT 2025 UNIFICADO.csv';
       let ingrIndex = null; // Map por equipo/activo
 
       function setupElastomero(id){
@@ -772,7 +763,6 @@
               const longitudVal = document.getElementById('longitudInput')?.value||'';
               const longitudUnit = document.getElementById('longitudUnit')?.textContent||'';
               const userTxt = document.getElementById('userInfo')?.textContent||'';
-              const clienteSel = (function(){ const g=document.getElementById('clienteGroup'); if(!g) return 'Interno'; const r=g.querySelector('input[name="clienteTipo"]:checked'); const txt=r? (r.parentElement?.textContent||'').trim() : 'Interno'; return txt; })();
               const lugarTxt = document.getElementById('lugarInput')?.value || '';
               const evalOper = document.getElementById('evalOper')?.classList.contains('active');
               const evalNoOper = document.getElementById('evalNoOper')?.classList.contains('active');
@@ -783,7 +773,7 @@
               const payload = {
                 equipoActivo: equipo,
                 tipo: tipoSel,
-                cliente: clienteSel,
+                cliente: '',
                 lugar: lugarTxt,
                 fecha: stamp,
                 fechaTs: Date.now(),
@@ -987,6 +977,33 @@
         applyDefaultSelections();
         updateEvaluation();
       });
+            // Sincronizar campo "Usuario" con el usuario autenticado
+      (function syncUserInfo(){
+        const span = document.getElementById('userInfo');
+        if (!span) return;
+
+        function getCurrentEmail(){
+          try {
+            return localStorage.getItem('currentUserEmail') || '';
+          } catch {
+            return '';
+          }
+        }
+
+        function updateSpan(email){
+          span.textContent = email || 'No autenticado';
+        }
+
+        // Inicial: usar el email actual guardado por script.js
+        updateSpan(getCurrentEmail());
+
+        // Escuchar cambios de autenticación (disparado por script.js)
+        window.addEventListener('auth:changed', (e) => {
+          const user = e.detail && e.detail.user;
+          const email = user && user.email ? user.email : getCurrentEmail();
+          updateSpan(email);
+        });
+      })();
 
       function getQueryParams(){
         const out = {}; const q = window.location.search.slice(1).split('&');
@@ -1152,29 +1169,14 @@
       function fetchIngralIndex(){
         return new Promise((resolve)=>{
           if (ingrIndex) return resolve(ingrIndex);
-          let map1 = new Map();
-          let map2 = new Map();
-          let done1 = false, done2 = false;
-          const maybeDone = ()=>{
-            if (!(done1 && done2)) return;
-            // Merge: base map1, luego aplicar conexion/serial desde map2 si existen
-            const out = new Map(map1);
-            for (const [k, v2] of map2.entries()){
-              const v1 = out.get(k) || { equipo:k };
-              if (v2.conexion) v1.conexion = v2.conexion;
-              if (v2.serial && !v1.serial) v1.serial = v2.serial;
-              out.set(k, v1);
-            }
-            ingrIndex = out;
-            resolve(ingrIndex);
-          };
           Papa.parse(getCsvUrl(INGRAL_SRC), { download:true, skipEmptyLines:'greedy', complete:(res)=>{
-            try { map1 = buildIngralIndex(res); } catch {}
-            done1 = true; maybeDone();
-          }});
-          Papa.parse(getCsvUrl(INGRAL_SRC2), { download:true, skipEmptyLines:'greedy', complete:(res)=>{
-            try { map2 = buildIngralIndex2(res); } catch {}
-            done2 = true; maybeDone();
+            try { 
+              ingrIndex = buildIngralIndex2(res);
+              resolve(ingrIndex);
+            } catch(e) { 
+              console.error('[inspeccion] Error cargando inventario', e);
+              resolve(new Map()); 
+            }
           }});
         });
       }

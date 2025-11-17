@@ -22,7 +22,10 @@
                   <li><a href="listapruebas.html">Lista de pruebas</a></li>
                 </ul></details></li>
                 <li><a href="tareas.html">Tareas</a></li>
-                <li><a href="inspeccion.html">Inspección</a></li>
+                <li class="nav-dropdown"><details><summary>Inspección</summary><ul>
+                  <li><a href="inspeccion.html">Inspección primaria</a></li>
+                  <li><a href="reginspecciones.html">Registro de inspecciones</a></li>
+                </ul></details></li>
                 <li><a href="ingral.html">Inventario</a></li>
                 <li><a href="actividad.html">Actividad</a></li>
                 <li><a href="reportes.html">Reportes</a></li>
@@ -99,7 +102,7 @@
         navigator.serviceWorker.register('service-worker.js').catch(function(e){ console.warn('SW reg failed', e); });
       });
     }
-    const INVENTARIO_SRC = 'docs/INVENTARIO GENERAL PCT 2025 NOV.csv';
+    const INVENTARIO_SRC = 'docs/INVENTARIO GENERAL PCT 2025 UNIFICADO.csv';
     function fmt(n){ try { return n.toLocaleString('es-MX'); } catch { return String(n); } }
     async function countInventario(){
       try{

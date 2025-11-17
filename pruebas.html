@@ -66,10 +66,7 @@
     <script>
       (function(){
         const CSV_URL = 'docs/inventario.csv';
-        const GEN_INV_URL = 'docs/INVENTARIO%20GENERAL%20PCT%202025%20NOV.csv';
-        const GEN_INV_URL_PLAIN = 'docs/INVENTARIO GENERAL PCT 2025 NOV.csv';
-        const GEN_INV2_URL = 'docs/INVENTARIO%20GENERAL%20PCT%202025%20NOV2.csv';
-        const GEN_INV2_URL_PLAIN = 'docs/INVENTARIO GENERAL PCT 2025 NOV2.csv';
+        const GEN_INV_URL = 'docs/INVENTARIO GENERAL PCT 2025 UNIFICADO.csv';
         let HEADERS = [];
         let ALL_ROWS = [];
         let EQUIPO_IDX = -1;
@@ -279,16 +276,9 @@
 
         async function loadGeneralInventory(){
           try{
-            const tries = [GEN_INV_URL, GEN_INV_URL_PLAIN, GEN_INV2_URL, GEN_INV2_URL_PLAIN];
-            let res = null; let lastErr = null; let usedUrl = null;
-            for (const url of tries){
-              try {
-                const r = await fetch(url, { cache: 'no-store' });
-                if (r.ok){ res = r; usedUrl = url; break; }
-                lastErr = 'HTTP ' + r.status;
-              } catch(ex){ lastErr = ex?.message || String(ex); }
-            }
-            if (!res) { console.log('[pruebas] Fetch general inventory failed on all candidates', { lastErr, tries }); return; }
+            const url = GEN_INV_URL;
+            const res = await fetch(url, { cache: 'no-store' });
+            if (!res.ok) { console.log('[pruebas] Fetch general inventory failed', { url, status: res.status }); return; }
             const txt = await res.text();
             const rows = parseCSVGeneral(txt);
             if (!rows.length) return;
@@ -297,8 +287,8 @@
             // índices para equipo y serie en inventario general
             GEN_EQUIPO_IDX = headerIndexByVariantsGen(['EQUIPO / ACTIVO','EQUIPO/ACTIVO','EQUIPO ACTIVO','EQUIPO']);
             GEN_SERIE_IDX = headerIndexByVariantsGen(['SERIE','NUMERO DE SERIE','NÚMERO DE SERIE','SERIAL','SERIAL NO','NO. SERIE']);
-            console.log('[pruebas] GEN indices', { usedUrl, GEN_EQUIPO_IDX, GEN_SERIE_IDX, headers: GEN_HEADERS });
-            try { document.getElementById('status').textContent = `Inventario general: ${usedUrl || ''} (equip:${GEN_EQUIPO_IDX}, serie:${GEN_SERIE_IDX})`; } catch {}
+            console.log('[pruebas] Inventario unificado cargado', { url, GEN_EQUIPO_IDX, GEN_SERIE_IDX, headers: GEN_HEADERS });
+            try { document.getElementById('status').textContent = `Inventario unificado (equip:${GEN_EQUIPO_IDX}, serie:${GEN_SERIE_IDX})`; } catch {}
             if (GEN_EQUIPO_IDX>=0 && GEN_SERIE_IDX>=0){
               serieByEquipo.clear();
               const norm = (s)=> String(s||'').trim().toUpperCase().replace(/[^A-Z0-9]/g,'');

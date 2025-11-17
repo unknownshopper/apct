@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Registro de Inspecciones</title>
+  <link rel="stylesheet" href="styles.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+  <link rel="icon" href="data:,">
+  <meta name="color-scheme" content="light">
+  <meta name="theme-color" content="#ffffff">
+</head>
+<body data-page="reginspecciones">
+  <header>
+    <div class="logo"><img src="img/logopctch.png" alt="Logo" /></div>
+    <button class="menu-toggle" aria-label="Abrir menú" aria-controls="primary-nav" aria-expanded="false">☰</button>
+    <nav id="primary-nav">
+      <ul>
+        <li><a href="index.html">Dashboard</a></li>
+        <li class="nav-dropdown"><details><summary>Pruebas</summary><ul>
+          <li><a href="pruebas.html">Pruebas</a></li>
+          <li><a href="stockpruebas.html">Stock de pruebas</a></li>
+          <li><a href="listapruebas.html">Lista de pruebas</a></li>
+        </ul></details></li>
+        <li><a href="tareas.html">Tareas</a></li>
+        <li class="nav-dropdown"><details><summary>Inspección</summary><ul>
+          <li><a href="inspeccion.html">Inspección primaria</a></li>
+          <li><a class="active" href="reginspecciones.html">Registro de inspecciones</a></li>
+        </ul></details></li>
+        <li><a href="ingral.html">Inventario</a></li>
+        <li><a href="actividad.html">Actividad</a></li>
+        <li><a href="reportes.html">Reportes</a></li>
+      </ul>
+    </nav>
+    <div class="user-box">
+      <span id="user-email"></span>
+      <a id="login-link" href="login.html">Login</a>
+      <button id="logout-btn" type="button" style="display:none">Salir</button>
+    </div>
+  </header>
+
+  <main class="wide">
+    <h1>Registro de Inspecciones</h1>
+
+    <section class="dashboard" style="margin: 12px 0 8px;">
+      <div class="cards" id="insp-cards"></div>
+    </section>
+
+    <div class="toolbar" role="region" aria-label="Herramientas de tabla">
+      <div class="group">
+        <input id="q" type="text" placeholder="Buscar por equipo, cliente, lugar o usuario..." aria-label="Buscar" />
+        <button id="clearQ" class="btn-primary" type="button">Limpiar</button>
+      </div>
+      <div class="toolbar-count" id="count">0 inspecciones</div>
+    </div>
+
+    <div id="insp-wrapper" class="table-responsive" aria-live="polite">
+      <div class="scrollbar-x"><div class="scrollbar-content"></div></div>
+      <div class="table-scroll">
+        <table class="inventory" id="inspTable">
+          <thead>
+            <tr>
+              <th>Fecha</th>
+              <th>Equipo/Activo</th>
+              <th>Tipo</th>
+              <th>Cliente</th>
+              <th>Lugar</th>
+              <th>Diámetro</th>
+              <th>Conexión</th>
+              <th>Longitud</th>
+              <th>Serial</th>
+              <th>Evaluación</th>
+              <th>Usuario</th>
+              <th>Observaciones</th>
+            </tr>
+          </thead>
+          <tbody id="inspBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+
+  <footer>
+    <a href="https://unknownshoppers.com" target="_blank" rel="noopener noreferrer">
+      Powered by <img src="img/logotus.jpg" alt="Unknown Shoppers" style="height:18px; vertical-align:middle">
+    </a>
+  </footer>
+
+  <script src="https://www.gstatic.com/firebasejs/9.6.11/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.6.11/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.6.11/firebase-firestore-compat.js"></script>
+  <script src="firebase-config.js"></script>
+  <script src="firebase-init.js"></script>
+  <script src="script.js"></script>
+  <script>
+  (function(){
+    const tbody = document.getElementById('inspBody');
+    const table = document.getElementById('inspTable');
+    const q = document.getElementById('q');
+    const clearQ = document.getElementById('clearQ');
+    const count = document.getElementById('count');
+    const cards = document.getElementById('insp-cards');
+    let allRows = [];
+    let view = [];
+
+    function fmtNum(n){
+      try { return n.toLocaleString('es-MX'); }
+      catch { return String(n); }
+    }
+
+    function fmtDate(ts){
+      if (!ts) return '';
+      try{
+        const d = new Date(ts);
+        if (isNaN(d.getTime())) return '';
+        const pad = (x) => String(x).padStart(2,'0');
+        return `${pad(d.getDate())}/${pad(d.getMonth()+1)}/${d.getFullYear()}`;
+      }catch{ return ''; }
+    }
+
+    function syncScrollbar(){
+      const scroller = document.querySelector('.table-scroll');
+      const bar = document.querySelector('.scrollbar-x');
+      if (!scroller || !bar || !table) return;
+      const content = bar.querySelector('.scrollbar-content');
+      content.style.width = table.scrollWidth + 'px';
+      bar.scrollLeft = scroller.scrollLeft;
+      bar.onscroll = () => { scroller.scrollLeft = bar.scrollLeft; };
+      scroller.onscroll = () => { bar.scrollLeft = scroller.scrollLeft; };
+      let dragging = false; let startX=0; let startLeft=0;
+      bar.addEventListener('mousedown', (e)=>{
+        dragging=true; startX=e.clientX; startLeft=bar.scrollLeft;
+        document.getElementById('insp-wrapper').classList.add('dragging');
+      });
+      window.addEventListener('mousemove', (e)=>{
+        if(!dragging) return;
+        const dx=e.clientX-startX;
+        bar.scrollLeft = startLeft + dx;
+      });
+      window.addEventListener('mouseup', ()=>{
+        if(dragging){
+          dragging=false;
+          document.getElementById('insp-wrapper').classList.remove('dragging');
+        }
+      });
+    }
+
+    function renderKpis(rows){
+      if (!cards) return;
+      const total = rows.length;
+      const now = Date.now();
+      const seven = 7*24*3600*1000;
+      let last7 = 0;
+      let operativos = 0;
+      let noOperativos = 0;
+      rows.forEach(r => {
+        if (now - (r.fechaTs || 0) <= seven) last7++;
+        const ev = (r.evaluacion || '').toLowerCase();
+        if (ev.includes('no operativo')) noOperativos++;
+        else if (ev.includes('operativo')) operativos++;
+      });
+      cards.innerHTML = '';
+      const data = [
+        { label: 'Inspecciones totales', val: total },
+        { label: 'Últimos 7 días', val: last7 },
+        { label: 'Operativas', val: operativos },
+        { label: 'No operativas', val: noOperativos }
+      ];
+      data.forEach(k => {
+        const card = document.createElement('div'); card.className='card';
+        const l = document.createElement('div'); l.className='kpi-label'; l.textContent = k.label;
+        const v = document.createElement('div'); v.className='kpi'; v.textContent = fmtNum(k.val);
+        card.appendChild(l); card.appendChild(v); cards.appendChild(card);
+      });
+    }
+
+    function renderBody(rows){
+      const frag = document.createDocumentFragment();
+      rows.forEach(r => {
+        const tr = document.createElement('tr');
+        const obsTxt = Array.isArray(r.observaciones)
+          ? r.observaciones.join(' \u2022 ')
+          : (r.observaciones || '');
+        const longTxt = (r.parametros && r.parametros.longitud)
+          ? `${r.parametros.longitud} ${r.parametros.longitudUnidad || ''}`.trim()
+          : '';
+        const diamTxt = r.parametros && r.parametros.diametro ? r.parametros.diametro : '';
+        const serialTxt = r.parametros && r.parametros.serial ? r.parametros.serial : '';
+        const cells = [
+          fmtDate(r.fechaTs || r.fecha),
+          r.equipoActivo || '',
+          r.tipo || '',
+          r.cliente || '',
+          r.lugar || '',
+          diamTxt,
+          r.parametros && r.parametros.conexion ? r.parametros.conexion : '',
+          longTxt,
+          serialTxt,
+          r.evaluacion || '',
+          r.usuario || '',
+          obsTxt
+        ];
+        cells.forEach(val => {
+          const td = document.createElement('td');
+          td.textContent = val == null ? '' : String(val);
+          tr.appendChild(td);
+        });
+        frag.appendChild(tr);
+      });
+      tbody.innerHTML = '';
+      tbody.appendChild(frag);
+      count.textContent = fmtNum(rows.length) + ' inspecciones';
+      syncScrollbar();
+      renderKpis(allRows);
+    }
+
+    function applyFilter(){
+      const term = (q.value || '').trim().toLowerCase();
+      if (!term){
+        view = allRows.slice();
+      } else {
+        view = allRows.filter(r => {
+          const haystack = [
+            r.equipoActivo,
+            r.cliente,
+            r.lugar,
+            r.usuario,
+            r.tipo,
+            r.evaluacion
+          ].concat(Array.isArray(r.observaciones) ? r.observaciones : [])
+           .join(' | ')
+           .toLowerCase();
+          return haystack.includes(term);
+        });
+      }
+      renderBody(view);
+    }
+
+    function attachFilter(){
+      if (!q || !clearQ) return;
+      q.addEventListener('input', ()=>applyFilter());
+      clearQ.addEventListener('click', ()=>{
+        q.value='';
+        applyFilter();
+      });
+    }
+
+    async function ready(){
+      const max = 60;
+      for (let i=0;i<max;i++){
+        if (window.db) return true;
+        await new Promise(r=>setTimeout(r,50));
+      }
+      return !!window.db;
+    }
+
+    async function loadInspections(){
+      try{
+        await ready();
+        const db = window.db;
+        if (!db) return;
+        const snap = await db.collection('inspections')
+          .orderBy('fechaTs','desc')
+          .limit(5000)
+          .get();
+        const rows = [];
+        snap.forEach(doc => {
+          const d = doc.data() || {};
+          rows.push(d);
+        });
+        allRows = rows;
+        view = rows.slice();
+        renderBody(view);
+      }catch(e){
+        console.error('Error cargando inspecciones', e);
+      }
+    }
+
+    if (document.readyState === 'loading'){
+      document.addEventListener('DOMContentLoaded', ()=>{
+        attachFilter();
+        loadInspections();
+      });
+    } else {
+      attachFilter();
+      loadInspections();
+    }
+  })();
+  </script>
+</body>
+</html>

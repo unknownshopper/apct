@@ -521,29 +521,50 @@ table.inventory tbody td {
   white-space: nowrap;
 }
 
+/* Ajustes específicos para la página de actividad */
+[data-page="actividad"] table.inventory {
+  /* Auto-ajuste de columnas según contenido */
+  table-layout: auto;
+  width: max-content;
+}
+
+[data-page="actividad"] table.inventory thead th,
+[data-page="actividad"] table.inventory tbody td {
+  /* Ajuste automático según contenido, con padding generoso */
+  width: auto;
+  padding: 0.75rem 1rem;
+}
+
+[data-page="actividad"] table.inventory thead th:first-child,
+[data-page="actividad"] table.inventory tbody td:first-child {
+  /* Columna SELECCIÓN - ancho fijo solo para esta */
+  width: 170px;
+  min-width: 170px;
+}
+
+[data-page="actividad"] table.inventory thead th:nth-child(4),
+[data-page="actividad"] table.inventory tbody td:nth-child(4) {
+  /* Columna DESCRIPCION - ajuste automático al contenido sin wrap */
+  white-space: nowrap;
+}
+
+/* Columnas SERIAL y DESCRIPCION en fila nueva - solo lectura con estilo distintivo */
+[data-page="actividad"] table.inventory tr.new-row td:nth-child(2),
+[data-page="actividad"] table.inventory tr.new-row td:nth-child(4) {
+  font-style: italic;
+  color: #6b7280;
+  background-color: #f9fafb;
+}
+
 /* Ya no se necesita padding extra en la primera fila: lo provee el separador */
 #actTable tbody tr:first-child > * { padding-top: 0 !important; }
 
+/* Primera columna de actividad: se comporta como cualquier otra celda, sin sticky,
+   para integrarse mejor al diseño y evitar el efecto de bloque separado */
 #actTable th:first-child,
 #actTable td:first-child {
-  position: sticky;
-  left: 0;
-  background: #fff;
-  
+  background: #f8fafc;
 }
-
-#actTable th:first-child {
-  top: 0; /* alinear con thead específico de actividad */
-  z-index: 6; /* por encima de las celdas de cuerpo sticky */
-}
-
-#actTable td:first-child {
-  z-index: 2;
-}
-
-/* Selector de categoría en primera columna (actividad) */
-#actTable th:first-child { width: 280px; }
-#actTable td:first-child { width: 280px; }
 #actTable td:first-child select {
   appearance: none;
   -webkit-appearance: none;
@@ -596,30 +617,31 @@ table.inventory tbody td {
   #actTable td:first-child { width: 220px; }
 }
 
-#actTable .date-editor {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-#actTable .date-editor > span { /* separadores ' / ' fijos */
-  color: var(--steel-600);
-  font-weight: 600;
-}
-#actTable .date-editor select {
-  appearance: none;
-  -webkit-appearance: none;
-  -moz-appearance: none;
-  height: 34px;
-  padding: 6px 10px;
-  border: 1px solid #e5e7eb;
-  border-radius: 8px;
-  background: #fff;
+/* Input de fecha con máscara automática */
+#actTable .date-input-masked,
+[data-page="actividad"] table.inventory input.date-input-masked {
+  width: 100px;
+  padding: 0.4rem 0.6rem;
+  border: 1px solid #dfe3e8;
+  border-radius: 6px;
+  background: #ffffff;
   color: var(--text-100);
   font-size: 0.9rem;
+  font-family: 'Inter', sans-serif;
+  text-align: center;
+  letter-spacing: 0.5px;
 }
-#actTable .date-editor select:disabled {
+#actTable .date-input-masked:focus,
+[data-page="actividad"] table.inventory input.date-input-masked:focus {
+  outline: none;
+  border-color: rgba(2,132,199,0.45);
+  box-shadow: 0 0 0 3px rgba(11,179,217,0.12);
+}
+#actTable .date-input-masked:disabled,
+[data-page="actividad"] table.inventory input.date-input-masked:disabled {
   background: #f8fafc;
   color: var(--steel-600);
+  cursor: not-allowed;
 }
 
 #inventory-wrapper.dragging {
