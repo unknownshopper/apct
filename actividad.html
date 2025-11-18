@@ -374,9 +374,10 @@
           const td = document.createElement('td');
           const idx = order[j];
           let v = idx == null || idx < 0 ? '' : (row[idx] == null ? '' : row[idx]);
-          // Formateo de fechas dd/mm/yy -> dd/mm/yyyy
+          // Formateo de fechas dd/mm/yy -> dd/mm/yyyy (excepto FIN PARCIAL y CONTINUACION que tienen múltiples fechas)
           const label = (visibleCols ? visibleCols.labels[j] : headers[j]) || '';
-          if (/fecha\s|inicio del servicio|continuacion del servicio|fin parcial del servicio|terminacion del servicio|devolucion/i.test(label)){
+          const isMultiDateField = /^(FIN PARCIAL DEL SERVICIO|FIN PARCIAL|CONTINUACION DEL SERVICIO|CONTINUACIÓN DEL SERVICIO)$/i.test(normalizeHeader(label).toUpperCase());
+          if (!isMultiDateField && /fecha\s|inicio del servicio|continuacion del servicio|fin parcial del servicio|terminacion del servicio|devolucion/i.test(label)){
             const s = String(v).trim();
             const m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
             if (m){
@@ -437,6 +438,13 @@
               const serialInv = invSerialByEquipo.get(equipoVal) || invSerialByEquipo.get(equipoVal.toUpperCase()) || '';
               if (tipo === 'EQUIPOS INTERNOS' && serialInv){ v = serialInv; console.log('[actividad] SERIAL autofill', { equipo: equipoVal, serial: v }); }
               td.textContent = v;
+            } else if (/^(FIN PARCIAL DEL SERVICIO|FIN PARCIAL|CONTINUACION DEL SERVICIO|CONTINUACIÓN DEL SERVICIO)$/i.test(normalizeHeader(label).toUpperCase())){
+              // FIN PARCIAL y CONTINUACION: mostrar múltiples líneas
+              td.textContent = v;
+              td.style.whiteSpace = 'pre-wrap';
+              td.style.fontSize = '0.9em';
+              td.style.verticalAlign = 'top';
+              td.style.lineHeight = '1.4';
             } else {
               td.textContent = v;
             }
@@ -1145,6 +1153,19 @@
           continue;
         }
         
+        // FIN PARCIAL y CONTINUACION: celdas con múltiples líneas visibles
+        if (/^(FIN PARCIAL DEL SERVICIO|FIN PARCIAL|CONTINUACION DEL SERVICIO|CONTINUACIÓN DEL SERVICIO)$/i.test(norm)){
+          td.textContent = '';
+          td.style.whiteSpace = 'pre-wrap'; // Mostrar saltos de línea
+          td.style.color = '#6b7280';
+          td.style.fontStyle = 'italic';
+          td.style.fontSize = '0.9em';
+          td.style.verticalAlign = 'top';
+          tr.appendChild(td);
+          editors[norm] = td;
+          continue;
+        }
+        
         // FECHA DE DEVOLUCION: auto-calculada como terminación + 1 día
         if (/fecha de devolucion|fecha de devolución/i.test(label)){
           td.textContent = ''; // Se calculará automáticamente
@@ -1235,6 +1256,8 @@
       // Auto-cálculo de días en servicio, fecha de devolución, ingreso y renta
       const inicio = editors['INICIO DEL SERVICIO'];
       const termin = editors['TERMINACION DEL SERVICIO'] || editors['TERMINACIÓN DEL SERVICIO'];
+      const finParcial = editors['FIN PARCIAL DEL SERVICIO'];
+      const continuacion = editors['CONTINUACION DEL SERVICIO'] || editors['CONTINUACIÓN DEL SERVICIO'];
       const dias = editors['DIAS EN SERVICIO'];
       const devolucion = editors['FECHA DE DEVOLUCION'] || editors['FECHA DE DEVOLUCIÓN'];
       const precio = editors['PRECIO'];
@@ -1268,6 +1291,33 @@
         devolucion.textContent = formatDMY(dDev);
       }
       
+      function recomputeFinParcialesContinuacion(){
+        if (!inicio || !termin) return;
+        const di = parseDMY(inicio.value); const dt = parseDMY(termin.value);
+        if (!di || !dt || dt <= di) { 
+          if (finParcial) finParcial.textContent = '';
+          if (continuacion) continuacion.textContent = '';
+          return; 
+        }
+        const fins = [];
+        const conts = [];
+        // Primera fecha fin parcial = inicio + 25 días
+        let cursor = new Date(di);
+        cursor.setDate(cursor.getDate() + 25);
+        cursor.setHours(0,0,0,0);
+        while (cursor < dt){
+          fins.push(formatDMY(cursor));
+          // Continuación = día siguiente
+          const cont = new Date(cursor);
+          cont.setDate(cont.getDate() + 1);
+          conts.push(formatDMY(cont));
+          // Siguiente fin parcial = actual + 30 días
+          cursor.setDate(cursor.getDate() + 30);
+        }
+        if (finParcial) finParcial.textContent = fins.join('\n');
+        if (continuacion) continuacion.textContent = conts.join('\n');
+      }
+      
       function recomputeIngresoRenta(){
         if (!dias || !precio) return;
         const d = parseFloat(dias.value) || 0;
@@ -1294,13 +1344,21 @@
         }
       }
       
-      if (inicio) inicio.addEventListener('change', recomputeDias);
+      if (inicio){
+        inicio.addEventListener('change', () => {
+          recomputeDias();
+          recomputeFinParcialesContinuacion();
+        });
+        inicio.addEventListener('blur', recomputeFinParcialesContinuacion);
+      }
       if (termin){
         termin.addEventListener('change', () => {
           recomputeDias();
           recomputeDevolucion();
           recomputeIngresoRenta();
+          recomputeFinParcialesContinuacion();
         });
+        termin.addEventListener('blur', recomputeFinParcialesContinuacion);
       }
       if (dias) dias.addEventListener('input', recomputeIngresoRenta);
       if (precio) precio.addEventListener('input', recomputeIngresoRenta);
@@ -1310,6 +1368,7 @@
       recomputeDias();
       recomputeDevolucion();
       recomputeIngresoRenta();
+      recomputeFinParcialesContinuacion();
 
       // Guardar desde toolbar
       saveRowBtn.onclick = ()=>{
@@ -1386,6 +1445,26 @@
         // Fechas: inicio y terminación completas
         if (iINI>=0) r[iINI] = formatDMY(dInicio);
         if (iTERM>=0) r[iTERM] = formatDMY(dTerm);
+        // Fin parcial y Continuación
+        if (iFINP>=0 || iCONT>=0){
+          const fins = [];
+          const conts = [];
+          // Primera fecha fin parcial = inicio + 25 días
+          let cursor = new Date(dInicio);
+          cursor.setDate(cursor.getDate() + 25);
+          cursor.setHours(0,0,0,0);
+          while (cursor < dTerm){
+            fins.push(formatDMY(cursor));
+            // Continuación = día siguiente
+            const cNext = new Date(cursor);
+            cNext.setDate(cNext.getDate() + 1);
+            conts.push(formatDMY(cNext));
+            // Siguiente fin parcial = actual + 30 días
+            cursor.setDate(cursor.getDate() + 30);
+          }
+          if (iFINP>=0) r[iFINP] = fins.join('\n');
+          if (iCONT>=0) r[iCONT] = conts.join('\n');
+        }
         
         // Fecha de devolución = terminación + 1 día
         if (iDEV>=0) {
