@@ -40,7 +40,10 @@
           <li><a href="reginspecciones.html">Registro de inspecciones</a></li>
         </ul></details></li>
         <li><a href="ingral.html">Inventario</a></li>
-        <li><a class="active" href="actividad.html">Actividad</a></li>
+        <li class="nav-dropdown"><details open><summary>Actividad</summary><ul>
+          <li><a class="active" href="actividad.html">Registro de actividad</a></li>
+          <li><a href="regactividad.html">Historial de registros</a></li>
+        </ul></details></li>
         <li><a href="reportes.html">Reportes</a></li>
       </ul>
     </nav>
@@ -326,6 +329,45 @@
           tag.textContent = pre;
           tdSel.appendChild(tag);
         }
+        
+        // Botón de editar para todas las filas
+        const editBtn = document.createElement('button');
+        editBtn.className = 'edit-row-btn';
+        editBtn.innerHTML = '✏️';
+        editBtn.title = 'Editar este registro';
+        editBtn.addEventListener('click', () => {
+          // Convertir la fila a modo edición
+          makeRowEditable(tr, row, i);
+        });
+        tdSel.appendChild(editBtn);
+        
+        // Botón de eliminar para todas las filas
+        const deleteBtn = document.createElement('button');
+        deleteBtn.className = 'delete-row-btn';
+        deleteBtn.innerHTML = '🗑️';
+        deleteBtn.title = 'Eliminar este registro';
+        deleteBtn.addEventListener('click', () => {
+          if (confirm('¿Estás seguro de eliminar este registro permanentemente?')){
+            // Eliminar de rows y view
+            const rowIndex = rows.indexOf(row);
+            if (rowIndex >= 0) {
+              rows.splice(rowIndex, 1);
+              view = rows;
+              renderBody(view);
+              updateKPIs();
+              // Actualizar localStorage
+              try{
+                const keyLS = 'actividad:newRows';
+                localStorage.setItem(keyLS, JSON.stringify(rows));
+              }catch(e){
+                console.error('[actividad] Error al actualizar localStorage:', e);
+              }
+              console.log('[actividad] Registro eliminado correctamente');
+            }
+          }
+        });
+        tdSel.appendChild(deleteBtn);
+        
         tr.appendChild(tdSel);
         const order = visibleCols ? visibleCols.order : headers.map((_,k)=>k);
         for (let j=0;j<order.length;j++){
@@ -910,6 +952,159 @@
       saveRowBtn.style.opacity = ok ? '1' : '.6';
     }
 
+    function makeRowEditable(tr, row, rowIndex){
+      // Evitar editar si ya hay una fila en edición
+      if (tbody.querySelector('tr.editing-row') || tbody.querySelector('tr.new-row')) {
+        alert('Ya hay una fila en edición. Guarda o cancela primero.');
+        return;
+      }
+      
+      tr.classList.add('editing-row');
+      const cells = tr.querySelectorAll('td');
+      const order = visibleCols ? visibleCols.order : headers.map((_,k)=>k);
+      const labels = visibleCols ? visibleCols.labels : headers;
+      const editors = {};
+      
+      // Primera celda: mantener select de tipo + agregar botones Guardar/Cancelar
+      const firstCell = cells[0];
+      const selEl = firstCell.querySelector('select') || firstCell.querySelector('.sel-tag');
+      const tipoValue = selEl ? (selEl.value || selEl.textContent) : 'EQUIPOS INTERNOS';
+      
+      // Limpiar y reconstruir primera celda
+      firstCell.innerHTML = '';
+      const sel = document.createElement('select');
+      sel.innerHTML = '<option value="EQUIPOS INTERNOS">EQUIPOS INTERNOS</option><option value="EQUIPOS EXTERNOS">EQUIPOS EXTERNOS</option>';
+      sel.value = tipoValue;
+      firstCell.appendChild(sel);
+      
+      // Botones Guardar/Cancelar
+      const saveBtn = document.createElement('button');
+      saveBtn.textContent = '💾';
+      saveBtn.className = 'save-edit-btn';
+      saveBtn.title = 'Guardar cambios';
+      
+      const cancelBtn = document.createElement('button');
+      cancelBtn.textContent = '✖';
+      cancelBtn.className = 'cancel-edit-btn';
+      cancelBtn.title = 'Cancelar edición';
+      
+      firstCell.appendChild(saveBtn);
+      firstCell.appendChild(cancelBtn);
+      
+      // Convertir celdas a inputs (excepto auto-generadas)
+      for (let j=0; j<order.length; j++){
+        const td = cells[j+1]; // +1 porque cells[0] es SELECCIÓN
+        if (!td) continue;
+        
+        const label = labels[j] || '';
+        const norm = normalizeHeader(label).toUpperCase();
+        const idx = order[j];
+        let val = idx >= 0 && idx < row.length ? (row[idx] || '') : '';
+        
+        // Campos no editables (auto-generados)
+        if (/^(SERIAL|#|DESCRIPCION|DESCRIPCIÓN|FECHA DE DEVOLUCION|FECHA DE DEVOLUCIÓN|INGRESO ACUMULADO|RENTA ACUMULADA)$/i.test(norm)){
+          td.style.fontStyle = 'italic';
+          td.style.color = '#6b7280';
+          editors[norm] = td;
+          continue;
+        }
+        
+        // Campos de fecha
+        if (/fecha|inicio del servicio|terminacion del servicio/i.test(label)){
+          const input = document.createElement('input');
+          input.type = 'text';
+          input.className = 'date-input-masked';
+          input.maxLength = 8;
+          input.placeholder = 'dd/mm/yy';
+          input.value = String(val);
+          // Agregar listeners de máscara
+          input.addEventListener('input', (e) => {
+            let value = e.target.value.replace(/\D/g, '');
+            if (value.length > 6) value = value.slice(0, 6);
+            let formatted = '';
+            if (value.length >= 1) formatted += value.slice(0, 2);
+            if (value.length >= 3) formatted += '/' + value.slice(2, 4);
+            if (value.length >= 5) formatted += '/' + value.slice(4, 6);
+            e.target.value = formatted;
+          });
+          td.innerHTML = '';
+          td.appendChild(input);
+          editors[norm] = input;
+          continue;
+        }
+        
+        // DIAS EN SERVICIO (número, auto-calculado pero puede editarse)
+        if (/dias en servicio/i.test(label)){
+          const input = document.createElement('input');
+          input.type = 'number';
+          input.min = '0';
+          input.value = String(val);
+          td.innerHTML = '';
+          td.appendChild(input);
+          editors[norm] = input;
+          continue;
+        }
+        
+        // PRECIO (número)
+        if (/precio/i.test(label)){
+          const input = document.createElement('input');
+          input.type = 'number';
+          input.min = '0';
+          input.step = '0.01';
+          input.value = String(val);
+          td.innerHTML = '';
+          td.appendChild(input);
+          editors[norm] = input;
+          continue;
+        }
+        
+        // Resto de campos (texto)
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.value = String(val);
+        td.innerHTML = '';
+        td.appendChild(input);
+        editors[norm] = input;
+      }
+      
+      // Guardar cambios
+      saveBtn.onclick = () => {
+        // Actualizar row con los nuevos valores
+        for (let j=0; j<order.length; j++){
+          const norm = normalizeHeader(labels[j]).toUpperCase();
+          const editor = editors[norm];
+          if (editor && editor.value !== undefined){
+            const idx = order[j];
+            if (idx >= 0) row[idx] = editor.value;
+          }
+        }
+        
+        // Actualizar tipo (PROPIEDAD)
+        if (propiedadIdx >= 0){
+          row[propiedadIdx] = sel.value === 'EQUIPOS INTERNOS' ? 'PCT' : 'PROVEEDOR';
+        }
+        
+        // Re-renderizar
+        renderBody(view);
+        updateKPIs();
+        
+        // Guardar en localStorage
+        try{
+          const keyLS = 'actividad:newRows';
+          localStorage.setItem(keyLS, JSON.stringify(rows));
+        }catch(e){
+          console.error('[actividad] Error al guardar:', e);
+        }
+        
+        console.log('[actividad] Registro actualizado correctamente');
+      };
+      
+      // Cancelar edición
+      cancelBtn.onclick = () => {
+        renderBody(view);
+      };
+    }
+
     function insertNewEditableRow(){
       // Evitar múltiples filas nuevas simultáneas
       if (tbody.querySelector('tr.new-row')) return;
@@ -1184,45 +1379,34 @@
           if (iPREC>=0) r[iPREC] = valPrecio;
         }
 
-        const newRows = [];
-        let segStart = new Date(dInicio);
-        while (true){
-          // Determinar corte 25
-          const cut = cutoff25(segStart);
-          const segEnd = minDate(cut, dTerm);
-          const r = makeRow();
-          fillCommon(r);
-          if (segStart.getTime() === dInicio.getTime()){
-            if (iINI>=0) r[iINI] = formatDMY(segStart);
-          } else {
-            if (iCONT>=0) r[iCONT] = formatDMY(segStart);
-          }
-          if (segEnd.getTime() === dTerm.getTime()){
-            if (iTERM>=0) r[iTERM] = formatDMY(segEnd);
-            if (iDEV>=0) {
-              const dev = new Date(segEnd.getFullYear(), segEnd.getMonth(), segEnd.getDate()+1);
-              r[iDEV] = formatDMY(dev);
-            }
-          } else {
-            if (iFINP>=0) r[iFINP] = formatDMY(segEnd); // día 25
-          }
-          if (iDIAS>=0) r[iDIAS] = String(daysInclusive(segStart, segEnd));
-          // Calcular ingreso/renta acumulados = dias * precio
-          const diasNum = iDIAS>=0 ? parseFloat(String(r[iDIAS]||'').replace(/,/g,'')) : NaN;
-          const precioNum = parseFloat(String(valPrecio||'').replace(/,/g,''));
-          if (!isNaN(diasNum) && !isNaN(precioNum)){
-            const monto = diasNum * precioNum;
-            if (iINGR>=0) r[iINGR] = String(monto);
-            if (iREN>=0)  r[iREN]  = String(monto);
-          }
-          newRows.push(r);
-          if (segEnd.getTime() === dTerm.getTime()) break;
-          // Continuación el 27 del mismo mes del corte
-          const cont = continuation27From(cut);
-          // Si terminación es antes de la continuación, terminar en terminación
-          segStart = cont <= dTerm ? cont : dTerm;
-          if (segStart > dTerm) break;
+        // Crear solo UNA fila por registro (sin cortes administrativos)
+        const r = makeRow();
+        fillCommon(r);
+        
+        // Fechas: inicio y terminación completas
+        if (iINI>=0) r[iINI] = formatDMY(dInicio);
+        if (iTERM>=0) r[iTERM] = formatDMY(dTerm);
+        
+        // Fecha de devolución = terminación + 1 día
+        if (iDEV>=0) {
+          const dev = new Date(dTerm);
+          dev.setDate(dev.getDate() + 1);
+          r[iDEV] = formatDMY(dev);
         }
+        
+        // Días en servicio totales
+        const diasTotales = daysInclusive(dInicio, dTerm);
+        if (iDIAS>=0) r[iDIAS] = String(diasTotales);
+        
+        // Calcular ingreso/renta acumulados = dias totales * precio
+        const precioNum = parseFloat(String(valPrecio||'').replace(/,/g,''));
+        if (!isNaN(diasTotales) && !isNaN(precioNum)){
+          const monto = diasTotales * precioNum;
+          if (iINGR>=0) r[iINGR] = String(monto);
+          if (iREN>=0)  r[iREN]  = String(monto);
+        }
+        
+        const newRows = [r];
 
         // Insertar nuevas filas al inicio, manteniendo orden cronológico dentro de lo insertado
         rows = [...newRows, ...rows];

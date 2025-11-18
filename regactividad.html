@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Historial de Registros - Actividad</title>
+  <script>
+    (function(){
+      var v = Date.now();
+      document.write('<link rel="stylesheet" href="styles.css?v=' + v + '">');
+    })();
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+  <link rel="icon" href="data:,">
+</head>
+<body data-page="regactividad">
+  <header>
+    <div class="logo"><img src="img/logopctch.png" alt="Logo" /></div>
+    <button class="menu-toggle" aria-label="Abrir menú" aria-controls="primary-nav" aria-expanded="false">☰</button>
+    <nav id="primary-nav">
+      <ul>
+        <li><a href="index.html">Dashboard</a></li>
+        <li class="nav-dropdown"><details><summary>Pruebas</summary><ul>
+          <li><a href="pruebas.html">Pruebas</a></li>
+          <li><a href="stockpruebas.html">Stock de pruebas</a></li>
+          <li><a href="listapruebas.html">Lista de pruebas</a></li>
+        </ul></details></li>
+        <li><a href="tareas.html">Tareas</a></li>
+        <li class="nav-dropdown"><details><summary>Inspección</summary><ul>
+          <li><a href="inspeccion.html">Inspección primaria</a></li>
+          <li><a href="reginspecciones.html">Registro de inspecciones</a></li>
+        </ul></details></li>
+        <li><a href="ingral.html">Inventario</a></li>
+        <li class="nav-dropdown"><details open><summary>Actividad</summary><ul>
+          <li><a href="actividad.html">Registro de actividad</a></li>
+          <li><a class="active" href="regactividad.html">Historial de registros</a></li>
+        </ul></details></li>
+        <li><a href="reportes.html">Reportes</a></li>
+      </ul>
+    </nav>
+    <div class="user-box">
+      <span id="user-email"></span>
+      <a id="login-link" href="login.html">Login</a>
+      <button id="logout-btn" type="button" style="display:none">Salir</button>
+    </div>
+  </header>
+  
+  <main class="wide">
+    <h1>📋 Historial de Registros de Actividad</h1>
+    
+    <div class="toolbar">
+      <input type="text" id="searchInput" placeholder="Buscar por equipo, cliente, área..." />
+      <button id="exportBtn" class="btn-secondary">📥 Exportar CSV</button>
+      <button id="clearAllBtn" class="btn-danger">🗑️ Borrar Todo</button>
+      <button id="refreshBtn" class="btn-secondary">🔄 Actualizar</button>
+    </div>
+
+    <div class="activity-stats">
+      <div class="stat-card">
+        <div class="stat-label">Total de Registros</div>
+        <div class="stat-value" id="totalRegistros">0</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Equipos Internos</div>
+        <div class="stat-value" id="totalInternos">0</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Equipos Externos</div>
+        <div class="stat-value" id="totalExternos">0</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Ingreso Total</div>
+        <div class="stat-value" id="ingresoTotal">$0.00</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Renta Total</div>
+        <div class="stat-value" id="rentaTotal">$0.00</div>
+      </div>
+    </div>
+
+    <div class="table-wrapper">
+      <table class="history-table">
+        <thead>
+          <tr>
+            <th>Fecha Registro</th>
+            <th>Tipo</th>
+            <th>Serial</th>
+            <th>Equipo/Activo</th>
+            <th>Cliente</th>
+            <th>Inicio Servicio</th>
+            <th>Terminación</th>
+            <th>Días</th>
+            <th>Precio</th>
+            <th>Ingreso/Renta</th>
+            <th>Estado</th>
+            <th>Acciones</th>
+          </tr>
+        </thead>
+        <tbody id="historyTableBody">
+          <tr>
+            <td colspan="12" style="text-align:center; padding:40px;">Cargando registros...</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </main>
+  <link rel="stylesheet" href="regactividad.css?v=1">
+  <script type="module" src="regactividad.js?v=1"></script>
+  </body>
+</html>
+        
