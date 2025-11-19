@@ -22,8 +22,25 @@ async function main() {
 
   // Map emails to roles
   await setRoleByEmail('the@unknownshoppers.com', 'admin');
-  await setRoleByEmail('inspector@pct.com', 'inspector');
-  await setRoleByEmail('director@pct.com', 'director');
+  
+  // Directors
+  await setRoleByEmail('director01@pct.com', 'director');
+  await setRoleByEmail('director02@pct.com', 'director');
+  await setRoleByEmail('director03@pct.com', 'director');
+  await setRoleByEmail('jalcz@pct.com', 'director');
+  
+  
+  // Supervisors
+  await setRoleByEmail('supervisor01@pct.com', 'supervisor');
+  await setRoleByEmail('supervisor02@pct.com', 'supervisor');
+  
+  // Inspectors
+  await setRoleByEmail('inspector01@pct.com', 'inspector');
+  await setRoleByEmail('inspector02@pct.com', 'inspector');
+  await setRoleByEmail('inspector03@pct.com', 'inspector');
+  await setRoleByEmail('inspector04@pct.com', 'inspector');
+  await setRoleByEmail('inspector05@pct.com', 'inspector');
+  await setRoleByEmail('inspector06@pct.com', 'inspector');
 
   console.log('Done. Ask users to sign out and sign in again to refresh claims.');
 }

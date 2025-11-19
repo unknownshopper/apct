@@ -6,7 +6,19 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
-  <title>Registro de Actividad</title>
+  <title>Registro de Actividad - PCT</title>
+  
+  <!-- SEO Meta Tags -->
+  <meta name="description" content="Registro y seguimiento de actividades operacionales del sistema PCT.">
+  <meta name="author" content="PCT">
+  <link rel="canonical" href="https://pc-t.mx/actividad.html">
+  
+  <!-- Open Graph / Facebook -->
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://pc-t.mx/actividad.html">
+  <meta property="og:title" content="Registro de Actividad - PCT">
+  <meta property="og:description" content="Registro y seguimiento de actividades operacionales del sistema PCT.">
+  <meta property="og:site_name" content="PCT">
   <script>
     const CSS_VERSION = Date.now();
     document.write('<link rel="stylesheet" href="styles.css?v=' + CSS_VERSION + '">');
@@ -69,7 +81,7 @@
         <input id="q" type="text" placeholder="Buscar..." aria-label="Buscar" />
         <button id="clearQ" class="btn-primary" type="button">Limpiar</button>
         <button id="newRowBtn" class="btn-primary" type="button">Nuevo registro</button>
-        <button id="saveRowBtn" class="btn-primary" type="button" style="display:none; opacity:.6; pointer-events:none;">Guardar</button>
+        <button id="saveRowBtn" class="btn-primary" type="button" style="display:none;">Guardar</button>
         <button id="cancelRowBtn" type="button" style="display:none;">Cancelar</button>
       </div>
       <div class="toolbar-count" id="count">0 registros</div>
@@ -902,6 +914,7 @@
         saveRowBtn.style.display='';
         saveRowBtn.disabled = true;
         saveRowBtn.style.opacity='.6';
+        saveRowBtn.style.pointerEvents='none';
         cancelRowBtn.style.display='';
         newRowBtn.disabled = true;
         newRowBtn.style.opacity='.5';
@@ -909,6 +922,7 @@
         saveRowBtn.style.display='none';
         saveRowBtn.disabled = false;
         saveRowBtn.style.opacity='1';
+        saveRowBtn.style.pointerEvents='auto';
         cancelRowBtn.style.display='none';
         newRowBtn.disabled = false;
         newRowBtn.style.opacity='1';
@@ -958,6 +972,7 @@
       const ok = isValidNewRow();
       saveRowBtn.disabled = !ok;
       saveRowBtn.style.opacity = ok ? '1' : '.6';
+      saveRowBtn.style.pointerEvents = ok ? 'auto' : 'none';
     }
 
     function makeRowEditable(tr, row, rowIndex){

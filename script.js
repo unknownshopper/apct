@@ -1,4 +1,4 @@
-document.addEventListener('DOMContentLoaded', () => {
+ document.addEventListener('DOMContentLoaded', () => {
   const toggleBtn = document.querySelector('.menu-toggle');
   const nav = document.getElementById('primary-nav');
 
@@ -37,13 +37,24 @@ document.addEventListener('DOMContentLoaded', () => {
 (function () {
   const USERS = {
     'the@unknownshoppers.com': { role: 'admin' },
+    'director01@pct.com': { role: 'director' },
+    'director02@pct.com': { role: 'director' },
+    'director03@pct.com': { role: 'director' },
     'jalcz@pct.com': { role: 'director' },
-    'inspector1@pct.com': { role: 'inspector' },
+    'supervisor01@pct.com': { role: 'supervisor' },
+    'supervisor02@pct.com': { role: 'supervisor' },
+    'inspector01@pct.com': { role: 'inspector' },
+    'inspector02@pct.com': { role: 'inspector' },
+    'inspector03@pct.com': { role: 'inspector' },
+    'inspector04@pct.com': { role: 'inspector' },
+    'inspector05@pct.com': { role: 'inspector' },
+    'inspector06@pct.com': { role: 'inspector' },
   };
 
   const PERMISSIONS = {
     admin: new Set(['create', 'view', 'edit', 'destroy']),
     director: new Set(['view', 'edit']),
+    supervisor: new Set(['view', 'edit']),
     inspector: new Set(['create']),
   };
 
