@@ -1,10 +1,43 @@
-// Página accesible sin autenticación: no cargamos Firebase aquí para evitar logs 400.
-// Mostramos login y ocultamos salir.
-try {
-  document.getElementById('user-email').textContent = '';
-  document.getElementById('logout-btn').style.display = 'none';
-  document.getElementById('login-link').style.display = 'inline-block';
-} catch (_) {}
+// Esperar a que Firebase esté inicializado
+let firebaseReady = false;
+const COLLECTION_NAME = 'activityRecords';
+
+// Verificar si Firebase está disponible
+function waitForFirebase() {
+  return new Promise((resolve) => {
+    const check = () => {
+      if (window.db && window.auth) {
+        firebaseReady = true;
+        resolve(true);
+      } else {
+        setTimeout(check, 100);
+      }
+    };
+    check();
+  });
+}
+
+// Actualizar UI de autenticación
+function updateAuthUI() {
+  try {
+    const userEmailEl = document.getElementById('user-email');
+    const loginLinkEl = document.getElementById('login-link');
+    const logoutBtnEl = document.getElementById('logout-btn');
+    
+    if (window.auth && window.auth.currentUser) {
+      const email = window.auth.currentUser.email || '';
+      if (userEmailEl) userEmailEl.textContent = email;
+      if (loginLinkEl) loginLinkEl.style.display = 'none';
+      if (logoutBtnEl) logoutBtnEl.style.display = '';
+    } else {
+      if (userEmailEl) userEmailEl.textContent = '';
+      if (loginLinkEl) loginLinkEl.style.display = 'inline-block';
+      if (logoutBtnEl) logoutBtnEl.style.display = 'none';
+    }
+  } catch(e) {
+    console.warn('[regactividad] Error actualizando UI auth:', e);
+  }
+}
 
 let headers = [];
 let headerIndices = {};
@@ -13,11 +46,117 @@ function getHeaderIndex(variants){ for (const v of variants){ const nv=norm(v); 
 
 async function loadHeaders(){ try{ const resp = await fetch('docs/REGISTRO DE ACTIVIDAD PCT 2025.csv'); const text = await resp.text(); const lines = text.split('\n'); for (let i=0;i<Math.min(20,lines.length);i++){ const cells = lines[i].split(','); if (cells.some(c=>/propiedad|serial|equipo|cliente/i.test(c))){ headers = cells.map(c=>c.trim()); headerIndices = { PROPIEDAD:getHeaderIndex(['PROPIEDAD']), SERIAL:getHeaderIndex(['SERIAL','#']), EQUIPO:getHeaderIndex(['EQUIPO / ACTIVO','EQUIPO/ACTIVO','EQUIPO ACTIVO','EQUIPO']), DESCRIPCION:getHeaderIndex(['DESCRIPCION','DESCRIPCIÓN']), CLIENTE:getHeaderIndex(['CLIENTE']), AREA:getHeaderIndex(['AREA DEL CLIENTE','ÁREA DEL CLIENTE']), UBICACION:getHeaderIndex(['UBICACION','UBICACIÓN']), FACTURA:getHeaderIndex(['FACTURA']), EMBARQUE:getHeaderIndex(['FECHA EMBARQUE','FECHA DE EMBARQUE']), INICIO:getHeaderIndex(['INICIO DEL SERVICIO']), TERMINACION:getHeaderIndex(['TERMINACION DEL SERVICIO','TERMINACIÓN DEL SERVICIO']), DEVOLUCION:getHeaderIndex(['FECHA DE DEVOLUCION','FECHA DE DEVOLUCIÓN']), DIAS:getHeaderIndex(['DIAS EN SERVICIO','DÍAS EN SERVICIO']), PRECIO:getHeaderIndex(['PRECIO']), INGRESO:getHeaderIndex(['INGRESO ACUMULADO','INGRESO ACUMULDDO']), RENTA:getHeaderIndex(['RENTA ACUMULADA']) }; break; } } }catch(e){ console.error('[regactividad] headers:',e);} }
 
-function loadHistory(){ try{ const key='actividad:newRows'; const stored=localStorage.getItem(key); const rows = stored? JSON.parse(stored):[]; if (rows.length===0){ document.getElementById('historyTableBody').innerHTML = '<tr><td colspan="12" style="text-align:center; padding:40px;">No hay registros guardados</td></tr>'; return; } let totalInternos=0,totalExternos=0,sumaIngreso=0,sumaRenta=0; rows.forEach(r=>{ const tipo=r[headerIndices.PROPIEDAD]||''; if (tipo==='PCT') totalInternos++; else if (tipo) totalExternos++; const ingreso=parseFloat(String(r[headerIndices.INGRESO]||'0').replace(/[^0-9.-]/g,''))||0; const renta=parseFloat(String(r[headerIndices.RENTA]||'0').replace(/[^0-9.-]/g,''))||0; sumaIngreso+=ingreso; sumaRenta+=renta; }); document.getElementById('totalRegistros').textContent=rows.length; document.getElementById('totalInternos').textContent=totalInternos; document.getElementById('totalExternos').textContent=totalExternos; document.getElementById('ingresoTotal').textContent='$'+sumaIngreso.toLocaleString('es-MX',{minimumFractionDigits:2}); document.getElementById('rentaTotal').textContent='$'+sumaRenta.toLocaleString('es-MX',{minimumFractionDigits:2}); renderTable(rows); }catch(e){ console.error('[regactividad] load:',e); document.getElementById('historyTableBody').innerHTML='<tr><td colspan="12" style="text-align:center; padding:40px; color:red;">Error al cargar registros</td></tr>'; } }
+// Cargar registros desde Firestore (con fallback a localStorage)
+async function loadHistory() {
+  try {
+    let rows = [];
+    
+    // Intentar cargar desde Firestore si está disponible
+    if (firebaseReady && window.db) {
+      try {
+        const snapshot = await window.db.collection(COLLECTION_NAME)
+          .orderBy('timestamp', 'desc')
+          .get();
+        
+        rows = snapshot.docs.map(doc => {
+          const data = doc.data();
+          return {
+            id: doc.id,
+            ...data.row,
+            _firestoreId: doc.id,
+            _timestamp: data.timestamp
+          };
+        });
+        
+        console.log(`[regactividad] Cargados ${rows.length} registros desde Firestore`);
+        
+        // Actualizar localStorage como caché
+        try {
+          const rowsData = rows.map(r => {
+            const { _firestoreId, _timestamp, id, ...rowData } = r;
+            return rowData;
+          });
+          localStorage.setItem('actividad:newRows', JSON.stringify(rowsData));
+          localStorage.setItem('actividad:firestoreIds', JSON.stringify(
+            rows.map(r => ({ index: rows.indexOf(r), firestoreId: r._firestoreId }))
+          ));
+        } catch (e) {
+          console.warn('[regactividad] No se pudo actualizar caché local:', e);
+        }
+      } catch (e) {
+        console.error('[regactividad] Error al cargar desde Firestore:', e);
+        // Fallback a localStorage
+        const stored = localStorage.getItem('actividad:newRows');
+        rows = stored ? JSON.parse(stored) : [];
+        console.log('[regactividad] Usando datos de localStorage (fallback)');
+      }
+    } else {
+      // Sin Firebase, usar localStorage
+      const stored = localStorage.getItem('actividad:newRows');
+      rows = stored ? JSON.parse(stored) : [];
+      console.log('[regactividad] Firebase no disponible, usando localStorage');
+    }
+    
+    if (rows.length === 0) {
+      document.getElementById('historyTableBody').innerHTML = '<tr><td colspan="12" style="text-align:center; padding:40px;">No hay registros guardados</td></tr>';
+      document.getElementById('totalRegistros').textContent = '0';
+      document.getElementById('totalInternos').textContent = '0';
+      document.getElementById('totalExternos').textContent = '0';
+      document.getElementById('ingresoTotal').textContent = '$0.00';
+      document.getElementById('rentaTotal').textContent = '$0.00';
+      return;
+    }
+    
+    let totalInternos = 0, totalExternos = 0, sumaIngreso = 0, sumaRenta = 0;
+    rows.forEach(r => {
+      const tipo = r[headerIndices.PROPIEDAD] || '';
+      if (tipo === 'PCT') totalInternos++;
+      else if (tipo) totalExternos++;
+      const ingreso = parseFloat(String(r[headerIndices.INGRESO] || '0').replace(/[^0-9.-]/g, '')) || 0;
+      const renta = parseFloat(String(r[headerIndices.RENTA] || '0').replace(/[^0-9.-]/g, '')) || 0;
+      sumaIngreso += ingreso;
+      sumaRenta += renta;
+    });
+    
+    document.getElementById('totalRegistros').textContent = rows.length;
+    document.getElementById('totalInternos').textContent = totalInternos;
+    document.getElementById('totalExternos').textContent = totalExternos;
+    document.getElementById('ingresoTotal').textContent = '$' + sumaIngreso.toLocaleString('es-MX', { minimumFractionDigits: 2 });
+    document.getElementById('rentaTotal').textContent = '$' + sumaRenta.toLocaleString('es-MX', { minimumFractionDigits: 2 });
+    
+    renderTable(rows);
+  } catch (e) {
+    console.error('[regactividad] load:', e);
+    document.getElementById('historyTableBody').innerHTML = '<tr><td colspan="12" style="text-align:center; padding:40px; color:red;">Error al cargar registros</td></tr>';
+  }
+}
 
 function renderTable(rows){ const tbody=document.getElementById('historyTableBody'); tbody.innerHTML=''; rows.forEach((row,idx)=>{ const tr=document.createElement('tr'); const tdF=document.createElement('td'); tdF.textContent=new Date().toLocaleDateString('es-MX'); tr.appendChild(tdF); const tdT=document.createElement('td'); const prop=row[headerIndices.PROPIEDAD]||''; const tipo=prop==='PCT'?'INTERNO':'EXTERNO'; tdT.innerHTML=`<span class="badge ${prop==='PCT'?'badge-interno':'badge-externo'}">${tipo}</span>`; tr.appendChild(tdT); const makeTd=(val)=>{const td=document.createElement('td'); td.textContent=val||'-'; return td;}; tr.appendChild(makeTd(row[headerIndices.SERIAL])); tr.appendChild(makeTd(row[headerIndices.EQUIPO])); tr.appendChild(makeTd(row[headerIndices.CLIENTE])); tr.appendChild(makeTd(row[headerIndices.INICIO])); tr.appendChild(makeTd(row[headerIndices.TERMINACION])); const tdDias=makeTd(row[headerIndices.DIAS]||'0'); tdDias.style.textAlign='center'; tr.appendChild(tdDias); const tdPrec=document.createElement('td'); const prec=parseFloat(row[headerIndices.PRECIO]||0); tdPrec.textContent='$'+prec.toLocaleString('es-MX',{minimumFractionDigits:2}); tdPrec.style.textAlign='right'; tr.appendChild(tdPrec); const tdMon=document.createElement('td'); const ing=parseFloat(row[headerIndices.INGRESO]||0); const ren=parseFloat(row[headerIndices.RENTA]||0); const monto=prop==='PCT'?ing:ren; tdMon.textContent='$'+monto.toLocaleString('es-MX',{minimumFractionDigits:2}); tdMon.style.textAlign='right'; tdMon.style.fontWeight='600'; tr.appendChild(tdMon); const tdEst=document.createElement('td'); const sTerm=row[headerIndices.TERMINACION]; let est='Desconocido'; if (sTerm){ const [d,m,y]=sTerm.split('/'); const f=new Date(2000+parseInt(y),parseInt(m)-1,parseInt(d)); est=f>new Date()?'Activo':'Finalizado'; } tdEst.innerHTML=`<span class="badge ${est==='Activo'?'badge-activo':'badge-finalizado'}">${est}</span>`; tr.appendChild(tdEst); const tdAcc=document.createElement('td'); tdAcc.style.whiteSpace='nowrap'; const bPdf=document.createElement('button'); bPdf.className='pdf-row-btn'; bPdf.innerHTML='📄'; bPdf.title='Generar PDF'; bPdf.style.marginRight='8px'; bPdf.onclick=()=>generatePDF(row); const bEd=document.createElement('button'); bEd.className='edit-row-btn'; bEd.innerHTML='✏️'; bEd.title='Editar'; bEd.style.marginRight='8px'; bEd.onclick=()=>editRecord(idx,row); const bDel=document.createElement('button'); bDel.className='delete-row-btn'; bDel.innerHTML='🗑️'; bDel.title='Eliminar'; bDel.onclick=()=>deleteRecord(idx,row); tdAcc.append(bPdf,bEd,bDel); tr.appendChild(tdAcc); tbody.appendChild(tr); }); }
 
-function deleteRecord(index,row){ if(!confirm('¿Estás seguro de eliminar este registro permanentemente?')) return; try{ const key='actividad:newRows'; const stored=localStorage.getItem(key); const rows=stored?JSON.parse(stored):[]; rows.splice(index,1); localStorage.setItem(key,JSON.stringify(rows)); loadHistory(); console.log('[regactividad] Registro eliminado'); }catch(e){ console.error('[regactividad] del:',e); alert('Error al eliminar'); } }
+async function deleteRecord(index, row) {
+  if (!confirm('¿Estás seguro de eliminar este registro permanentemente?')) return;
+  
+  try {
+    // Intentar eliminar de Firestore
+    if (firebaseReady && window.db && row._firestoreId) {
+      await window.db.collection(COLLECTION_NAME).doc(row._firestoreId).delete();
+      console.log('[regactividad] Registro eliminado de Firestore:', row._firestoreId);
+    }
+    
+    // Eliminar de localStorage
+    const key = 'actividad:newRows';
+    const stored = localStorage.getItem(key);
+    const rows = stored ? JSON.parse(stored) : [];
+    rows.splice(index, 1);
+    localStorage.setItem(key, JSON.stringify(rows));
+    
+    await loadHistory();
+    console.log('[regactividad] Registro eliminado');
+  } catch (e) {
+    console.error('[regactividad] del:', e);
+    alert('Error al eliminar: ' + e.message);
+  }
+}
 
 function esc(v){ return String(v==null?'':v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 function generatePDF(row){ 
@@ -68,85 +207,160 @@ function editRecord(index, row){
     if (headerIndices.DEVOLUCION>=0) gi('ed_dev').value = String(row[headerIndices.DEVOLUCION]||'');
     gi('ed_precio').value = String(row[headerIndices.PRECIO]||'');
 
-    gi('ed_cancel').onclick = ()=> overlay.remove();
-    gi('ed_save').onclick = ()=>{
-      try{
-        const stored = JSON.parse(localStorage.getItem('actividad:newRows')||'[]');
-        const rows = Array.isArray(stored)? stored:[];
+    gi('ed_cancel').onclick = () => overlay.remove();
+    gi('ed_save').onclick = async () => {
+      try {
+        const stored = JSON.parse(localStorage.getItem('actividad:newRows') || '[]');
+        const rows = Array.isArray(stored) ? stored : [];
         const r = rows[index];
-        if (!r){ alert('No se encontró el registro'); return; }
+        if (!r) { alert('No se encontró el registro'); return; }
+        
         r[headerIndices.EQUIPO] = gi('ed_equipo').value;
         r[headerIndices.CLIENTE] = gi('ed_cliente').value;
         r[headerIndices.AREA] = gi('ed_area').value;
         r[headerIndices.UBICACION] = gi('ed_ubic').value;
-        if (headerIndices.EMBARQUE>=0) r[headerIndices.EMBARQUE] = gi('ed_emb').value;
+        if (headerIndices.EMBARQUE >= 0) r[headerIndices.EMBARQUE] = gi('ed_emb').value;
         r[headerIndices.INICIO] = gi('ed_ini').value;
         r[headerIndices.TERMINACION] = gi('ed_term').value;
-        if (headerIndices.DEVOLUCION>=0) r[headerIndices.DEVOLUCION] = gi('ed_dev').value;
+        if (headerIndices.DEVOLUCION >= 0) r[headerIndices.DEVOLUCION] = gi('ed_dev').value;
         r[headerIndices.PRECIO] = gi('ed_precio').value;
 
-        if (gi('ed_recalc').checked){
+        if (gi('ed_recalc').checked) {
           const sIni = r[headerIndices.INICIO];
           const sTerm = r[headerIndices.TERMINACION];
           const di = parseDMY(sIni), dt = parseDMY(sTerm);
-          if (di && dt && dt>di){
-            const fins=[]; const conts=[];
-            // Primera fecha fin parcial = inicio + 25 días
+          if (di && dt && dt > di) {
+            const fins = []; const conts = [];
             let cursor = new Date(di);
             cursor.setDate(cursor.getDate() + 25);
-            cursor.setHours(0,0,0,0);
-            while(cursor < dt){
+            cursor.setHours(0, 0, 0, 0);
+            while (cursor < dt) {
               fins.push(formatDMY(cursor));
-              // Continuación = día siguiente
               const cNext = new Date(cursor);
               cNext.setDate(cNext.getDate() + 1);
               conts.push(formatDMY(cNext));
-              // Siguiente fin parcial = actual + 30 días
               cursor.setDate(cursor.getDate() + 30);
             }
-            const idxFines = getIdx(['FIN PARCIAL DEL SERVICIO','FIN PARCIAL','FINES PARCIALES','FIN PARCIAL SERVICIO','FIN PARCIAL DE SERVICIO']);
-            const idxCont  = getIdx(['CONTINUACION DEL SERVICIO','CONTINUACIÓN DEL SERVICIO','CONTINUACION','CONTINUACIÓN','CONTINUACION DE SERVICIO','CONTINUACIÓN DE SERVICIO']);
-            if (idxFines>=0) r[idxFines] = fins.join('\n');
-            if (idxCont>=0)  r[idxCont]  = conts.join('\n');
-            // Recalcular Días en servicio
-            const diasTotales = Math.ceil((dt - di)/(1000*60*60*24)) + 1;
-            if (headerIndices.DIAS>=0) r[headerIndices.DIAS] = String(diasTotales);
-            // Recalcular Ingreso/Renta = días × precio
+            const idxFines = getIdx(['FIN PARCIAL DEL SERVICIO', 'FIN PARCIAL', 'FINES PARCIALES', 'FIN PARCIAL SERVICIO', 'FIN PARCIAL DE SERVICIO']);
+            const idxCont = getIdx(['CONTINUACION DEL SERVICIO', 'CONTINUACIÓN DEL SERVICIO', 'CONTINUACION', 'CONTINUACIÓN', 'CONTINUACION DE SERVICIO', 'CONTINUACIÓN DE SERVICIO']);
+            if (idxFines >= 0) r[idxFines] = fins.join('\n');
+            if (idxCont >= 0) r[idxCont] = conts.join('\n');
+            const diasTotales = Math.ceil((dt - di) / (1000 * 60 * 60 * 24)) + 1;
+            if (headerIndices.DIAS >= 0) r[headerIndices.DIAS] = String(diasTotales);
             const precioNum = parseFloat(gi('ed_precio').value) || 0;
             const monto = diasTotales * precioNum;
-            if (headerIndices.INGRESO>=0) r[headerIndices.INGRESO] = String(monto);
-            if (headerIndices.RENTA>=0) r[headerIndices.RENTA] = String(monto);
-            // Recalcular Devolución = Terminación + 1 día
-            if (headerIndices.DEVOLUCION>=0){
-              const devDate = new Date(dt); devDate.setDate(dt.getDate()+1);
+            if (headerIndices.INGRESO >= 0) r[headerIndices.INGRESO] = String(monto);
+            if (headerIndices.RENTA >= 0) r[headerIndices.RENTA] = String(monto);
+            if (headerIndices.DEVOLUCION >= 0) {
+              const devDate = new Date(dt); devDate.setDate(dt.getDate() + 1);
               r[headerIndices.DEVOLUCION] = formatDMY(devDate);
             }
           }
         }
 
+        // Actualizar en Firestore si está disponible
+        if (firebaseReady && window.db && row._firestoreId) {
+          const rowData = { ...r };
+          delete rowData._firestoreId;
+          delete rowData._timestamp;
+          delete rowData.id;
+          
+          await window.db.collection(COLLECTION_NAME).doc(row._firestoreId).update({
+            row: rowData,
+            timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+            updatedAt: new Date().toISOString()
+          });
+          console.log('[regactividad] Registro actualizado en Firestore');
+        }
+
         localStorage.setItem('actividad:newRows', JSON.stringify(rows));
         overlay.remove();
-        loadHistory();
-      }catch(e){ console.error('[regactividad] edit save:', e); alert('Error al guardar'); }
+        await loadHistory();
+      } catch (e) { console.error('[regactividad] edit save:', e); alert('Error al guardar: ' + e.message); }
     };
   }catch(e){ console.error('[regactividad] edit:', e); alert('No se pudo abrir el editor'); }
 }
 
-// Arranque: cargar datos siempre (sin auth en esta página)
-(async function init(){
+// Arranque: esperar Firebase y cargar datos
+(async function init() {
   await loadHeaders();
-  loadHistory();
+  
+  // Esperar a que Firebase esté listo
+  try {
+    await waitForFirebase();
+    console.log('[regactividad] Firebase inicializado correctamente');
+    
+    // Actualizar UI de autenticación
+    updateAuthUI();
+    
+    // Escuchar cambios en autenticación
+    if (window.auth && window.auth.onAuthStateChanged) {
+      window.auth.onAuthStateChanged((user) => {
+        console.log('[regactividad] Estado de auth cambió:', user ? user.email : 'sin sesión');
+        updateAuthUI();
+      });
+    }
+  } catch (e) {
+    console.warn('[regactividad] Firebase no disponible, usando localStorage únicamente');
+  }
+  
+  await loadHistory();
 })();
 
 document.querySelector('.menu-toggle')?.addEventListener('click', function(){ const nav=document.getElementById('primary-nav'); nav.classList.toggle('open'); this.setAttribute('aria-expanded', nav.classList.contains('open')); });
+
+// Botón de logout
+const logoutBtn = document.getElementById('logout-btn');
+if (logoutBtn) {
+  logoutBtn.addEventListener('click', async () => {
+    try {
+      if (window.auth && window.auth.signOut) {
+        await window.auth.signOut();
+      }
+      window.location.href = 'login.html';
+    } catch (e) {
+      console.error('[regactividad] Error al cerrar sesión:', e);
+      window.location.href = 'login.html';
+    }
+  });
+}
 
 document.getElementById('searchInput')?.addEventListener('input', (e)=>{ const term=e.target.value.toLowerCase(); document.querySelectorAll('#historyTableBody tr').forEach(r=>{ r.style.display = r.textContent.toLowerCase().includes(term)?'':'none'; }); });
 
 document.getElementById('exportBtn')?.addEventListener('click', function(){ try{ const key='actividad:newRows'; const stored=localStorage.getItem(key); const rows=stored?JSON.parse(stored):[]; if(rows.length===0){ alert('No hay registros para exportar'); return; } const headersCsv='Tipo,Serial,Equipo/Activo,Descripción,Cliente,Área,Ubicación,Factura,Inicio,Terminación,Días,Precio,Ingreso/Renta\n'; let csv=headersCsv; rows.forEach(row=>{ const prop=row[headerIndices.PROPIEDAD]||''; const tipo=prop==='PCT'?'INTERNO':'EXTERNO'; const ingreso=parseFloat(row[headerIndices.INGRESO]||0); const renta=parseFloat(row[headerIndices.RENTA]||0); const monto=prop==='PCT'?ingreso:renta; const fields=[ tipo, row[headerIndices.SERIAL]||'', row[headerIndices.EQUIPO]||'', row[headerIndices.DESCRIPCION]||'', row[headerIndices.CLIENTE]||'', row[headerIndices.AREA]||'', row[headerIndices.UBICACION]||'', row[headerIndices.FACTURA]||'', row[headerIndices.INICIO]||'', row[headerIndices.TERMINACION]||'', row[headerIndices.DIAS]||'', row[headerIndices.PRECIO]||'', monto||'' ]; const line=fields.map(v=>'"'+String(v).replace(/"/g,'""')+'"').join(','); csv+=line+'\n'; }); const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='historial_actividad_'+new Date().toISOString().split('T')[0]+'.csv'; a.click(); }catch(e){ console.error('[regactividad] export:',e); alert('Error al exportar CSV'); } });
 
-document.getElementById('clearAllBtn')?.addEventListener('click', function(){ if(!confirm('⚠️ ADVERTENCIA: Esto eliminará TODOS los registros permanentemente.\n\n¿Estás completamente seguro?')) return; if(!confirm('Esta acción NO se puede deshacer. ¿Continuar?')) return; try{ localStorage.removeItem('actividad:newRows'); loadHistory(); alert('✅ Todos los registros han sido eliminados'); }catch(e){ console.error('[regactividad] clear:',e); alert('Error al borrar'); } });
+document.getElementById('clearAllBtn')?.addEventListener('click', async function() {
+  if (!confirm('⚠️ ADVERTENCIA: Esto eliminará TODOS los registros permanentemente de la nube y de todas las computadoras.\n\n¿Estás completamente seguro?')) return;
+  if (!confirm('Esta acción NO se puede deshacer. ¿Continuar?')) return;
+  
+  try {
+    // Eliminar de Firestore
+    if (firebaseReady && window.db) {
+      const snapshot = await window.db.collection(COLLECTION_NAME).get();
+      const batch = window.db.batch();
+      snapshot.docs.forEach(doc => {
+        batch.delete(doc.ref);
+      });
+      await batch.commit();
+      console.log('[regactividad] Registros eliminados de Firestore');
+    }
+    
+    // Eliminar de localStorage
+    localStorage.removeItem('actividad:newRows');
+    localStorage.removeItem('actividad:firestoreIds');
+    
+    await loadHistory();
+    alert('✅ Todos los registros han sido eliminados');
+  } catch (e) {
+    console.error('[regactividad] clear:', e);
+    alert('Error al borrar: ' + e.message);
+  }
+});
 
-document.getElementById('refreshBtn')?.addEventListener('click', async ()=>{ await loadHeaders(); loadHistory(); });
+document.getElementById('refreshBtn')?.addEventListener('click', async () => {
+  await loadHeaders();
+  await loadHistory();
+});
 
 // --- VER DETALLE ---
 function getIdx(nameVariants){ try { return getHeaderIndex(nameVariants); } catch(_) { return -1; } }

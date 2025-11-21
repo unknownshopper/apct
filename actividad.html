@@ -164,6 +164,60 @@
     let inventorySet = new Set(); // para verificación rápida de pertenencia
     let externalOptionsByProvider = new Map(); // proveedor -> Set de claves sugeridas
 
+    // Sincronización con Firestore
+    const COLLECTION_NAME = 'activityRecords';
+    let firebaseReady = false;
+    
+    // Esperar a que Firebase esté disponible
+    function waitForFirebase() {
+      return new Promise((resolve) => {
+        const check = () => {
+          if (window.db && window.auth) {
+            firebaseReady = true;
+            resolve(true);
+          } else {
+            setTimeout(check, 100);
+          }
+        };
+        check();
+      });
+    }
+    
+    // Guardar registro en Firestore
+    async function saveToFirestore(row) {
+      if (!firebaseReady || !window.db) {
+        console.warn('[actividad] Firebase no disponible, solo se guardó en localStorage');
+        return null;
+      }
+      
+      try {
+        const rowData = Array.isArray(row) ? row : Object.values(row);
+        const docRef = await window.db.collection(COLLECTION_NAME).add({
+          row: rowData,
+          timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+          createdAt: new Date().toISOString(),
+          createdBy: window.auth.currentUser ? window.auth.currentUser.email : 'unknown'
+        });
+        console.log('[actividad] Registro guardado en Firestore:', docRef.id);
+        return docRef.id;
+      } catch (e) {
+        console.error('[actividad] Error al guardar en Firestore:', e);
+        return null;
+      }
+    }
+    
+    // Eliminar registro de Firestore
+    async function deleteFromFirestore(firestoreId) {
+      if (!firebaseReady || !window.db || !firestoreId) return;
+      
+      try {
+        await window.db.collection(COLLECTION_NAME).doc(firestoreId).delete();
+        console.log('[actividad] Registro eliminado de Firestore:', firestoreId);
+      } catch (e) {
+        console.error('[actividad] Error al eliminar de Firestore:', e);
+      }
+    }
+
     function fmt(n){ return n.toLocaleString('es-MX'); }
 
     function ensureDatalist(id, options){
@@ -358,11 +412,16 @@
         deleteBtn.className = 'delete-row-btn';
         deleteBtn.innerHTML = '🗑️';
         deleteBtn.title = 'Eliminar este registro';
-        deleteBtn.addEventListener('click', () => {
+        deleteBtn.addEventListener('click', async () => {
           if (confirm('¿Estás seguro de eliminar este registro permanentemente?')){
             // Eliminar de rows y view
             const rowIndex = rows.indexOf(row);
             if (rowIndex >= 0) {
+              // Eliminar de Firestore si tiene ID
+              if (row._firestoreId) {
+                await deleteFromFirestore(row._firestoreId);
+              }
+              
               rows.splice(rowIndex, 1);
               view = rows;
               renderBody(view);
@@ -370,7 +429,14 @@
               // Actualizar localStorage
               try{
                 const keyLS = 'actividad:newRows';
-                localStorage.setItem(keyLS, JSON.stringify(rows));
+                const cleanRows = rows.map(r => {
+                  if (r._firestoreId) {
+                    const { _firestoreId, ...rest } = r;
+                    return rest;
+                  }
+                  return r;
+                });
+                localStorage.setItem(keyLS, JSON.stringify(cleanRows));
               }catch(e){
                 console.error('[actividad] Error al actualizar localStorage:', e);
               }
@@ -739,7 +805,15 @@
       }, error:(e)=>{ console.log('[actividad] Papa.parse error', { url, error:e }); }});
     }
 
-    function load(){
+    async function load(){
+      // Inicializar Firebase
+      try {
+        await waitForFirebase();
+        console.log('[actividad] Firebase inicializado correctamente');
+      } catch (e) {
+        console.warn('[actividad] Firebase no disponible, usando localStorage únicamente');
+      }
+      
       Papa.parse(SRC, {
         download: true,
         skipEmptyLines: 'greedy',
@@ -1091,7 +1165,7 @@
       }
       
       // Guardar cambios
-      saveBtn.onclick = () => {
+      saveBtn.onclick = async () => {
         // Actualizar row con los nuevos valores
         for (let j=0; j<order.length; j++){
           const norm = normalizeHeader(labels[j]).toUpperCase();
@@ -1107,6 +1181,22 @@
           row[propiedadIdx] = sel.value === 'EQUIPOS INTERNOS' ? 'PCT' : 'PROVEEDOR';
         }
         
+        // Actualizar en Firestore si tiene ID
+        if (firebaseReady && window.db && row._firestoreId) {
+          try {
+            const rowData = [...row];
+            delete rowData._firestoreId;
+            await window.db.collection(COLLECTION_NAME).doc(row._firestoreId).update({
+              row: rowData,
+              timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+              updatedAt: new Date().toISOString()
+            });
+            console.log('[actividad] Registro actualizado en Firestore');
+          } catch (e) {
+            console.error('[actividad] Error al actualizar en Firestore:', e);
+          }
+        }
+        
         // Re-renderizar
         renderBody(view);
         updateKPIs();
@@ -1114,7 +1204,14 @@
         // Guardar en localStorage
         try{
           const keyLS = 'actividad:newRows';
-          localStorage.setItem(keyLS, JSON.stringify(rows));
+          const cleanRows = rows.map(r => {
+            if (r._firestoreId) {
+              const { _firestoreId, ...rest } = r;
+              return rest;
+            }
+            return r;
+          });
+          localStorage.setItem(keyLS, JSON.stringify(cleanRows));
         }catch(e){
           console.error('[actividad] Error al guardar:', e);
         }
@@ -1509,13 +1606,22 @@
         buildExternalOptionsBase();
         renderHead();
         renderBody(view);
-        // Persistir en localStorage para mantener las nuevas filas en esta URL/sesión
+        // Persistir en localStorage y Firestore
         try{
           const keyLS = 'actividad:newRows';
           const prev = JSON.parse(localStorage.getItem(keyLS)||'[]');
           const next = Array.isArray(prev) ? [...newRows, ...prev] : [...newRows];
           localStorage.setItem(keyLS, JSON.stringify(next));
-        }catch{}
+          
+          // Guardar en Firestore también
+          (async () => {
+            for (const row of newRows) {
+              await saveToFirestore(row);
+            }
+          })();
+        }catch(e){
+          console.error('[actividad] Error al persistir:', e);
+        }
         // Agregar un registro visual al log inferior
         try{
           const ul = document.getElementById('activity-log-list');
