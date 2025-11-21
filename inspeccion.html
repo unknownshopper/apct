@@ -1168,19 +1168,14 @@
         const idxDescripcion = pickIndex(hmap, ['descripcion','descripción']);
         const idxEstado = pickIndex(hmap, ['edo','estado']);
         
-        // Para longitud, buscar columnas de longitud o calcularlo desde descripción
-        const idxLongitud = -1; // No hay columna directa de longitud en el CSV
-        
         const map = new Map();
         for (let i=1;i<rows.length;i++){
           const r = rows[i];
           const equipo = String(r[idxEquipo]||'').trim();
           if (!equipo) continue;
           
-          const estado = idxEstado >= 0 ? String(r[idxEstado]||'').trim().toUpperCase() : 'ON';
-          // Solo incluir equipos activos (ON)
-          if (estado !== 'ON') continue;
-          
+          // Incluir TODOS los equipos del inventario, sin filtrar por estado
+          const estado = idxEstado >= 0 ? String(r[idxEstado]||'').trim().toUpperCase() : '';
           const conexion = String(r[idxConexion1]||'').trim();
           const serial = idxSerial>=0 ? String(r[idxSerial]||'').trim() : '';
           const diametro = idxDiametro>=0 ? String(r[idxDiametro]||'').trim() : '';
@@ -1195,7 +1190,7 @@
             }
           }
           
-          map.set(equipo, { equipo, conexion, serial, diametro, descripcion, longitud });
+          map.set(equipo, { equipo, conexion, serial, diametro, descripcion, longitud, estado });
         }
         return map;
       }
