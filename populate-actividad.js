@@ -92,21 +92,45 @@
     for (let i = 0; i < equiposSeleccionados.length; i++) {
       const equipo = equiposSeleccionados[i];
       
-      // Fechas aleatorias en los últimos 6 meses
-      const diasAtras = Math.floor(Math.random() * 180);
-      const fechaInicio = new Date(hoy);
-      fechaInicio.setDate(hoy.getDate() - diasAtras);
+      // Determinar si será activo (70%) o finalizado (30%)
+      const esActivo = Math.random() < 0.7;
       
-      // Duración entre 10 y 90 días
-      const duracion = 10 + Math.floor(Math.random() * 80);
-      const fechaTerminacion = new Date(fechaInicio);
-      fechaTerminacion.setDate(fechaInicio.getDate() + duracion);
+      // Fechas aleatorias
+      let fechaInicio, fechaTerminacion, fechaDevolucion, duracion;
+      
+      if (esActivo) {
+        // ACTIVO: Inició en los últimos 2 meses, aún no termina
+        const diasAtras = Math.floor(Math.random() * 60);
+        fechaInicio = new Date(hoy);
+        fechaInicio.setDate(hoy.getDate() - diasAtras);
+        
+        // Terminará en el futuro (entre 10 y 60 días)
+        const diasFuturos = 10 + Math.floor(Math.random() * 50);
+        fechaTerminacion = new Date(hoy);
+        fechaTerminacion.setDate(hoy.getDate() + diasFuturos);
+        
+        // Duración total
+        duracion = Math.ceil((fechaTerminacion - fechaInicio) / (1000 * 60 * 60 * 24)) + 1;
+        
+        fechaDevolucion = new Date(fechaTerminacion);
+        fechaDevolucion.setDate(fechaTerminacion.getDate() + 1);
+      } else {
+        // FINALIZADO: En los últimos 6 meses
+        const diasAtras = Math.floor(Math.random() * 180);
+        fechaInicio = new Date(hoy);
+        fechaInicio.setDate(hoy.getDate() - diasAtras);
+        
+        // Duración entre 15 y 90 días
+        duracion = 15 + Math.floor(Math.random() * 75);
+        fechaTerminacion = new Date(fechaInicio);
+        fechaTerminacion.setDate(fechaInicio.getDate() + duracion);
+        
+        fechaDevolucion = new Date(fechaTerminacion);
+        fechaDevolucion.setDate(fechaTerminacion.getDate() + 1);
+      }
       
       const fechaEmbarque = new Date(fechaInicio);
       fechaEmbarque.setDate(fechaInicio.getDate() - 2);
-      
-      const fechaDevolucion = new Date(fechaTerminacion);
-      fechaDevolucion.setDate(fechaTerminacion.getDate() + 1);
       
       // Precio diario entre $500 y $5000
       const precioDiario = 500 + Math.floor(Math.random() * 4500);
@@ -142,26 +166,41 @@
         cursor.setDate(cursor.getDate() + 30);
       }
       
+      // OC y OS aleatorios
+      const ordenCompra = `OC-2025-${String(2000 + i).padStart(4, '0')}`;
+      const ordenServicio = `OS-${String(5000 + i).padStart(4, '0')}`;
+      const cotizacion = `COT-2025-${String(100 + i).padStart(3, '0')}`;
+      const manifiesto = `MAN-${String(8000 + i).padStart(5, '0')}`;
+      
       // Crear array de datos según estructura del CSV
+      // #,EQUIPO/ACTIVO,PRODUCTO,DESCRIPCION,PROPIEDAD,CLIENTE,AREA,UBICACION,
+      // COT/ESTIMACION,O.S.,FECHA EMBARQUE,NUM MANIFIESTO,PRECIO,
+      // INICIO,CONTINUACION,FIN PARCIAL,TERMINACION,DEVOLUCION,
+      // ORDEN COMPRA,FACTURA,DIAS,INGRESO,RENTA
       const registro = [
-        'PCT',                          // PROPIEDAD
-        equipo.serial,                  // SERIAL
+        String(i + 1),                  // # (numero consecutivo)
         equipo.equipo,                  // EQUIPO / ACTIVO
+        equipo.equipo,                  // PRODUCTO (mismo que equipo)
         equipo.descripcion,             // DESCRIPCION
+        'PCT',                          // PROPIEDAD
         cliente,                        // CLIENTE
         area,                           // AREA DEL CLIENTE
         ubicacion,                      // UBICACION
-        factura,                        // FACTURA
+        cotizacion,                     // COT / ESTIMACION
+        ordenServicio,                  // O. S.
         formatFecha(fechaEmbarque),     // FECHA EMBARQUE
+        manifiesto,                     // NUMERO DE MANIFIESTO
+        String(precioDiario),           // PRECIO
         formatFecha(fechaInicio),       // INICIO DEL SERVICIO
+        continuaciones.join('\n'),      // CONTINUACION DEL SERVICIO
+        finesParciales.join('\n'),      // FIN PARCIAL DEL SERVICIO
         formatFecha(fechaTerminacion),  // TERMINACION DEL SERVICIO
         formatFecha(fechaDevolucion),   // FECHA DE DEVOLUCION
+        ordenCompra,                    // ORDEN DE COMPRA
+        factura,                        // FACTURA
         String(duracion),               // DIAS EN SERVICIO
-        String(precioDiario),           // PRECIO
         String(ingreso),                // INGRESO ACUMULADO
-        String(ingreso),                // RENTA ACUMULADA
-        finesParciales.join('\n'),      // FIN PARCIAL DEL SERVICIO
-        continuaciones.join('\n')       // CONTINUACION DEL SERVICIO
+        String(ingreso)                 // RENTA ACUMULADA
       ];
       
       // Guardar en Firestore
@@ -174,29 +213,38 @@
           source: 'populate-script'
         });
         
+        const estado = esActivo ? '🟢 ACTIVO' : '⚪ FINALIZADO';
         registrosCreados.push({
           id: docRef.id,
           equipo: equipo.equipo,
-          cliente
+          cliente,
+          estado: esActivo ? 'Activo' : 'Finalizado'
         });
         
-        console.log(`✅ [${i + 1}/${equiposSeleccionados.length}] ${equipo.equipo} → ${cliente}`);
+        console.log(`✅ [${i + 1}/${equiposSeleccionados.length}] ${estado} ${equipo.equipo} → ${cliente}`);
         
       } catch (e) {
         console.error(`❌ Error creando registro ${i + 1}:`, e);
       }
     }
     
+    // Calcular estadísticas
+    const activos = registrosCreados.filter(r => r.estado === 'Activo').length;
+    const finalizados = registrosCreados.filter(r => r.estado === 'Finalizado').length;
+    
     console.log('\n' + '='.repeat(60));
     console.log(`✅ Población completada!`);
-    console.log(`   📊 Registros creados: ${registrosCreados.length}`);
+    console.log(`   📊 Total de registros: ${registrosCreados.length}`);
+    console.log(`   🟢 Activos: ${activos}`);
+    console.log(`   ⚪ Finalizados: ${finalizados}`);
     console.log(`   🔄 Recarga la página para ver los registros`);
     console.log('='.repeat(60));
     
     // Mostrar resumen
     console.log('\n📋 Registros creados:');
     registrosCreados.forEach((r, i) => {
-      console.log(`   ${i + 1}. ${r.equipo} → ${r.cliente}`);
+      const emoji = r.estado === 'Activo' ? '🟢' : '⚪';
+      console.log(`   ${i + 1}. ${emoji} ${r.equipo} → ${r.cliente}`);
     });
     
     const recargar = confirm(
