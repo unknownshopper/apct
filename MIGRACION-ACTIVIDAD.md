@@ -20,6 +20,17 @@
 3. **actividad.html** - Sincronización al crear/editar/eliminar registros
 4. **migrate-actividad.js** - Script de migración de datos existentes
 
+## 🎲 Popular con Datos de Prueba (Opcional)
+
+Si deseas crear registros de prueba para ver el sistema funcionando:
+
+```javascript
+// Copiar y pegar en la consola:
+fetch('populate-actividad.js').then(r=>r.text()).then(eval);
+```
+
+Esto creará 30 registros ficticios usando equipos reales del inventario que tengan serial y descripción.
+
 ## 🔄 Proceso de Migración
 
 ### Opción 1: Migración Automática (Recomendada)
