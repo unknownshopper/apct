@@ -1162,16 +1162,40 @@
         if (!rows.length) return new Map();
         const hmap = indexMapForHeaderRow(rows[0]);
         const idxEquipo = pickIndex(hmap, ['equipo / activo','equipo/activo','equipo activo','equipo']);
-        const idxConexion1 = pickIndex(hmap, ['conexion1','conexión1','conexion']);
+        const idxConexion1 = pickIndex(hmap, ['conexión 1','conexion 1','conexion1','conexión1','conexion']);
         const idxSerial = pickIndex(hmap, ['serial','no de serie','nserie']); // opcional
+        const idxDiametro = pickIndex(hmap, ['diametro 1','diámetro 1','diametro1','diámetro1','diametro','diámetro']);
+        const idxDescripcion = pickIndex(hmap, ['descripcion','descripción']);
+        const idxEstado = pickIndex(hmap, ['edo','estado']);
+        
+        // Para longitud, buscar columnas de longitud o calcularlo desde descripción
+        const idxLongitud = -1; // No hay columna directa de longitud en el CSV
+        
         const map = new Map();
         for (let i=1;i<rows.length;i++){
           const r = rows[i];
           const equipo = String(r[idxEquipo]||'').trim();
           if (!equipo) continue;
+          
+          const estado = idxEstado >= 0 ? String(r[idxEstado]||'').trim().toUpperCase() : 'ON';
+          // Solo incluir equipos activos (ON)
+          if (estado !== 'ON') continue;
+          
           const conexion = String(r[idxConexion1]||'').trim();
           const serial = idxSerial>=0 ? String(r[idxSerial]||'').trim() : '';
-          map.set(equipo, { equipo, conexion, serial });
+          const diametro = idxDiametro>=0 ? String(r[idxDiametro]||'').trim() : '';
+          const descripcion = idxDescripcion>=0 ? String(r[idxDescripcion]||'').trim() : '';
+          
+          // Extraer longitud de la descripción (buscar LONG: o L: seguido de número)
+          let longitud = '';
+          if (descripcion) {
+            const matchLong = descripcion.match(/\bLONG[:\s]*([0-9.]+)/i);
+            if (matchLong) {
+              longitud = matchLong[1];
+            }
+          }
+          
+          map.set(equipo, { equipo, conexion, serial, diametro, descripcion, longitud });
         }
         return map;
       }
