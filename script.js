@@ -123,9 +123,11 @@
     links.forEach(a => {
       const href = String(a.getAttribute('href')||'');
       const isInspeccion = /inspeccion\.html$/i.test(href);
-      if (role === 'inspector' && onInspection){
+      if (role === 'inspector') {
+        // Inspector: siempre mostrar únicamente el enlace de Inspección
         a.style.display = isInspeccion ? '' : 'none';
       } else {
+        // Otros roles: ver todos los enlaces
         a.style.display = '';
       }
     });
@@ -210,7 +212,8 @@
     const guardP = document.getElementById('inspection-guard');
     const result = document.getElementById('inspection-result');
 
-    const canCreateInspection = role === 'inspector';
+    // Inspector y Admin pueden crear inspecciones
+    const canCreateInspection = role === 'inspector' || role === 'admin';
     if (!email) {
       if (guardP) {
         guardP.style.display = '';
@@ -263,25 +266,18 @@
         // Exponer usuario global y notificar
         try { window.currentUser = user || null; } catch {}
         try { window.dispatchEvent(new CustomEvent('auth:changed', { detail: { user: user || null } })); } catch {}
-
-        if (!user) {
-          setCurrentEmail(null);
-          if (!isLogin) {
-            setAppVisible(false);
-            window.location.href = 'login.html';
-            return;
-          } else {
-            // En login sin sesión, mostrar solo login
-            setAppVisible(true);
-          }
-        } else {
-          setCurrentEmail(user.email || null);
-          if (isLogin) {
-            window.location.href = 'index.html';
-            return;
-          } else {
-            setAppVisible(true);
-          }
+        try {
+          const email = user?.email || null;
+          const role = await getEffectiveRole(email);
+          window.currentRole = role;
+          window.isAdmin = function(){ return window.currentRole === 'admin'; };
+        } catch {}
+        
+        const hasAuth = !!user;
+        if (!hasAuth && !isLogin) {
+          setAppVisible(false);
+          window.location.href = 'login.html';
+          return;
         }
         refreshUserBox();
         applyIndexPermissions();

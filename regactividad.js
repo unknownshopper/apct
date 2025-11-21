@@ -15,6 +15,14 @@ function waitForFirebase() {
     };
     check();
   });
+
+// Ocultar botones peligrosos si no es admin
+window.addEventListener('load', () => {
+  if (!(window.isAdmin && window.isAdmin())) {
+    const btn = document.getElementById('clearAllBtn');
+    if (btn) btn.style.display = 'none';
+  }
+});
 }
 
 // Actualizar UI de autenticación
@@ -131,11 +139,86 @@ async function loadHistory() {
   }
 }
 
-function renderTable(rows){ const tbody=document.getElementById('historyTableBody'); tbody.innerHTML=''; rows.forEach((row,idx)=>{ const tr=document.createElement('tr'); const tdF=document.createElement('td'); tdF.textContent=new Date().toLocaleDateString('es-MX'); tr.appendChild(tdF); const tdT=document.createElement('td'); const prop=row[headerIndices.PROPIEDAD]||''; const tipo=prop==='PCT'?'INTERNO':'EXTERNO'; tdT.innerHTML=`<span class="badge ${prop==='PCT'?'badge-interno':'badge-externo'}">${tipo}</span>`; tr.appendChild(tdT); const makeTd=(val)=>{const td=document.createElement('td'); td.textContent=val||'-'; return td;}; tr.appendChild(makeTd(row[headerIndices.SERIAL])); tr.appendChild(makeTd(row[headerIndices.EQUIPO])); tr.appendChild(makeTd(row[headerIndices.CLIENTE])); tr.appendChild(makeTd(row[headerIndices.INICIO])); tr.appendChild(makeTd(row[headerIndices.TERMINACION])); const tdDias=makeTd(row[headerIndices.DIAS]||'0'); tdDias.style.textAlign='center'; tr.appendChild(tdDias); const tdPrec=document.createElement('td'); const prec=parseFloat(row[headerIndices.PRECIO]||0); tdPrec.textContent='$'+prec.toLocaleString('es-MX',{minimumFractionDigits:2}); tdPrec.style.textAlign='right'; tr.appendChild(tdPrec); const tdMon=document.createElement('td'); const ing=parseFloat(row[headerIndices.INGRESO]||0); const ren=parseFloat(row[headerIndices.RENTA]||0); const monto=prop==='PCT'?ing:ren; tdMon.textContent='$'+monto.toLocaleString('es-MX',{minimumFractionDigits:2}); tdMon.style.textAlign='right'; tdMon.style.fontWeight='600'; tr.appendChild(tdMon); const tdEst=document.createElement('td'); const sTerm=row[headerIndices.TERMINACION]; let est='Desconocido'; if (sTerm){ const [d,m,y]=sTerm.split('/'); const f=new Date(2000+parseInt(y),parseInt(m)-1,parseInt(d)); est=f>new Date()?'Activo':'Finalizado'; } tdEst.innerHTML=`<span class="badge ${est==='Activo'?'badge-activo':'badge-finalizado'}">${est}</span>`; tr.appendChild(tdEst); const tdAcc=document.createElement('td'); tdAcc.style.whiteSpace='nowrap'; const bPdf=document.createElement('button'); bPdf.className='pdf-row-btn'; bPdf.innerHTML='📄'; bPdf.title='Generar PDF'; bPdf.style.marginRight='8px'; bPdf.onclick=()=>generatePDF(row); const bEd=document.createElement('button'); bEd.className='edit-row-btn'; bEd.innerHTML='✏️'; bEd.title='Editar'; bEd.style.marginRight='8px'; bEd.onclick=()=>editRecord(idx,row); const bDel=document.createElement('button'); bDel.className='delete-row-btn'; bDel.innerHTML='🗑️'; bDel.title='Eliminar'; bDel.onclick=()=>deleteRecord(idx,row); tdAcc.append(bPdf,bEd,bDel); tr.appendChild(tdAcc); tbody.appendChild(tr); }); }
+function renderTable(rows){ 
+  const tbody=document.getElementById('historyTableBody'); 
+  tbody.innerHTML=''; 
+  rows.forEach((row,idx)=>{ 
+    const tr=document.createElement('tr'); 
+    const tdF=document.createElement('td'); 
+    tdF.textContent=new Date().toLocaleDateString('es-MX'); 
+    tr.appendChild(tdF); 
+    const tdT=document.createElement('td'); 
+    const prop=row[headerIndices.PROPIEDAD]||''; 
+    const tipo=prop==='PCT'?'INTERNO':'EXTERNO'; 
+    tdT.innerHTML=`<span class="badge ${prop==='PCT'?'badge-interno':'badge-externo'}">${tipo}</span>`; 
+    tr.appendChild(tdT); 
+    const makeTd=(val)=>{const td=document.createElement('td'); td.textContent=val||'-'; return td;}; 
+    tr.appendChild(makeTd(row[headerIndices.SERIAL])); 
+    tr.appendChild(makeTd(row[headerIndices.EQUIPO])); 
+    tr.appendChild(makeTd(row[headerIndices.CLIENTE])); 
+    tr.appendChild(makeTd(row[headerIndices.INICIO])); 
+    tr.appendChild(makeTd(row[headerIndices.TERMINACION])); 
+    const tdDias=makeTd(row[headerIndices.DIAS]||'0'); 
+    tdDias.style.textAlign='center'; 
+    tr.appendChild(tdDias); 
+    const tdPrec=document.createElement('td'); 
+    const prec=parseFloat(row[headerIndices.PRECIO]||0); 
+    tdPrec.textContent='$'+prec.toLocaleString('es-MX',{minimumFractionDigits:2}); 
+    tdPrec.style.textAlign='right'; 
+    tr.appendChild(tdPrec); 
+    const tdMon=document.createElement('td'); 
+    const ing=parseFloat(row[headerIndices.INGRESO]||0); 
+    const ren=parseFloat(row[headerIndices.RENTA]||0); 
+    const monto=prop==='PCT'?ing:ren; 
+    tdMon.textContent='$'+monto.toLocaleString('es-MX',{minimumFractionDigits:2}); 
+    tdMon.style.textAlign='right'; 
+    tdMon.style.fontWeight='600'; 
+    tr.appendChild(tdMon); 
+    const tdEst=document.createElement('td'); 
+    const sTerm=row[headerIndices.TERMINACION]; 
+    let est='Desconocido'; 
+    if (sTerm){ 
+      const [d,m,y]=sTerm.split('/'); 
+      const f=new Date(2000+parseInt(y),parseInt(m)-1,parseInt(d)); 
+      est=f>new Date()?'Activo':'Finalizado'; 
+    } 
+    tdEst.innerHTML=`<span class="badge ${est==='Activo'?'badge-activo':'badge-finalizado'}">${est}</span>`; 
+    tr.appendChild(tdEst); 
+    const tdAcc=document.createElement('td'); 
+    tdAcc.style.whiteSpace='nowrap'; 
+    const bPdf=document.createElement('button'); 
+    bPdf.className='pdf-row-btn'; 
+    bPdf.innerHTML='📄'; 
+    bPdf.title='Generar PDF'; 
+    bPdf.style.marginRight='8px'; 
+    bPdf.onclick=()=>generatePDF(row); 
+    const bEd=document.createElement('button'); 
+    bEd.className='edit-row-btn'; 
+    bEd.innerHTML='✏️'; 
+    bEd.title='Editar'; 
+    bEd.style.marginRight='8px'; 
+    bEd.onclick=()=>editRecord(idx,row); 
+    const bDel=document.createElement('button'); 
+    bDel.className='delete-row-btn'; 
+    bDel.innerHTML='🗑️'; 
+    bDel.title='Eliminar'; 
+    bDel.onclick=()=>deleteRecord(idx,row); 
+    if (!(window.isAdmin && window.isAdmin())) {
+      bEd.style.display = 'none';
+      bDel.style.display = 'none';
+    }
+    tdAcc.append(bPdf,bEd,bDel); 
+    tr.appendChild(tdAcc); 
+    tbody.appendChild(tr); 
+  }); 
+}
 
 async function deleteRecord(index, row) {
+  if (!(window.isAdmin && window.isAdmin())) {
+    alert('Solo un administrador puede eliminar registros.');
+    return;
+  }
   if (!confirm('¿Estás seguro de eliminar este registro permanentemente?')) return;
-  
   try {
     // Intentar eliminar de Firestore
     if (firebaseReady && window.db && row._firestoreId) {
@@ -171,6 +254,10 @@ function generatePDF(row){
 }
 
 function editRecord(index, row){
+  if (!(window.isAdmin && window.isAdmin())) {
+    alert('Solo un administrador puede editar registros.');
+    return;
+  }
   try{
     const overlay = document.createElement('div');
     overlay.style.position='fixed'; overlay.style.inset='0'; overlay.style.background='rgba(0,0,0,.35)'; overlay.style.zIndex='9999';
@@ -327,9 +414,10 @@ if (logoutBtn) {
 
 document.getElementById('searchInput')?.addEventListener('input', (e)=>{ const term=e.target.value.toLowerCase(); document.querySelectorAll('#historyTableBody tr').forEach(r=>{ r.style.display = r.textContent.toLowerCase().includes(term)?'':'none'; }); });
 
-document.getElementById('exportBtn')?.addEventListener('click', function(){ try{ const key='actividad:newRows'; const stored=localStorage.getItem(key); const rows=stored?JSON.parse(stored):[]; if(rows.length===0){ alert('No hay registros para exportar'); return; } const headersCsv='Tipo,Serial,Equipo/Activo,Descripción,Cliente,Área,Ubicación,Factura,Inicio,Terminación,Días,Precio,Ingreso/Renta\n'; let csv=headersCsv; rows.forEach(row=>{ const prop=row[headerIndices.PROPIEDAD]||''; const tipo=prop==='PCT'?'INTERNO':'EXTERNO'; const ingreso=parseFloat(row[headerIndices.INGRESO]||0); const renta=parseFloat(row[headerIndices.RENTA]||0); const monto=prop==='PCT'?ingreso:renta; const fields=[ tipo, row[headerIndices.SERIAL]||'', row[headerIndices.EQUIPO]||'', row[headerIndices.DESCRIPCION]||'', row[headerIndices.CLIENTE]||'', row[headerIndices.AREA]||'', row[headerIndices.UBICACION]||'', row[headerIndices.FACTURA]||'', row[headerIndices.INICIO]||'', row[headerIndices.TERMINACION]||'', row[headerIndices.DIAS]||'', row[headerIndices.PRECIO]||'', monto||'' ]; const line=fields.map(v=>'"'+String(v).replace(/"/g,'""')+'"').join(','); csv+=line+'\n'; }); const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='historial_actividad_'+new Date().toISOString().split('T')[0]+'.csv'; a.click(); }catch(e){ console.error('[regactividad] export:',e); alert('Error al exportar CSV'); } });
+document.getElementById('exportBtn')?.addEventListener('click', function(){ try{ const key='actividad:newRows'; const stored=localStorage.getItem(key); const rows=stored?JSON.parse(stored):[]; if(rows.length===0){ alert('No hay registros para exportar'); return; } const headersCsv='Tipo,Serial,Equipo/Activo,Descripción,Cliente,Área,Ubicación,Factura,Inicio,Terminación,Días,Precio,Ingreso/Renta\n'; let csv=headersCsv; rows.forEach(row=>{ const prop=row[headerIndices.PROPIEDAD]||''; const tipo=prop==='PCT'?'INTERNO':'EXTERNO'; const ingreso=parseFloat(row[headerIndices.INGRESO]||0); const renta=parseFloat(row[headerIndices.RENTA]||0); const monto=prop==='PCT'?ingreso:renta; const fields=[ tipo, row[headerIndices.SERIAL]||'', row[headerIndices.EQUIPO]||'', row[headerIndices.DESCRIPCION]||'', row[headerIndices.CLIENTE]||'', row[headerIndices.AREA]||'', row[headerIndices.UBICACION]||'', row[headerIndices.FACTURA]||'', row[headerIndices.INICIO]||'', row[headerIndices.TERMINACION]||'', row[headerIndices.DIAS]||'', row[headerIndices.PRECIO]||'', monto||'' ]; csv += fields.map(v=>`"${String(v).replace(/\"/g,'\"\"')}\"`).join(',')+'\n'; }); const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='registros_actividad.csv'; a.click(); }catch(e){ console.error('[regactividad] export csv', e); alert('Error al exportar CSV'); }});
 
 document.getElementById('clearAllBtn')?.addEventListener('click', async function() {
+  if (!(window.isAdmin && window.isAdmin())) { alert('Solo un administrador puede borrar todos los registros.'); return; }
   if (!confirm('⚠️ ADVERTENCIA: Esto eliminará TODOS los registros permanentemente de la nube y de todas las computadoras.\n\n¿Estás completamente seguro?')) return;
   if (!confirm('Esta acción NO se puede deshacer. ¿Continuar?')) return;
   

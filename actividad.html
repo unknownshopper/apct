@@ -396,23 +396,31 @@
           tdSel.appendChild(tag);
         }
         
-        // Botón de editar para todas las filas
+        // Botón de editar (solo admin)
         const editBtn = document.createElement('button');
         editBtn.className = 'edit-row-btn';
         editBtn.innerHTML = '✏️';
         editBtn.title = 'Editar este registro';
+        if (!(window.isAdmin && window.isAdmin())) {
+          editBtn.style.display = 'none';
+        }
         editBtn.addEventListener('click', () => {
+          if (!(window.isAdmin && window.isAdmin())) { alert('Solo un administrador puede editar registros.'); return; }
           // Convertir la fila a modo edición
           makeRowEditable(tr, row, i);
         });
         tdSel.appendChild(editBtn);
         
-        // Botón de eliminar para todas las filas
+        // Botón de eliminar (solo admin)
         const deleteBtn = document.createElement('button');
         deleteBtn.className = 'delete-row-btn';
         deleteBtn.innerHTML = '🗑️';
         deleteBtn.title = 'Eliminar este registro';
+        if (!(window.isAdmin && window.isAdmin())) {
+          deleteBtn.style.display = 'none';
+        }
         deleteBtn.addEventListener('click', async () => {
+          if (!(window.isAdmin && window.isAdmin())) { alert('Solo un administrador puede eliminar registros.'); return; }
           if (confirm('¿Estás seguro de eliminar este registro permanentemente?')){
             // Eliminar de rows y view
             const rowIndex = rows.indexOf(row);
