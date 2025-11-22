@@ -3,6 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
     <title>PCT - Panel de Control y Gestión</title>
     
     <!-- SEO Meta Tags -->
@@ -24,7 +27,16 @@
     <meta name="twitter:title" content="PCT - Panel de Control y Gestión">
     <meta name="twitter:description" content="Sistema de gestión integral PCT para control de pruebas, inspecciones, inventario y actividades operacionales.">
     
-    <link rel="stylesheet" href="styles.css">
+    <!-- Favicon -->
+    <link rel="icon" type="image/x-icon" href="img/logo.ico">
+    <link rel="shortcut icon" href="img/logo.ico">
+
+    <script>
+      (function(){
+        var v = Date.now();
+        document.write('<link rel="stylesheet" href="styles.css?v=' + v + '">');
+      })();
+    </script>
     <link rel="manifest" href="manifest.webmanifest">
     <meta name="theme-color" content="#0f172a">
 </head>
@@ -118,11 +130,15 @@
   <script src="firebase-init.js"></script>
   <script>
   (function(){
-    // Registrar Service Worker
+    // Service Worker: en localhost desregistrar para evitar caché obsoleta; en producción registrar
     if ('serviceWorker' in navigator) {
-      window.addEventListener('load', function(){
-        navigator.serviceWorker.register('service-worker.js').catch(function(e){ console.warn('SW reg failed', e); });
-      });
+      if (/^(localhost|127\.0\.0\.1)$/i.test(location.hostname)) {
+        navigator.serviceWorker.getRegistrations().then(function(regs){ regs.forEach(function(r){ r.unregister(); }); }).catch(function(){});
+      } else {
+        window.addEventListener('load', function(){
+          navigator.serviceWorker.register('service-worker.js').catch(function(e){ console.warn('SW reg failed', e); });
+        });
+      }
     }
     const INVENTARIO_SRC = 'docs/INVENTARIO GENERAL PCT 2025 UNIFICADO.csv';
     function fmt(n){ try { return n.toLocaleString('es-MX'); } catch { return String(n); } }
@@ -338,6 +354,11 @@
     if (document.readyState==='loading') document.addEventListener('DOMContentLoaded', init); else init();
   })();
   </script>
-  <script src="script.js"></script>
+  <script>
+    (function(){
+      var v = Date.now();
+      document.write('<script src="script.js?v=' + v + '"><\\/script>');
+    })();
+  </script>
 </body>
 </html>
