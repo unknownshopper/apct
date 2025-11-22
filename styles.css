@@ -265,7 +265,7 @@ footer img {
 @media (max-width: 640px){ .cards .card { flex-basis: 100%; max-width: 100%; } }
 
 .timeline { background:#fff; border:1px solid rgba(0,0,0,0.08); border-radius:12px; padding:14px; }
-.timeline-header { display:flex; align-items:center; justify-content:space-between; gap: 12px; margin-bottom: 10px; }
+.timeline-header { display:flex; align-items:center; justify-content:space-between; gap: 12px; margin-bottom: 36px; }
 .timeline-header .title { font-weight: 700; color:#0f172a; }
 .timeline-header .legend { display:flex; align-items:center; gap: 12px; color:#475569; font-size:.9rem; }
 .timeline-header .legend .dot { display:inline-block; width:10px; height:10px; border-radius:999px; margin-right:4px; vertical-align:middle; }
@@ -274,12 +274,59 @@ footer img {
 .timeline-header .legend .soon30 { background:#22c55e; }
 .timeline-header .legend .ok { background:#0ea5e9; }
 
-.timeline-bar { position: relative; height: 56px; border-radius: 10px; background: linear-gradient(90deg, rgba(239,68,68,0.12), rgba(245,158,11,0.12) 20%, rgba(34,197,94,0.12) 60%, rgba(14,165,233,0.12)); border:1px solid rgba(0,0,0,0.08); overflow:hidden; }
+.timeline-bar { position: relative; height: 56px; border-radius: 10px; background: linear-gradient(90deg, rgba(239,68,68,0.12), rgba(245,158,11,0.12) 20%, rgba(34,197,94,0.12) 60%, rgba(14,165,233,0.12)); border:1px solid rgba(0,0,0,0.08); overflow: visible; }
 .tl-dot { position:absolute; top: 50%; transform: translate(-50%, -50%); width: 10px; height: 10px; border-radius: 50%; box-shadow: 0 0 0 2px rgba(255,255,255,0.9), 0 0 0 4px rgba(0,0,0,0.06); }
 .tl-dot.overdue { background:#ef4444; }
 .tl-dot.soon7 { background:#f59e0b; }
 .tl-dot.soon30 { background:#22c55e; }
 .tl-dot.ok { background:#0ea5e9; }
+
+/* Lightweight tooltip for timeline dots */
+.tooltip {
+  position: fixed;
+  z-index: 10000;
+  max-width: 280px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: rgba(17, 24, 39, 0.92);
+  color: #f8fafc;
+  font-size: 12px;
+  line-height: 1.35;
+  box-shadow: 0 6px 18px rgba(0,0,0,0.25);
+  pointer-events: none;
+  transform: translate(-50%, calc(-100% - 10px));
+  display: none;
+}
+.tooltip .muted { color: #cbd5e1; opacity: .95; }
+.tooltip .title { font-weight: 700; color: #e2e8f0; margin-bottom: 2px; }
+.tooltip .sep { opacity: .6; margin: 0 4px; }
+
+/* When tooltip is used inside the timeline bar, position relative to the bar */
+.timeline .tooltip, .timeline-bar .tooltip {
+  position: absolute;
+  transform: translate(-50%, calc(-100% - 8px));
+}
+
+/* Timeline vertical markers */
+.tl-marker { position: absolute; top: 0; bottom: 0; width: 0; pointer-events: none; }
+.tl-marker.today { border-left: 2px solid #111827; box-shadow: 0 0 0 2px rgba(255,255,255,0.6); }
+.tl-marker.week { border-left: 1px dashed rgba(15,23,42,0.25); }
+.tl-marker.month { border-left: 1.5px solid rgba(15,23,42,0.35); }
+
+/* Labels for reference points on the timeline */
+.tl-label {
+  position: absolute;
+  top: 0;
+  transform: translate(-50%, calc(-100% - 14px));
+  background: rgba(17,24,39,0.9);
+  color: #f8fafc;
+  font-size: 11px;
+  padding: 3px 6px;
+  border-radius: 6px;
+  white-space: nowrap;
+  box-shadow: 0 6px 18px rgba(0,0,0,0.18);
+  pointer-events: none;
+}
 
 /* Auth Page */
 .auth-page {

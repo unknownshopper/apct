@@ -126,6 +126,7 @@
     }
     const INVENTARIO_SRC = 'docs/INVENTARIO GENERAL PCT 2025 UNIFICADO.csv';
     function fmt(n){ try { return n.toLocaleString('es-MX'); } catch { return String(n); } }
+    function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g, m=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;' }[m])); }
     async function countInventario(){
       try{
         const res = await fetch(INVENTARIO_SRC + '?t=' + Date.now(), { cache:'no-store' });
@@ -154,13 +155,19 @@
         const seven = 7*24*3600*1000;
         let total = snap.size;
         let last7 = 0;
-        const byEq = new Map();
+        const byEq = new Map(); // eq -> { ts, cliente }
         snap.forEach(doc=>{
           const d = doc.data()||{};
           const eq = String(d.equipoActivo||'').trim();
           const ts = typeof d.fechaTs==='number' ? d.fechaTs : (d.created_at||0);
+          const cliente = String(
+            d.cliente || d.clienteNombre || d.clienteNombreRazonSocial || d.clienteRS || ''
+          ).trim();
           if (now - ts <= seven) last7++;
-          if (eq && (!byEq.has(eq) || ts > byEq.get(eq))) byEq.set(eq, ts);
+          if (eq) {
+            const cur = byEq.get(eq);
+            if (!cur || ts > cur.ts) byEq.set(eq, { ts, cliente });
+          }
         });
         return { total, last7, byEquipo: byEq };
       }catch(e){
@@ -174,7 +181,9 @@
       const dueMs = 60*day;
       let overdue=0, soon7=0, soon30=0, ok=0;
       const items = [];
-      for (const [eq, ts] of byEquipo.entries()){
+      for (const [eq, info] of byEquipo.entries()){
+        const ts = typeof info === 'object' && info ? info.ts : info;
+        const cliente = typeof info === 'object' && info ? (info.cliente || '') : '';
         const next = ts + dueMs;
         const delta = Math.floor((next - now)/day);
         let status = 'ok';
@@ -182,7 +191,7 @@
         else if (delta <= 7) { status = 'soon7'; soon7++; }
         else if (delta <= 30) { status = 'soon30'; soon30++; }
         else { ok++; }
-        items.push({ eq, next, delta, status });
+        items.push({ eq, cliente, next, delta, status });
       }
       items.sort((a,b)=> a.next - b.next);
       return { overdue, soon7, soon30, ok, items };
@@ -191,16 +200,91 @@
       const bar = document.getElementById('timeline-bar');
       if (!bar) return;
       bar.innerHTML = '';
+      // Ensure singleton tooltip element INSIDE the bar
+      let tip = bar.querySelector('#tl-tooltip');
+      if (!tip){
+        tip = document.createElement('div');
+        tip.id = 'tl-tooltip';
+        tip.className = 'tooltip';
+        bar.appendChild(tip);
+      }
       const now = Date.now();
-      const start = now - 7*24*3600*1000;
-      const end = now + 60*24*3600*1000;
+      const dayMs = 24*3600*1000;
+      const start = now - 7*dayMs;
+      const end = now + 60*dayMs;
       const range = end - start;
+
+      // --- Markers: today, weeks, and months ---
+      // Today marker
+      const mToday = document.createElement('div');
+      mToday.className = 'tl-marker today';
+      mToday.style.left = (Math.max(0, Math.min(1, (now - start)/range)) * 100) + '%';
+      bar.appendChild(mToday);
+
+      // Weekly markers (every 7 days from the nearest multiple of 7 after start)
+      let wCursor = start - (start % dayMs); // align to midnight
+      // shift to next 7-day step from start
+      const offsetToNext7 = ((Math.ceil((start - wCursor)/dayMs) + 7) % 7) || 7;
+      wCursor = start + offsetToNext7*dayMs;
+      for (let t = wCursor; t <= end; t += 7*dayMs) {
+        const x = (t - start) / range;
+        if (x <= 0 || x >= 1) continue;
+        const mk = document.createElement('div');
+        mk.className = 'tl-marker week';
+        mk.style.left = (x*100) + '%';
+        bar.appendChild(mk);
+      }
+
+      // Monthly markers: first day of each month within range
+      const dStart = new Date(start); dStart.setHours(0,0,0,0);
+      const dEnd = new Date(end); dEnd.setHours(0,0,0,0);
+      let mCursor = new Date(dStart.getFullYear(), dStart.getMonth()+1, 1);
+      while (mCursor.getTime() < dEnd.getTime()) {
+        const t = mCursor.getTime();
+        const x = (t - start) / range;
+        if (x > 0 && x < 1) {
+          const mk = document.createElement('div');
+          mk.className = 'tl-marker month';
+          mk.style.left = (x*100) + '%';
+          bar.appendChild(mk);
+        }
+        mCursor = new Date(mCursor.getFullYear(), mCursor.getMonth()+1, 1);
+      }
+      // Labels: Hoy, 7 días, 14 días, 1 mes
+      const labelPoints = [
+        { t: now, text: 'Hoy' },
+        { t: now + 7*dayMs, text: '7 días' },
+        { t: now + 14*dayMs, text: '14 días' },
+        { t: now + 30*dayMs, text: '1 mes' }
+      ];
+      labelPoints.forEach(lp => {
+        const x = (lp.t - start) / range;
+        if (x <= 0 || x >= 1) return;
+        const el = document.createElement('div');
+        el.className = 'tl-label';
+        el.textContent = lp.text;
+        el.style.left = (x*100) + '%';
+        bar.appendChild(el);
+      });
       items.forEach(it=>{
         const pos = Math.max(0, Math.min(1, (it.next - start)/range));
         const dot = document.createElement('span');
         dot.className = 'tl-dot ' + it.status;
         dot.style.left = (pos*100) + '%';
-        dot.title = it.eq + ' • ' + (it.delta<0?('vencida ' + Math.abs(it.delta) + ' d'):('en ' + it.delta + ' d'));
+        const daysTxt = it.delta < 0 ? `Vencida hace ${Math.abs(it.delta)} días` : `En ${it.delta} días`;
+        const clienteTxt = it.cliente ? it.cliente : '—';
+        // Custom tooltip events (place centered above the dot)
+        const updatePos = ()=>{
+          tip.style.left = dot.offsetLeft + 'px';
+          tip.style.top = '0px';
+        };
+        dot.addEventListener('mouseenter', (ev)=>{
+          tip.innerHTML = `<div class="title">${esc(it.eq)}</div><div class="muted">Cliente: ${esc(clienteTxt)}</div><div class="muted">Límite: ${esc(daysTxt)}</div>`;
+          tip.style.display = 'block';
+          updatePos();
+        });
+        dot.addEventListener('mousemove', updatePos);
+        dot.addEventListener('mouseleave', ()=>{ tip.style.display='none'; });
         bar.appendChild(dot);
       });
     }

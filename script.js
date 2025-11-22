@@ -279,6 +279,8 @@
           window.location.href = 'login.html';
           return;
         }
+        // Usuario autenticado o estamos en login: asegurar que la app sea visible
+        setAppVisible(true);
         refreshUserBox();
         applyIndexPermissions();
         applyInspectionGuard();
