@@ -283,6 +283,8 @@
           const role = await getEffectiveRole(email);
           window.currentRole = role;
           window.isAdmin = function(){ return window.currentRole === 'admin'; };
+          // Persistir email para que el header lo muestre y toggle login/logout
+          try { setCurrentEmail(email); } catch {}
         } catch {}
         
         const hasAuth = !!user;
