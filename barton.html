@@ -1,0 +1,1076 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>AK‑BARTON L‑10 7.2 — Prueba de Barómetro</title>
+    <style>
+      :root {
+        --bg: #0b1220;
+        --card: #131b2e;
+        --text: #e8eefc;
+        --muted: #9fb3d1;
+        --accent: #4f8cff;
+        --border: #22304d;
+      }
+      * { box-sizing: border-box; }
+      html, body { height: 100%; }
+      body {
+        margin: 0;
+        font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+        background: radial-gradient(1200px 600px at 50% -100px, #1b2642 0%, var(--bg) 60%);
+        color: var(--text);
+      }
+      .page {
+        min-height: 100dvh;
+        display: grid;
+        grid-template-rows: auto 1fr auto;
+      }
+      header {
+        padding: 16px 20px;
+        border-bottom: 1px solid var(--border);
+        background: linear-gradient(180deg, rgba(30,46,78,0.6), rgba(19,27,46,0.6));
+        backdrop-filter: blur(6px);
+        position: sticky;
+        top: 0;
+        z-index: 10;
+      }
+      header .title {
+        display: flex;
+        gap: 12px;
+        align-items: baseline;
+        flex-wrap: wrap;
+      }
+      header h1 { font-size: 18px; margin: 0; }
+      header .subtitle { color: var(--muted); font-size: 14px; }
+      .container {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 20px;
+        width: 100%;
+      }
+      .grid-2 {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 16px;
+      }
+      @media (min-width: 960px) {
+        .grid-2 { grid-template-columns: 360px 1fr; }
+      }
+      .card {
+        background: linear-gradient(180deg, rgba(28,40,72,0.7), rgba(19,27,46,0.9));
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.35);
+        overflow: hidden;
+      }
+      .actions {
+        display: flex;
+        gap: 10px;
+        padding: 14px;
+        border-bottom: 1px solid var(--border);
+        background: rgba(10,16,30,0.35);
+        flex-wrap: wrap;
+      }
+      .panel {
+        padding: 16px;
+        border-right: 1px solid var(--border);
+        background: rgba(10,16,30,0.25);
+      }
+      .panel h3 { margin: 0 0 10px; font-size: 14px; color: var(--muted); }
+      .field { display: grid; gap: 6px; margin-bottom: 12px; }
+      .row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+      label { font-size: 12px; color: var(--muted); }
+      input, select, textarea {
+        background: #0e162b;
+        color: var(--text);
+        border: 1px solid var(--border);
+        padding: 8px 10px;
+        border-radius: 8px;
+        font-size: 14px;
+        resize: vertical;
+      }
+      textarea { min-height: 80px; }
+      button, .link-btn {
+        appearance: none;
+        border: 1px solid var(--border);
+        background: #0e162b;
+        color: var(--text);
+        padding: 10px 14px;
+        border-radius: 8px;
+        cursor: pointer;
+        font-weight: 600;
+        font-size: 14px;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        text-decoration: none;
+      }
+      button:hover, .link-btn:hover { border-color: #35528a; background: #0c1a36; }
+      .viewer { padding: 16px; }
+      .frame {
+        display: grid;
+        place-items: center;
+        background: #0a1020;
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        overflow: hidden;
+      }
+      .frame img {
+        width: 100%;
+        height: auto;
+        display: block;
+        object-fit: contain;
+      }
+      .stage {
+        position: relative;
+        width: 100%;
+        max-width: 900px;
+        aspect-ratio: 1 / 1;
+      }
+      canvas { width: 100%; height: 100%; display: block; }
+      .sample-bg {
+        position: absolute;
+        inset: 0;
+        opacity: 0.35;
+        pointer-events: none;
+      }
+      .note {
+        color: var(--muted);
+        font-size: 13px;
+        margin-top: 10px;
+        text-align: center;
+      }
+      .legend {
+        display: inline-flex;
+        gap: 14px;
+        align-items: center;
+        font-size: 12px;
+        color: var(--muted);
+        padding: 8px 12px;
+        border: 1px solid var(--border);
+        border-radius: 999px;
+        background: rgba(10,16,30,0.25);
+      }
+      .dot { width: 10px; height: 10px; border-radius: 999px; display: inline-block; }
+      footer {
+        color: var(--muted);
+        font-size: 12px;
+        padding: 16px 20px;
+        border-top: 1px solid var(--border);
+      }
+      @media (min-width: 640px) {
+        .viewer { padding: 24px; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="page">
+      <header>
+        <div class="title container">
+          <h1>AK‑BARTON L‑10 7.2</h1>
+          <div class="subtitle">Prueba de barómetro — Plantilla</div>
+        </div>
+      </header>
+
+      <main class="container">
+        <section class="card" aria-label="Simulación de disco">
+          <div class="actions">
+            <button type="button" onclick="window.print()" title="Imprimir la vista">🖨️ Imprimir</button>
+            <button type="button" id="btn-export" title="Exportar PNG">🖼️ Exportar PNG</button>
+            <a class="link-btn" href="/" title="Volver al inicio">← Volver</a>
+            <span style="flex:1"></span>
+            <label style="display:inline-flex; align-items:center; gap:8px; font-size:13px; color:var(--muted)">
+              Muestra:
+              <select id="sample-select">
+                <option value="img/AK-BARTON-L-10-7.2.jpg">AK‑BARTON L‑10 7.2</option>
+                <option value="img/barton2.png">BARTON 2 círculos</option>
+              </select>
+            </label>
+            <label style="display:inline-flex; align-items:center; gap:8px; font-size:13px; color:var(--muted)">
+              <input type="checkbox" id="toggle-sample" checked /> Mostrar muestra
+            </label>
+          </div>
+
+          <div class="grid-2">
+            <aside class="panel">
+              <h3>Parámetros</h3>
+              <div class="field row">
+                <div>
+                  <label for="minP">Presión mín.</label>
+                  <input id="minP" type="number" step="0.1" value="0" />
+                </div>
+                <div>
+                  <label for="maxP">Presión máx.</label>
+                  <input id="maxP" type="number" step="0.1" value="100" />
+                </div>
+              </div>
+              <div class="field row">
+                <div>
+                  <label for="unit">Unidad</label>
+                  <select id="unit">
+                    <option value="psi">psi</option>
+                    <option value="bar">bar</option>
+                    <option value="kPa">kPa</option>
+                  </select>
+                </div>
+                <div>
+                  <label for="tickP">Paso retícula presión</label>
+                  <input id="tickP" type="number" step="0.1" value="10" />
+                </div>
+              </div>
+              <div class="field row">
+                <div>
+                  <label for="period">Periodo total (min para 360°)</label>
+                  <input id="period" type="number" step="1" value="60" />
+                </div>
+                <div>
+                  <label for="tickT">Paso radial tiempo (min)</label>
+                  <input id="tickT" type="number" step="1" value="5" />
+                </div>
+              </div>
+              <div class="field row">
+                <div>
+                  <label for="startTime">Hora inicio (hh:mm)</label>
+                  <input id="startTime" type="time" value="00:00" />
+                </div>
+              </div>
+              <h3>Inicio/Fin automáticos</h3>
+              <div class="field row">
+                <div>
+                  <label style="display:inline-flex; align-items:center; gap:8px"><input id="applyStart" type="checkbox" checked /> Rampa inicial</label>
+                  <div class="row">
+                    <input id="tStart" type="number" step="0.1" value="0" />
+                    <input id="pStart" type="number" step="0.1" value="0" />
+                  </div>
+                  <label style="font-size:11px; color:var(--muted)">t inicio (min), p inicio</label>
+                </div>
+                <div>
+                  <label style="display:inline-flex; align-items:center; gap:8px"><input id="applyEnd" type="checkbox" checked /> Rampa final</label>
+                  <div class="row">
+                    <input id="tEnd" type="number" step="0.1" placeholder="(= periodo)" />
+                    <input id="pEnd" type="number" step="0.1" value="0" />
+                  </div>
+                  <label style="font-size:11px; color:var(--muted)">t fin (min), p fin</label>
+                </div>
+              </div>
+              <div class="field row">
+                <div>
+                  <label for="transition">Transición entre puntos</label>
+                  <select id="transition">
+                    <option value="hold">Escalón (mantener presión estable)</option>
+                    <option value="linear">Lineal (rampa gradual)</option>
+                  </select>
+                </div>
+                <div>
+                  <label for="dt">Resolución (min por muestra)</label>
+                  <input id="dt" type="number" step="0.01" value="0.1" />
+                </div>
+                <div>
+                  <label for="autoRamp">&nbsp;</label>
+                  <label style="display:inline-flex; align-items:center; gap:8px"><input id="autoRamp" type="checkbox" checked /> Auto‑rampa si Δp≠0</label>
+                </div>
+              </div>
+              <div class="field">
+                <label for="seriesA">Serie A (CSV: min,valor por línea)</label>
+                <textarea id="seriesA" placeholder="0,20\n10,35\n25,50\n45,60\n60,40"></textarea>
+                <div class="row">
+                  <div>
+                    <label for="colorA">Color A</label>
+                    <input id="colorA" type="color" value="#4f8cff" />
+                  </div>
+                  <div>
+                    <label for="showA">&nbsp;</label>
+                    <label style="display:inline-flex; align-items:center; gap:8px"><input id="showA" type="checkbox" checked />Mostrar A</label>
+                  </div>
+                </div>
+              </div>
+              <div class="field">
+                <label for="seriesB">Serie B (CSV: min,valor por línea)</label>
+                <textarea id="seriesB" placeholder="0,30\n10,45\n25,55\n45,65\n60,50"></textarea>
+                <div class="row">
+                  <div>
+                    <label for="colorB">Color B</label>
+                    <input id="colorB" type="color" value="#22c55e" />
+                  </div>
+                  <div>
+                    <label for="showB">&nbsp;</label>
+                    <label style="display:inline-flex; align-items:center; gap:8px"><input id="showB" type="checkbox" checked />Mostrar B</label>
+                  </div>
+                </div>
+              </div>
+              <div class="field">
+                <label for="seriesC">Serie C (falla/fuga — CSV: min,valor por línea)</label>
+                <textarea id="seriesC" placeholder="0,0\n0.9,20\n15,19\n21.8,40\n36,38\n42.7,60\n57,57\n60,54\n63,50\n66,45\n69,40\n72,35\n75,30\n90,15\n95,0"></textarea>
+                <div class="row">
+                  <div>
+                    <label for="colorC">Color C</label>
+                    <input id="colorC" type="color" value="#ff3d71" />
+                  </div>
+                  <div>
+                    <label for="showC">&nbsp;</label>
+                    <label style="display:inline-flex; align-items:center; gap:8px"><input id="showC" type="checkbox" checked />Mostrar C</label>
+                  </div>
+                </div>
+              </div>
+              <div class="field row">
+                <label style="display:inline-flex; align-items:center; gap:8px"><input id="smooth" type="checkbox" /> Suavizar trazos</label>
+              </div>
+              <h3>Alineación</h3>
+              <div class="field row">
+                <div>
+                  <label for="angleOffset">Offset angular (°)</label>
+                  <input id="angleOffset" type="number" step="0.1" value="0" />
+                </div>
+                <div>
+                  <label for="rScale">Escala radial</label>
+                  <input id="rScale" type="number" step="0.01" value="1" />
+                </div>
+              </div>
+              <div class="field row">
+                <div>
+                  <label for="centerX">Centro X (px)</label>
+                  <input id="centerX" type="number" step="1" value="0" />
+                </div>
+                <div>
+                  <label for="centerY">Centro Y (px)</label>
+                  <input id="centerY" type="number" step="1" value="0" />
+                </div>
+              </div>
+              <div class="field row">
+                <div>
+                  <label for="sampleOpacity">Opacidad muestra (0–1)</label>
+                  <input id="sampleOpacity" type="number" step="0.05" value="0.35" />
+                </div>
+              </div>
+              <div class="field row">
+                <button id="btn-draw" type="button">Dibujar</button>
+                <button id="btn-clear" type="button">Limpiar</button>
+              </div>
+              <h3>Protocolo estándar</h3>
+              <div class="field row">
+                <div>
+                  <label for="holdMin">Estabilización (min)</label>
+                  <input id="holdMin" type="number" step="0.1" value="20" />
+                </div>
+                <div>
+                  <label for="rampUpMax">Rampa subida (min, < 1)</label>
+                  <input id="rampUpMax" type="number" step="0.1" value="0.9" />
+                </div>
+                <div>
+                  <label for="rampDown60">Rampa 60→0 (min)</label>
+                  <input id="rampDown60" type="number" step="0.1" value="3" />
+                </div>
+              </div>
+              <h3>Depresurización</h3>
+              <div class="field row">
+                <div>
+                  <label style="display:inline-flex; align-items:center; gap:8px"><input id="showDepress" type="checkbox" checked /> Mostrar línea</label>
+                </div>
+                <div>
+                  <label for="colorDepress">Color</label>
+                  <input id="colorDepress" type="color" value="#cccccc" />
+                </div>
+              </div>
+              <div class="field row">
+                <button id="stdA" type="button">Estandarizar Serie A</button>
+                <button id="stdB" type="button">Estandarizar Serie B</button>
+              </div>
+              <h3>Evaluación Serie C (falla)</h3>
+              <div class="field row">
+                <div>
+                  <label for="tolPsi">Tolerancia presión (±psi)</label>
+                  <input id="tolPsi" type="number" step="0.1" value="0.5" />
+                </div>
+                <div>
+                  <label for="epsMin">Tolerancia tiempo (±min)</label>
+                  <input id="epsMin" type="number" step="0.05" value="0.1" />
+                </div>
+                <div>
+                  <label>&nbsp;</label>
+                  <button id="btn-eval" type="button">Evaluar C</button>
+                </div>
+              </div>
+              <p class="note" style="text-align:left">Consejo: El tiempo se mapea a ángulo (0–360°) y la presión al radio. Ajusta el periodo al disco real (p.ej. 60 min, 12 h, 24 h).</p>
+            </aside>
+
+            <div class="viewer">
+              <div class="frame">
+                <div class="stage">
+                  <img id="sample" class="sample-bg" src="img/AK-BARTON-L-10-7.2.jpg" alt="Muestra AK‑BARTON L‑10 7.2" />
+                  <canvas id="chart"></canvas>
+                  <div id="tooltip" style="position:absolute; pointer-events:none; background:#0e162bcc; color:#e8eefc; font-size:12px; padding:6px 8px; border:1px solid #22304d; border-radius:6px; display:none; transform: translate(-50%, -120%);"></div>
+                </div>
+              </div>
+              <div class="note" style="display:flex; justify-content:center;">
+                <div class="legend">
+                  <span class="dot" id="legendA" style="background:#4f8cff"></span> Serie A
+                  <span class="dot" id="legendB" style="background:#b1f82c"></span> Serie B
+                  <span class="dot" id="legendC" style="background:#ff0044cb"></span> Serie C
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+      </main>
+
+      <footer>
+        <div class="container">© <span id="y"></span> Prueba de barómetro — AK‑BARTON L‑10 7.2</div>
+      </footer>
+    </div>
+
+    <script>
+      document.getElementById('y').textContent = new Date().getFullYear();
+
+      const canvas = document.getElementById('chart');
+      const ctx = canvas.getContext('2d');
+      const sampleEl = document.getElementById('sample');
+      const toggleSample = document.getElementById('toggle-sample');
+      const sampleSelect = document.getElementById('sample-select');
+
+      function resizeCanvas() {
+        const rect = canvas.parentElement.getBoundingClientRect();
+        const size = Math.min(rect.width, rect.height);
+        // Ensure crisp lines on HiDPI
+        const dpr = Math.max(1, window.devicePixelRatio || 1);
+        canvas.width = Math.floor(size * dpr);
+        canvas.height = Math.floor(size * dpr);
+        canvas.style.width = size + 'px';
+        canvas.style.height = size + 'px';
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        drawAll();
+      }
+
+      window.addEventListener('resize', resizeCanvas);
+      toggleSample.addEventListener('change', () => {
+        sampleEl.style.display = toggleSample.checked ? 'block' : 'none';
+      });
+      sampleSelect.addEventListener('change', ()=>{
+        sampleEl.src = sampleSelect.value;
+      });
+
+      function getParams() {
+        const minP = parseFloat(document.getElementById('minP').value || '0');
+        const maxP = parseFloat(document.getElementById('maxP').value || '100');
+        const unit = document.getElementById('unit').value;
+        const tickP = Math.max(0.0001, parseFloat(document.getElementById('tickP').value || '10'));
+        const period = Math.max(0.0001, parseFloat(document.getElementById('period').value || '60'));
+        const tickT = Math.max(0.0001, parseFloat(document.getElementById('tickT').value || '5'));
+        const startTimeStr = (document.getElementById('startTime').value || '00:00').trim();
+        let startMinutes = 0; {
+          const m = startTimeStr.match(/^(\d{1,2}):(\d{2})$/);
+          if (m) { startMinutes = (parseInt(m[1],10)%24)*60 + (parseInt(m[2],10)%60); }
+        }
+        const seriesRawA = document.getElementById('seriesA').value.trim();
+        const seriesA = seriesRawA.length ? seriesRawA.split(/\n+/).map(l=>{
+          const [t,p] = l.split(/[,;\s]+/).map(x=>parseFloat(x));
+          return { t, p };
+        }).filter(v=>Number.isFinite(v.t) && Number.isFinite(v.p)) : [];
+        const seriesRawB = document.getElementById('seriesB').value.trim();
+        const seriesB = seriesRawB.length ? seriesRawB.split(/\n+/).map(l=>{
+          const [t,p] = l.split(/[,;\s]+/).map(x=>parseFloat(x));
+          return { t, p };
+        }).filter(v=>Number.isFinite(v.t) && Number.isFinite(v.p)) : [];
+        const colorA = document.getElementById('colorA').value;
+        const colorB = document.getElementById('colorB').value;
+        const seriesRawC = document.getElementById('seriesC').value.trim();
+        const seriesC = seriesRawC.length ? seriesRawC.split(/\n+/).map(l=>{
+          const [t,p] = l.split(/[,;\s]+/).map(x=>parseFloat(x));
+          return { t, p };
+        }).filter(v=>Number.isFinite(v.t) && Number.isFinite(v.p)) : [];
+        const showA = document.getElementById('showA').checked;
+        const showB = document.getElementById('showB').checked;
+        const colorC = document.getElementById('colorC').value;
+        const showC = document.getElementById('showC').checked;
+        const smooth = document.getElementById('smooth').checked;
+        const transition = document.getElementById('transition').value; // 'hold' | 'linear'
+        const dt = Math.max(0.0001, parseFloat(document.getElementById('dt').value || '0.1'));
+        const angleOffset = parseFloat(document.getElementById('angleOffset').value || '0');
+        const rScale = parseFloat(document.getElementById('rScale').value || '1');
+        const centerX = parseFloat(document.getElementById('centerX').value || '0');
+        const centerY = parseFloat(document.getElementById('centerY').value || '0');
+        const sampleOpacity = Math.max(0, Math.min(1, parseFloat(document.getElementById('sampleOpacity').value || '0.35')));
+        const autoRamp = document.getElementById('autoRamp').checked;
+        const applyStart = document.getElementById('applyStart').checked;
+        const tStart = parseFloat(document.getElementById('tStart').value || '0');
+        const pStart = parseFloat(document.getElementById('pStart').value || '0');
+        const applyEnd = document.getElementById('applyEnd').checked;
+        const tEndRaw = document.getElementById('tEnd').value;
+        const tEnd = tEndRaw === '' ? period : parseFloat(tEndRaw);
+        const pEnd = parseFloat(document.getElementById('pEnd').value || '0');
+        const showDepress = document.getElementById('showDepress').checked;
+        const colorDepress = document.getElementById('colorDepress').value;
+        return { minP, maxP, unit, tickP, period, tickT, seriesA, seriesB, seriesC, colorA, colorB, colorC, showA, showB, showC, smooth, transition, dt, angleOffset, rScale, centerX, centerY, sampleOpacity, startMinutes, autoRamp, applyStart, tStart, pStart, applyEnd, tEnd, pEnd, showDepress, colorDepress };
+      }
+
+      function drawGrid(params) {
+        const { minP, maxP, unit, tickP, period, tickT, rScale, centerX, centerY, sampleOpacity } = params;
+        sampleEl.style.opacity = String(sampleOpacity);
+        const w = canvas.width / (window.devicePixelRatio||1);
+        const h = canvas.height / (window.devicePixelRatio||1);
+        const cx = w/2 + centerX, cy = h/2 + centerY;
+        const radius = Math.min(w,h)*0.48 * rScale;
+        const inner = radius*0.08;
+        ctx.clearRect(0,0,w,h);
+
+        // Base
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.strokeStyle = '#22304d';
+        ctx.fillStyle = '#0a1020';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.arc(0,0,radius,0,Math.PI*2);
+        ctx.fill();
+        ctx.stroke();
+
+        // Concentric pressure rings
+        const rangeP = maxP - minP;
+        const stepsP = Math.floor(rangeP / tickP);
+        for (let i=0; i<=stepsP; i++) {
+          const pVal = minP + i*tickP;
+          const r = inner + (radius - inner) * ((pVal - minP) / rangeP);
+          ctx.beginPath();
+          ctx.arc(0,0,r,0,Math.PI*2);
+          ctx.strokeStyle = i % 5 === 0 ? '#33507f' : '#22304d';
+          ctx.stroke();
+          if (i % 2 === 0) {
+            ctx.fillStyle = '#9fb3d1';
+            ctx.font = '12px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto';
+            ctx.textAlign = 'left';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(pVal.toFixed(2)+ ' ' + unit, r+6, 0);
+          }
+        }
+
+        // Time spokes
+        const full = Math.ceil(period / tickT);
+        for (let i=0; i<full; i++) {
+          const t = i * tickT;
+          const ang = (t/period) * Math.PI*2 - Math.PI/2; // 0 min at top
+          ctx.beginPath();
+          ctx.moveTo(Math.cos(ang)*inner, Math.sin(ang)*inner);
+          ctx.lineTo(Math.cos(ang)*radius, Math.sin(ang)*radius);
+          ctx.strokeStyle = i % 6 === 0 ? '#33507f' : '#22304d';
+          ctx.stroke();
+          if (i % 6 === 0) {
+            // label
+            ctx.save();
+            const lr = radius + 18;
+            ctx.translate(Math.cos(ang)*lr, Math.sin(ang)*lr);
+            ctx.rotate(ang + Math.PI/2);
+            ctx.fillStyle = '#9fb3d1';
+            ctx.font = '12px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(t + ' min', 0, 0);
+            ctx.restore();
+          }
+        }
+
+        // Center hub
+        ctx.beginPath();
+        ctx.arc(0,0,inner*0.7,0,Math.PI*2);
+        ctx.fillStyle = '#101a34';
+        ctx.fill();
+        ctx.strokeStyle = '#22304d';
+        ctx.stroke();
+
+        // Title
+        ctx.fillStyle = '#e8eefc';
+        ctx.font = '600 14px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto';
+        ctx.textAlign = 'center';
+        ctx.fillText('AK‑BARTON L‑10 7.2 — Simulación', 0, -radius - 24);
+
+        ctx.restore();
+      }
+
+      const lastGeom = { A: { keys: [] }, B: { keys: [] }, C: { keys: [] } };
+
+      function drawOneSeries(ptsInput, color, params, seriesId) {
+        const { minP, maxP, period, smooth, transition, dt, angleOffset, rScale, centerX, centerY, autoRamp, applyStart, tStart, pStart, applyEnd, tEnd, pEnd } = params;
+        if (!ptsInput.length) return;
+        const w = canvas.width / (window.devicePixelRatio||1);
+        const h = canvas.height / (window.devicePixelRatio||1);
+        const cx = w/2 + centerX, cy = h/2 + centerY;
+        const radius = Math.min(w,h)*0.48 * rScale;
+        const inner = radius*0.08;
+        const rangeP = maxP - minP;
+        const toRadius = (p) => inner + (radius - inner) * ((p - minP) / rangeP);
+        const toAngle = (t) => (t / period) * Math.PI * 2 - Math.PI / 2 + (angleOffset * Math.PI / 180);
+
+        // Sort by time and clamp
+        let key = [...ptsInput].sort((a,b)=>a.t-b.t).map(({t,p})=> (
+          {
+          t: Math.max(0, Math.min(period, t)),
+          p: Math.max(minP, Math.min(maxP, p))
+        }));
+
+        // Inject start/end ramps if enabled
+        if (key.length) {
+          const first = key[0];
+          if (applyStart && tStart < first.t) {
+            key.unshift({ t: Math.max(0, tStart), p: Math.max(minP, Math.min(maxP, pStart)) });
+          }
+          const last = key[key.length-1];
+          if (applyEnd && tEnd > last.t) {
+            key.push({ t: Math.min(period, tEnd), p: Math.max(minP, Math.min(maxP, pEnd)) });
+          }
+        }
+
+        // Build sampled points along time to create arcs/spirals
+        const samples = [];
+        for (let i = 0; i < key.length - 1; i++) {
+          const a = key[i];
+          const b = key[i + 1];
+          const tStart = a.t, tEnd = b.t;
+          if (tEnd <= tStart) continue;
+          const step = Math.max(1e-6, dt);
+          const segHasRamp = a.p !== b.p;
+          const segMode = (transition === 'linear' || (transition === 'hold' && autoRamp && segHasRamp)) ? 'linear' : 'hold';
+          for (let t = tStart; t < tEnd; t += step) {
+            let p;
+            if (segMode === 'hold') {
+              // hold pressure until the next timestamp: arc
+              p = a.p;
+            } else {
+              // linear ramp between a and b: spiral
+              const u = (t - tStart) / (tEnd - tStart);
+              p = a.p + (b.p - a.p) * u;
+            }
+            samples.push({ t, p });
+          }
+          // add the boundary point at the end segment
+          samples.push({ t: tEnd, p: segMode === 'hold' ? a.p : b.p });
+          // if hold mode, add the instantaneous jump as a short radial line for visibility
+          if (segMode === 'hold' && segHasRamp) {
+            const nJump = Math.max(2, Math.ceil(1 / step));
+            for (let j = 1; j <= nJump; j++) {
+              const u = j / nJump;
+              samples.push({ t: tEnd, p: a.p + (b.p - a.p) * u });
+            }
+          }
+        }
+
+        // Draw path
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 2;
+        if (!smooth) {
+          ctx.beginPath();
+          for (let i = 0; i < samples.length; i++) {
+            const ang = toAngle(samples[i].t);
+            const r = toRadius(samples[i].p);
+            const x = Math.cos(ang) * r;
+            const y = Math.sin(ang) * r;
+            if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+          }
+          ctx.stroke();
+        } else {
+          const toXY = (pt) => {
+            const ang = toAngle(pt.t); const r = toRadius(pt.p);
+            return { x: Math.cos(ang) * r, y: Math.sin(ang) * r };
+          };
+          const ptsXY = samples.map(toXY);
+          if (ptsXY.length >= 2) {
+            ctx.beginPath();
+            ctx.moveTo(ptsXY[0].x, ptsXY[0].y);
+            for (let i = 0; i < ptsXY.length - 1; i++) {
+              const p0 = ptsXY[i - 1] || ptsXY[i];
+              const p1 = ptsXY[i];
+              const p2 = ptsXY[i + 1];
+              const p3 = ptsXY[i + 2] || p2;
+              const t = 0.5;
+              const cp1x = p1.x + (p2.x - p0.x) * t / 3;
+              const cp1y = p1.y + (p2.y - p0.y) * t / 3;
+              const cp2x = p2.x - (p3.x - p1.x) * t / 3;
+              const cp2y = p2.y - (p3.y - p1.y) * t / 3;
+              ctx.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, p2.x, p2.y);
+            }
+            ctx.stroke();
+          }
+        }
+
+        // Points (key timestamps)
+        ctx.fillStyle = color + 'cc';
+        const thisKeys = [];
+        for (let i = 0; i < key.length; i++) {
+          const pt = key[i];
+          const ang = toAngle(pt.t); const r = toRadius(pt.p);
+          const x = Math.cos(ang) * r; const y = Math.sin(ang) * r;
+          ctx.beginPath(); ctx.arc(x, y, 3, 0, Math.PI * 2); ctx.fill();
+          thisKeys.push({ x: cx + x, y: cy + y, t: pt.t, p: pt.p, index: i });
+        }
+        lastGeom[seriesId] = { keys: thisKeys };
+        ctx.restore();
+      }
+
+      function drawAll() {
+        const params = getParams();
+        drawGrid(params);
+        const legendA = document.getElementById('legendA');
+        const legendB = document.getElementById('legendB');
+        const legendC = document.getElementById('legendC');
+        legendA.style.background = params.colorA;
+        legendB.style.background = params.colorB;
+        legendC.style.background = params.colorC;
+        if (params.showA) drawOneSeries(params.seriesA, params.colorA, params, 'A');
+        if (params.showB) drawOneSeries(params.seriesB, params.colorB, params, 'B');
+        if (params.showC) drawOneSeries(params.seriesC, params.colorC, params, 'C');
+
+        // Annotate start time near first dot of visible series
+        const seriesOrder = [ ['A', params.colorA, params.showA], ['B', params.colorB, params.showB] ];
+        for (const [sid, col, show] of seriesOrder) {
+          if (!show || !lastGeom[sid].keys.length) continue;
+          const k0 = lastGeom[sid].keys[0];
+          const w = canvas.width / (window.devicePixelRatio||1);
+          const h = canvas.height / (window.devicePixelRatio||1);
+          ctx.save();
+          ctx.fillStyle = '#e8eefc';
+          ctx.font = '12px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto';
+          ctx.textAlign = 'left';
+          ctx.textBaseline = 'bottom';
+          const tAbs = (params.startMinutes + k0.t) % 1440;
+          const hh = Math.floor(tAbs/60).toString().padStart(2,'0');
+          const mm = Math.floor(tAbs%60).toString().padStart(2,'0');
+          ctx.fillText(`Inicio ${hh}:${mm}`, k0.x + 6, k0.y - 6);
+          ctx.restore();
+          break; // solo una etiqueta de inicio
+        }
+
+        // Depressurization radial line from max pressure point to 0
+        if (params.showDepress) {
+          const seriesList = [ ['A', params.colorA, params.showA, params.seriesA], ['B', params.colorB, params.showB, params.seriesB], ['C', params.colorC, params.showC, params.seriesC] ];
+          for (const [sid, col, show, src] of seriesList) {
+            if (!show || !lastGeom[sid].keys.length) continue;
+            // find max pressure in source
+            let maxIdx = 0; let maxP = -Infinity;
+            const sorted = [...src].sort((a,b)=>a.t-b.t);
+            for (let i=0;i<sorted.length;i++){ if (sorted[i].p>maxP){ maxP=sorted[i].p; maxIdx=i; } }
+            // choose the LAST index where p == maxP before it decreases (end of hold at max)
+            let startIdx = maxIdx;
+            for (let i=maxIdx; i<sorted.length-1; i++) {
+              if (sorted[i].p === maxP && sorted[i+1].p === maxP) { startIdx = i+1; continue; }
+              if (sorted[i].p === maxP && sorted[i+1].p < maxP) { startIdx = i; break; }
+            }
+            const keyIdx = Math.min(startIdx, lastGeom[sid].keys.length-1);
+            const maxKey = lastGeom[sid].keys[keyIdx];
+            const w = canvas.width / (window.devicePixelRatio||1);
+            const h = canvas.height / (window.devicePixelRatio||1);
+            const cx = w/2 + params.centerX, cy = h/2 + params.centerY;
+            const radius = Math.min(w,h)*0.48 * params.rScale;
+            const inner = radius*0.08; // ~cerca del cero
+            const t0 = sorted[Math.min(startIdx, sorted.length-1)].t;
+            const ang = (t0/params.period) * Math.PI*2 - Math.PI/2 + (params.angleOffset * Math.PI/180);
+            const rEnd = inner;
+            const x2 = cx + Math.cos(ang)*rEnd;
+            const y2 = cy + Math.sin(ang)*rEnd;
+
+            // Draw dashed radial line (absolute coordinates)
+            ctx.save();
+            ctx.setLineDash([6,6]);
+            ctx.strokeStyle = params.colorDepress;
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(maxKey.x, maxKey.y);
+            ctx.lineTo(x2, y2);
+            ctx.stroke();
+
+            // Label descent time (from max to next point with p=0 if exists)
+            let t1 = t0;
+            for (let i=maxIdx+1; i<sorted.length; i++) { if (sorted[i].p <= 0) { t1 = sorted[i].t; break; } }
+            const dtDesc = Math.max(0, t1 - t0);
+            const midx = (maxKey.x + x2)/2, midy = (maxKey.y + y2)/2;
+            ctx.setLineDash([]);
+            ctx.fillStyle = params.colorDepress;
+            ctx.font = '12px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'bottom';
+            ctx.fillText(`${dtDesc.toFixed(2)} min`, midx, midy - 6);
+            ctx.restore();
+          }
+        }
+      }
+
+      // Tooltip handling for key points (psi changes)
+      const tooltip = document.getElementById('tooltip');
+      const stageEl = document.querySelector('.stage');
+      function showTooltip(x, y, html) {
+        tooltip.style.left = x + 'px';
+        tooltip.style.top = y + 'px';
+        tooltip.innerHTML = html;
+        tooltip.style.display = 'block';
+      }
+      function hideTooltip() { tooltip.style.display = 'none'; }
+
+      canvas.addEventListener('mouseleave', hideTooltip);
+      canvas.addEventListener('mousemove', (e)=>{
+        const rect = canvas.getBoundingClientRect();
+        const srect = stageEl.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+        const params = getParams();
+        const candidates = [];
+        for (const sid of ['A','B','C']) {
+          const keys = (lastGeom[sid] && lastGeom[sid].keys) || [];
+          for (let i=0; i<keys.length; i++) {
+            const k = keys[i];
+            const dx = k.x - x, dy = k.y - y; const d2 = dx*dx + dy*dy;
+            candidates.push({ d2, sid, k, i });
+          }
+        }
+        if (!candidates.length) { hideTooltip(); return; }
+        candidates.sort((a,b)=>a.d2-b.d2);
+        const best = candidates[0];
+        const thresh = 12*12; // px^2
+        if (best.d2 > thresh) { hideTooltip(); return; }
+        const sid = best.sid; const k = best.k; const idx = best.i;
+        // Rate and delta info vs next point if any
+        const source = sid==='A'? params.seriesA : params.seriesB;
+        const sorted = [...source].sort((a,b)=>a.t-b.t);
+        const next = idx < sorted.length-1 ? sorted[idx+1] : null;
+        let rateTxt = '';
+        if (next && next.t>k.t) {
+          const dp = next.p - k.p; const dtm = next.t - k.t; const rate = dp/dtm;
+          rateTxt = `<br/>Δp ${dp.toFixed(2)} ${params.unit} en ${dtm.toFixed(1)} min (≈ ${rate.toFixed(3)} ${params.unit}/min)`;
+        }
+        const tAbs = (params.startMinutes + k.t) % 1440;
+        const hh = Math.floor(tAbs/60).toString().padStart(2,'0');
+        const mm = Math.floor(tAbs%60).toString().padStart(2,'0');
+        const html = `<b>Serie ${sid}</b><br/>t ${k.t.toFixed(2)} min • ${hh}:${mm}<br/>p ${k.p.toFixed(2)} ${params.unit}${rateTxt}`;
+        // constrain tooltip within stage
+        const tx = Math.max(8, Math.min(k.x, srect.width-8));
+        const ty = Math.max(8, Math.min(k.y, srect.height-8));
+        showTooltip(tx, ty, html);
+      });
+
+      // Build standardized series given pressure targets
+      function buildStandardSeries(targets, holdMin, rampUpMax, rampDown60) {
+        // targets is array like [0,20,40,60]
+        const out = [];
+        let t = 0;
+        for (let i=1; i<targets.length; i++) {
+          const pPrev = targets[i-1];
+          const p = targets[i];
+          // ramp up duration (<1 min), use rampUpMax
+          t += Math.min(rampUpMax, 0.99);
+          out.push({ t, p });
+          // hold 20 min at intermediate plateaus except last 60
+          if (i < targets.length-1) {
+            const hold = holdMin;
+            t += hold;
+            out.push({ t, p });
+          }
+        }
+        // final 60->0 ramp
+        t += rampDown60;
+        out.push({ t, p: 0 });
+        return out;
+      }
+
+      function applyStandardize(targetId) {
+        const hold = parseFloat(document.getElementById('holdMin').value || '20');
+        const rampUpMax = parseFloat(document.getElementById('rampUpMax').value || '0.9');
+        const rampDown60 = parseFloat(document.getElementById('rampDown60').value || '3');
+        const arr = buildStandardSeries([0,20,40,60], hold, rampUpMax, rampDown60);
+        const lines = arr.map(({t,p})=> `${t.toFixed(2)},${p.toFixed(2)}`).join('\n');
+        document.getElementById(targetId).value = lines;
+      }
+
+      document.getElementById('stdA').addEventListener('click', ()=>{ applyStandardize('seriesA'); drawAll(); });
+      document.getElementById('stdB').addEventListener('click', ()=>{ applyStandardize('seriesB'); drawAll(); });
+
+      document.getElementById('btn-export').addEventListener('click', ()=>{
+        const link = document.createElement('a');
+        link.download = 'ak-barton-l10-7.2-simulacion.png';
+        link.href = canvas.toDataURL('image/png');
+        link.click();
+      });
+
+      document.getElementById('btn-draw').addEventListener('click', drawAll);
+      document.getElementById('btn-clear').addEventListener('click', ()=>{
+        document.getElementById('seriesA').value = '';
+        document.getElementById('seriesB').value = '';
+        drawAll();
+      });
+      // Defaults: Linear transition, Series A and B prefilled (B desplazada en tiempo)
+      (function seedDefaults(){
+        const a = [
+          '0,0',
+          '0.90,20',
+          '20.90,20',
+          '21.80,40',
+          '41.80,40',
+          '42.70,60',
+          '62.70,60',
+          '65.70,0'
+        ].join('\n');
+        const b = [
+          '5,0',
+          '5.80,20',
+          '25.80,20',
+          '26.60,40',
+          '46.60,40',
+          '47.40,60',
+          '67.40,60',
+          '70.40,0'
+        ].join('\n');
+        const c = [
+          '0,0',
+          '0.90,20',
+          '20,19',
+          '21.80,40',
+          '41.00,38',
+          '42.70,60',
+          '62.00,58',
+          '64.00,55',
+          '68.00,50',
+          '72.00,45',
+          '76.00,40',
+          '80.00,35',
+          '85.00,25',
+          '90.00,15',
+          '95.00,0'
+        ].join('\n');
+        document.getElementById('seriesA').value = a;
+        document.getElementById('seriesB').value = b;
+        document.getElementById('seriesC').value = c;
+        document.getElementById('transition').value = 'linear';
+      })();
+      document.getElementById('legendA').style.background = document.getElementById('colorA').value;
+      document.getElementById('legendB').style.background = document.getElementById('colorB').value;
+      document.getElementById('sample-select').value = 'img/AK-BARTON-L-10-7.2.jpg';
+      resizeCanvas();
+      drawAll();
+
+      // -------- Evaluación Serie C (falla) ---------
+      function sortSeries(arr){ return [...arr].sort((a,b)=>a.t-b.t); }
+      function clamp(v,min,max){ return Math.max(min, Math.min(max, v)); }
+      function lerp(a,b,u){ return a + (b-a)*u; }
+
+      function timeAtPressure(sorted, target){
+        for (let i=0;i<sorted.length-1;i++){
+          const a=sorted[i], b=sorted[i+1];
+          if ((a.p-target)*(b.p-target)===0){
+            if (a.p===target) return a.t;
+            if (b.p===target) return b.t;
+          }
+          const rising = (b.p>a.p && target>=Math.min(a.p,b.p) && target<=Math.max(a.p,b.p));
+          const falling = (b.p<a.p && target>=Math.min(a.p,b.p) && target<=Math.max(a.p,b.p));
+          if (rising || falling){
+            const u = (target-a.p)/((b.p-a.p)||1e-9);
+            if (u>=0 && u<=1) return lerp(a.t,b.t,u);
+          }
+        }
+        return null;
+      }
+      function bandEntryExit(sorted, target, tol){
+        const low = target - tol, high = target + tol;
+        let inBand=false, tIn=null; const windows=[];
+        for (let i=0;i<sorted.length-1;i++){
+          const a=sorted[i], b=sorted[i+1];
+          const aIn = a.p>=low && a.p<=high;
+          const bIn = b.p>=low && b.p<=high;
+          if (!inBand && (aIn||bIn)){
+            // find entry by solving for boundary if needed
+            if (aIn){ tIn = a.t; }
+            else {
+              const u = (clamp(a.p,low,high)-a.p)/((b.p-a.p)||1e-9); // approximate at low boundary
+              tIn = lerp(a.t,b.t, clamp(u,0,1));
+            }
+            inBand=true;
+          }
+          if (inBand && !bIn){
+            // exit at boundary
+            const targetP = (b.p>a.p)? high : low;
+            const u = (targetP-a.p)/((b.p-a.p)||1e-9);
+            const tOut = lerp(a.t,b.t, clamp(u,0,1));
+            windows.push([tIn, tOut]);
+            inBand=false; tIn=null;
+          }
+        }
+        if (inBand && tIn!=null){ windows.push([tIn, sorted[sorted.length-1].t]); }
+        // pick the longest window
+        let best=null, bestDur=-1; for (const w of windows){ const d=w[1]-w[0]; if (d>bestDur){ bestDur=d; best=w; } }
+        return best; // [tIn,tOut] or null
+      }
+
+      function drawMarkerAtTP(params, t, p, text){
+        const w = canvas.width / (window.devicePixelRatio||1);
+        const h = canvas.height / (window.devicePixelRatio||1);
+        const cx = w/2 + params.centerX, cy = h/2 + params.centerY;
+        const radius = Math.min(w,h)*0.48 * params.rScale;
+        const inner = radius*0.08;
+        const rangeP = params.maxP - params.minP;
+        const toRadius = (pp)=> inner + (radius - inner) * ((pp - params.minP) / rangeP);
+        const ang = (t/params.period) * Math.PI*2 - Math.PI/2 + (params.angleOffset * Math.PI/180);
+        const r = toRadius(p);
+        const x = cx + Math.cos(ang)*r, y = cy + Math.sin(ang)*r;
+        ctx.save();
+        ctx.fillStyle = '#ff3d71';
+        ctx.strokeStyle = '#ff3d71';
+        ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(x-4,y-4); ctx.lineTo(x+4,y+4); ctx.moveTo(x-4,y+4); ctx.lineTo(x+4,y-4); ctx.stroke();
+        if (text){
+          ctx.font = '12px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto';
+          ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+          ctx.fillText(text, x+6, y+6);
+        }
+        ctx.restore();
+      }
+
+      function evaluateC(){
+        const params = getParams();
+        const issuesEl = document.getElementById('issues');
+        issuesEl.textContent = '';
+        const C = sortSeries(params.seriesC);
+        if (!C.length){ issuesEl.textContent = 'Serie C vacía.'; return; }
+        const tolPsi = parseFloat(document.getElementById('tolPsi').value || '0.5');
+        const epsMin = parseFloat(document.getElementById('epsMin').value || '0.1');
+        const reqHold = 20.0; const maxRamp = 0.99; const reqDescent = 3.0;
+        const lines=[];
+
+        // Ramps durations 0->20, 20->40, 40->60
+        const t0 = timeAtPressure(C, 0) ?? (C[0]?.t||0);
+        const t20 = timeAtPressure(C, 20);
+        const t40 = timeAtPressure(C, 40);
+        const t60 = timeAtPressure(C, 60);
+        if (t20!=null && t0!=null){ const d=t20-t0; if (d>maxRamp+epsMin){ lines.push(`Rampa 0→20 lenta: ${d.toFixed(2)} min (> ${maxRamp})`); drawMarkerAtTP(params, (t0+t20)/2, 20, `${d.toFixed(2)}m`);} }
+        if (t40!=null && t20!=null){ const d=t40-t20; if (d>maxRamp+epsMin){ lines.push(`Rampa 20→40 lenta: ${d.toFixed(2)} min (> ${maxRamp})`); drawMarkerAtTP(params, (t20+t40)/2, 40, `${d.toFixed(2)}m`);} }
+        if (t60!=null && t40!=null){ const d=t60-t40; if (d>maxRamp+epsMin){ lines.push(`Rampa 40→60 lenta: ${d.toFixed(2)} min (> ${maxRamp})`); drawMarkerAtTP(params, (t40+t60)/2, 60, `${d.toFixed(2)}m`);} }
+
+        // Holds at 20/40/60 ~20min and drift within tolPsi
+        for (const target of [20,40,60]){
+          const win = bandEntryExit(C, target, tolPsi);
+          if (!win){ lines.push(`Sin estabilidad en ${target}±${tolPsi} psi`); continue; }
+          const dur = win[1]-win[0];
+          if (Math.abs(dur-reqHold)>epsMin){ lines.push(`Estabilidad en ${target} psi = ${dur.toFixed(2)} min (≠ ${reqHold})`); drawMarkerAtTP(params, (win[0]+win[1])/2, target, `${dur.toFixed(1)}m`); }
+          // drift: check endpoints inside band but trend slope small
+          const pStart = target; const pEnd = target; // within band already
+          // If C muestra caída (valores fuera de banda), already flagged by duration shorter than 20
+        }
+
+        // Descent 60->0 ~ 3 min from end of 60 hold
+        if (t60!=null){
+          const win60 = bandEntryExit(C, 60, tolPsi);
+          if (win60){
+            const tStartDesc = win60[1];
+            const tZero = timeAtPressure(C, 0);
+            if (tZero!=null && tZero>tStartDesc){
+              const d = tZero - tStartDesc;
+              if (Math.abs(d-reqDescent)>epsMin){ lines.push(`Despresurización 60→0 = ${d.toFixed(2)} min (≠ ${reqDescent})`); drawMarkerAtTP(params, (tStartDesc+tZero)/2, 30, `${d.toFixed(2)}m`); }
+            } else {
+              lines.push('No se encontró 0 psi después de 60 psi para calcular despresurización');
+            }
+          }
+        }
+
+        issuesEl.textContent = lines.length? ('Hallazgos (Serie C):\n- ' + lines.join('\n- ')) : 'Serie C cumple con los parámetros establecidos.';
+      }
+
+      const btnEval = document.getElementById('btn-eval');
+      if (btnEval) btnEval.addEventListener('click', ()=>{ drawAll(); evaluateC(); });
+    </script>
+  </body>
+  </html>
