@@ -260,9 +260,21 @@
 
   // Initialize from Firebase Auth state
   function bindAuthState() {
+    // Soporte para logout inmediato via querystring
+    try{
+      const p = new URLSearchParams(location.search);
+      if (p.get('logout') === '1' && window.auth && window.auth.signOut){
+        window.auth.signOut().finally(()=>{
+          try{ localStorage.removeItem('currentUserEmail'); }catch{}
+          p.delete('logout'); const url = location.pathname + (p.toString()?('?'+p.toString()):''); history.replaceState(null,'',url);
+        });
+      }
+    }catch{}
+
     if (window.auth && window.auth.onAuthStateChanged) {
       window.auth.onAuthStateChanged(async (user) => {
         const isLogin = page.isLogin;
+        const forceLogin = (()=>{ try{ return new URLSearchParams(location.search).get('forceLogin')==='1'; }catch{return false} })();
         // Exponer usuario global y notificar
         try { window.currentUser = user || null; } catch {}
         try { window.dispatchEvent(new CustomEvent('auth:changed', { detail: { user: user || null } })); } catch {}
@@ -281,6 +293,21 @@
         }
         // Usuario autenticado o estamos en login: asegurar que la app sea visible
         setAppVisible(true);
+        // En login: nunca redirigir automáticamente aunque haya sesión
+        if (isLogin) {
+          try{
+            const form = document.getElementById('login-form');
+            const hint = document.getElementById('login-hint');
+            if (hasAuth && form && !forceLogin){
+              // Mostrar aviso y opciones, ocultar envío del form
+              if (hint){ hint.style.display=''; hint.textContent = 'Ya hay una sesión activa. Puedes continuar al dashboard o cerrar sesión.'; }
+              const go = document.getElementById('login-go');
+              const out = document.getElementById('login-out');
+              if (go){ go.style.display=''; go.addEventListener('click', ()=>{ location.href = 'index.html'; }); }
+              if (out){ out.style.display=''; out.addEventListener('click', async ()=>{ try{ await window.auth.signOut(); location.replace('login.html'); }catch{} }); }
+            }
+          }catch{}
+        }
         refreshUserBox();
         applyIndexPermissions();
         applyInspectionGuard();

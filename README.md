@@ -113,6 +113,36 @@ Sistema web para gestionar inventario, inspecciones y actividad operativa de equ
 - ✅ Página 2: Tabulador completo de servicio
 - ✅ Exportación CSV desde historial
 
+### Módulo: Material Test Report (MTR)
+- Nuevas páginas y scripts:
+  - `matestrep.html`: UI para captura y visualización de reportes de material.
+  - `matestrep.js`: construcción dinámica del formulario, cálculos de promedios (Charpy), guardado/carga, metadatos (usuario, fecha/hora, geolocalización), modo solo-lectura por `?id=` y autocompletado de Equipo/Activo desde inventario CSV.
+  - `listmatestrep.html`: listado de reportes con botón Abrir.
+  - `listmatestrep.js`: carga desde Firestore (colección `material_tests`) o semillas locales (demo); generación de 30 semillas con datos completos y asociación a claves reales `PCT-...` del inventario.
+  - Recursos agregados: `docs/matestrep.jpeg`, `img/materialtestreport.jpeg`.
+
+- Integraciones de datos:
+  - Inventario: `docs/INVENTARIO GENERAL PCT 2025 UNIFICADO.csv` para poblar el selector de Equipo/Activo (solo claves `PCT-...`).
+  - Semillas: caché local `mtr_seed_list` (versión 3) y `mtr_equip_keys` para lista de equipos.
+
+- Permisos y seguridad:
+  - Guardar MTR: restringido a roles `admin` y `supervisor` (bloqueo en cliente).
+  - Modo lectura: al abrir con `?id=...` se deshabilitan inputs y solo se muestra como documento imprimible.
+
+- Estilos y PDF:
+  - `styles.css` (scoped `[data-page="matestrep"]`):
+    - Layout centrado (960px), secciones tipo “card”, tablas con encabezado sticky en pantalla.
+    - Modo impresión A4 con márgenes 12mm, tablas sin dividirse entre páginas (control de `page-break-inside`), evitar stickies al imprimir.
+    - Logo controlado mediante `.page-logo` (12mm) solo en primera página de impresión.
+
+- Navegación:
+  - En `matestrep.html` se añadió dropdown “Reportes” con enlaces a MTR y listado MTR.
+
+- Notas de uso:
+  - Abrir `listmatestrep.html` para ver 30 reportes demo; botón Abrir pasa `?id=` a `matestrep.html`.
+  - En `matestrep.html` sin `?id=`: formulario editable con autocompletado de Equipo/Activo desde CSV y captura de geolocalización.
+  - Guardado: intenta Firestore (`material_tests`); si falla, guarda borrador en `localStorage` (`mtr_draft`).
+
 ## Desarrollo local
 - Servir el directorio: `python3 -m http.server 8080`
 - Abrir: `http://localhost:8080/`
