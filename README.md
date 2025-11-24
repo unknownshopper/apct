@@ -143,6 +143,52 @@ Sistema web para gestionar inventario, inspecciones y actividad operativa de equ
   - En `matestrep.html` sin `?id=`: formulario editable con autocompletado de Equipo/Activo desde CSV y captura de geolocalización.
   - Guardado: intenta Firestore (`material_tests`); si falla, guarda borrador en `localStorage` (`mtr_draft`).
 
+### Módulos nuevos: UTT y EMI (Noviembre 2025)
+
+- Archivos creados:
+  - `utt.html` y `listutt.html`
+  - `emi.html` y `listemi.html`
+- UTT (Ultrasonic Thickness Test):
+  - Meta: Equipo/Activo (datalist desde `docs/INVENTARIO GENERAL PCT 2025 UNIFICADO.csv`), Método/Norma, Usuario, Espesor nominal, Tolerancia mínima, Fecha.
+  - Tabla de lecturas con cálculo de Mínimo/Promedio y badge de Conformidad global (OK si `min >= tolerancia`).
+  - Acciones: Agregar/Limpiar filas, Imprimir/PDF, Guardar (placeholder) → colección Firestore `utt_tests`.
+- EMI (Electro Magnetic Inspection):
+  - Meta: Equipo/Activo (datalist desde CSV), Método/Norma, Usuario, Velocidad, Ganancia, Umbral/Alarma, Fecha.
+  - Tabla de indicaciones con Posición, Longitud, Severidad (Baja/Media/Alta), Observaciones. Conformidad global “No conforme” si existe alguna severidad Alta.
+  - Acciones: Agregar/Limpiar filas, Imprimir/PDF, Guardar (placeholder) → colección Firestore `emi_tests`.
+- Listas (`listutt.html`, `listemi.html`):
+  - Estructura base de tabla para futura lectura desde Firestore.
+
+### Navegación unificada y UX (global)
+
+- Dropdown “Pruebas” actualizado en todos los HTML con: MTR, Lista MTR, UTT, Lista UTT, EMI, Lista EMI, Pruebas, Stock, Lista general.
+- UX del navbar mejorada:
+  - Dropdowns colapsados por defecto en carga y apertura exclusiva (solo uno abierto).
+  - Accesibilidad: `aria-expanded` sincronizado en `summary`, cierre por clic afuera y tecla Escape.
+  - Móvil: menú tipo drawer con botón “☰”, cierre automático al seleccionar un enlace.
+- Indicador de red:
+  - Dot y etiqueta “Firebase online/offline” bajo el badge de login (no intrusivo, en tiempo real).
+- Estilos y PDF:
+  - UTT/EMI con estilos coherentes a MTR (cards, tablas, badges `.ok/.bad`, impresión A4 con logos controlados y tablas sin cortes).
+  - Refinamiento del encabezado/print para MTR (logo tamaño consistente en la primera página).
+
+## ¿Por qué este sistema es mejor que Excel?
+
+- **Colaboración en tiempo real**: múltiples usuarios trabajando sin conflictos de versiones ni archivos duplicados.
+- **Roles y permisos**: visibilidad y acciones controladas (admin/director/inspector); en Excel es difícil y frágil.
+- **Trazabilidad y auditoría**: metadatos de usuario/fecha, posibles logs/auditoría; Excel carece de bitácora robusta.
+- **Estandarización**: formularios con validaciones, listas controladas y reglas de conformidad; evita formulas rotas y formatos dispares.
+- **Integración de datos**: vínculo directo con inventario CSV y (próximo) Firestore; en Excel hay copias pegadas propensas a error.
+- **Impresión/PDF profesional**: reportes con encabezado, logo y tablas que no se cortan entre páginas; en Excel suele requerir ajustes manuales.
+- **Búsqueda y performance**: tablas con ordenamiento/filtrado y, con Firestore, consultas eficientes; Excel ralentiza en volúmenes altos.
+- **Seguridad y respaldo**: Auth de Firebase, reglas de acceso y respaldo gestionado; Excel depende de carpetas compartidas vulnerables.
+- **Despliegue y versionado**: cambios versionados en Git y publicados; en Excel proliferan copias locales.
+- **Escalabilidad y mantenibilidad**: modular (MTR/UTT/EMI), nuevas pruebas y listados se suman sin rearmar archivos.
+- **Operación offline con reconexión**: la app sigue operando (lectura/interfaz) y reconecta; Excel no sincroniza automáticamente.
+- **Experiencia de usuario**: navbar consistente, móvil primero, componentes reutilizables; Excel no es una UI pensada para campo.
+
+> Resultado: menos errores, más control y trazabilidad, tiempos de entrega más rápidos, y una presentación profesional frente a cliente/auditor.
+
 ## Certificaciones y cumplimiento (objetivo)
 
 - **ISO 9001:2015 (Sistema de Gestión de la Calidad)**
