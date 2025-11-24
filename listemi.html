@@ -3,38 +3,26 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Reportes - PCT</title>
-  
-  <!-- SEO Meta Tags -->
-  <meta name="description" content="Generación y visualización de reportes del sistema PCT.">
-  <meta name="author" content="PCT">
-  <link rel="canonical" href="https://pc-t.mx/reportes.html">
-  
-  <!-- Open Graph / Facebook -->
-  <meta property="og:type" content="website">
-  <meta property="og:url" content="https://pc-t.mx/reportes.html">
-  <meta property="og:title" content="Reportes - PCT">
-  <meta property="og:description" content="Generación y visualización de reportes del sistema PCT.">
-  <meta property="og:site_name" content="PCT">
-  
+  <title>Lista EMI - PCT</title>
+  <meta name="description" content="Listado de pruebas EMI registradas">
   <link rel="icon" type="image/x-icon" href="img/logo.ico">
   <link rel="shortcut icon" href="img/logo.ico">
   <link rel="stylesheet" href="styles.css" />
 </head>
-<body>
+<body data-page="listemi">
   <header>
     <div class="logo"><img src="img/logopctch.png" alt="Logo" /></div>
     <button class="menu-toggle" aria-label="Abrir menú" aria-controls="primary-nav" aria-expanded="false">☰</button>
     <nav id="primary-nav">
       <ul>
         <li><a href="index.html">Dashboard</a></li>
-        <li class="nav-dropdown"><details><summary>Pruebas</summary><ul>
+        <li class="nav-dropdown"><details open><summary>Pruebas</summary><ul>
           <li><a href="matestrep.html">MTR Material Test Report</a></li>
           <li><a href="listmatestrep.html">Lista de pruebas (MTR)</a></li>
           <li><a href="utt.html">Pruebas UTT</a></li>
           <li><a href="listutt.html">Lista UTT</a></li>
           <li><a href="emi.html">Pruebas EMI</a></li>
-          <li><a href="listemi.html">Lista EMI</a></li>
+          <li><a class="active" href="listemi.html">Lista EMI</a></li>
           <li><a href="pruebas.html">Pruebas</a></li>
           <li><a href="stockpruebas.html">Stock de pruebas</a></li>
           <li><a href="listapruebas.html">Lista de pruebas</a></li>
@@ -42,8 +30,11 @@
         <li><a href="tareas.html">Tareas</a></li>
         <li><a href="inspeccion.html">Inspección</a></li>
         <li><a href="ingral.html">Inventario</a></li>
-        <li><a href="actividad.html">Actividad</a></li>
-        <li><a class="active" href="reportes.html">Reportes</a></li>
+        <li class="nav-dropdown"><details><summary>Actividad</summary><ul>
+          <li><a href="actividad.html">Registro de actividad</a></li>
+          <li><a href="regactividad.html">Historial de registros</a></li>
+        </ul></details></li>
+        <li><a href="reportes.html">Reportes</a></li>
       </ul>
     </nav>
     <div class="user-box">
@@ -53,15 +44,29 @@
     </div>
   </header>
 
-  <main>
-    <h1>Reportes</h1>
-    <p>Página de reportes.</p>
+  <main class="wide">
+    <h1>Lista de Pruebas EMI</h1>
+    <div class="table-wrap">
+      <table id="emi-list-table" class="inventory">
+        <thead>
+          <tr>
+            <th>Fecha</th>
+            <th>Equipo/Activo</th>
+            <th>Método/Norma</th>
+            <th>Total indicaciones</th>
+            <th>Conformidad</th>
+            <th>Usuario</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td colspan="6" style="text-align:center;">Pendiente de cargar datos</td></tr>
+        </tbody>
+      </table>
+    </div>
   </main>
 
   <footer>
-    <a href="https://unknownshoppers.com" target="_blank" rel="noopener noreferrer">
-      Powered by <img src="img/logotus.jpg" alt="Unknown Shoppers" style="height:18px; vertical-align:middle">
-    </a>
+    <a href="https://unknownshoppers.com" target="_blank" rel="noopener noreferrer">Powered by <img src="img/logotus.jpg" alt="Unknown Shoppers" style="height:18px; vertical-align:middle"></a>
   </footer>
 
   <script src="https://www.gstatic.com/firebasejs/9.6.11/firebase-app-compat.js"></script>
@@ -72,3 +77,4 @@
   <script src="script.js"></script>
 </body>
 </html>
+

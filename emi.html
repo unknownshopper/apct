@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>EMI - Electro Magnetic Inspection - PCT</title>
+  <meta name="description" content="Prueba de Inspección Electromagnética (EMI)">
+  <link rel="stylesheet" href="styles.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+  <link rel="icon" type="image/x-icon" href="img/logo.ico">
+  <link rel="shortcut icon" href="img/logo.ico">
+  <meta name="color-scheme" content="light">
+  <meta name="theme-color" content="#ffffff">
+</head>
+<body data-page="emi">
+  <header>
+    <div class="logo"><img src="img/logopctch.png" alt="Logo" /></div>
+    <button class="menu-toggle" aria-label="Abrir menú" aria-controls="primary-nav" aria-expanded="false">☰</button>
+    <nav id="primary-nav">
+      <ul>
+        <li><a href="index.html">Dashboard</a></li>
+        <li class="nav-dropdown"><details open><summary>Pruebas</summary><ul>
+          <li><a href="matestrep.html">MTR Material Test Report</a></li>
+          <li><a href="listmatestrep.html">Lista de pruebas (MTR)</a></li>
+          <li><a href="utt.html">Pruebas UTT</a></li>
+          <li><a href="listutt.html">Lista UTT</a></li>
+          <li><a class="active" href="emi.html">Pruebas EMI</a></li>
+          <li><a href="listemi.html">Lista EMI</a></li>
+          <li><a href="pruebas.html">Pruebas</a></li>
+          <li><a href="stockpruebas.html">Stock de pruebas</a></li>
+          <li><a href="listapruebas.html">Lista de pruebas</a></li>
+        </ul></details></li>
+        <li><a href="tareas.html">Tareas</a></li>
+        <li class="nav-dropdown"><details><summary>Inspección</summary><ul>
+          <li><a href="inspeccion.html">Inspección primaria</a></li>
+          <li><a href="reginspecciones.html">Registro de inspecciones</a></li>
+        </ul></details></li>
+        <li><a href="ingral.html">Inventario</a></li>
+        <li class="nav-dropdown"><details><summary>Actividad</summary><ul>
+          <li><a href="actividad.html">Registro de actividad</a></li>
+          <li><a href="regactividad.html">Historial de registros</a></li>
+        </ul></details></li>
+        <li><a href="reportes.html">Reportes</a></li>
+      </ul>
+    </nav>
+    <div class="user-box">
+      <span id="user-email"></span>
+      <a id="login-link" href="login.html">Login</a>
+      <button id="logout-btn" type="button" style="display:none">Salir</button>
+    </div>
+  </header>
+
+  <main class="wide">
+    <h1>Electro Magnetic Inspection (EMI)</h1>
+    <div class="page-logo"><img src="img/logopctch.png" alt="PCT"></div>
+
+    <section class="card" style="padding:12px;">
+      <div class="meta" style="grid-template-columns: repeat(3, 1fr);">
+        <div>
+          <div class="label">Equipo/Activo</div>
+          <div class="value">
+            <input id="emi-eq" class="input" type="text" list="emi-eq-list" placeholder="PCT-..." style="width:220px">
+            <datalist id="emi-eq-list"></datalist>
+          </div>
+        </div>
+        <div>
+          <div class="label">Método / Norma</div>
+          <div class="value"><input id="emi-method" class="input" type="text" placeholder="ASTM / API / ASME" style="width:220px"></div>
+        </div>
+        <div>
+          <div class="label">Usuario</div>
+          <div class="value"><span id="emi-user">—</span></div>
+        </div>
+        <div>
+          <div class="label">Velocidad (m/s)</div>
+          <div class="value"><input id="emi-speed" class="input" type="number" step="0.1" min="0" style="width:120px"></div>
+        </div>
+        <div>
+          <div class="label">Ganancia (dB)</div>
+          <div class="value"><input id="emi-gain" class="input" type="number" step="0.1" min="0" style="width:120px"></div>
+        </div>
+        <div>
+          <div class="label">Umbral/Alarma</div>
+          <div class="value"><input id="emi-thr" class="input" type="number" step="0.1" min="0" style="width:120px"></div>
+        </div>
+        <div>
+          <div class="label">Fecha</div>
+          <div class="value"><span id="emi-date">—</span></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="table-wrap">
+      <h2>Indicaciones</h2>
+      <table class="inventory" id="emi-table">
+        <thead>
+          <tr>
+            <th>Punto</th>
+            <th>Posición</th>
+            <th>Longitud (mm)</th>
+            <th>Severidad</th>
+            <th>Observaciones</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="emi-body"></tbody>
+      </table>
+      <div style="margin-top:8px; display:flex; gap:8px; justify-content:flex-end;">
+        <button id="emi-add" class="btn">Agregar indicación</button>
+        <button id="emi-clear" class="btn ghost">Limpiar</button>
+      </div>
+      <div style="margin-top:8px; display:flex; gap:16px; align-items:center;">
+        <div><strong>Total indicaciones:</strong> <span id="emi-count">0</span></div>
+        <div><strong>Conformidad global:</strong> <span id="emi-badge" class="status-badge">—</span></div>
+      </div>
+    </section>
+
+    <div class="actions">
+      <button class="btn-primary" id="emi-save" type="button">Guardar</button>
+      <button class="btn" id="emi-print" type="button">Imprimir / PDF</button>
+    </div>
+  </main>
+
+  <footer>
+    <a href="https://unknownshoppers.com" target="_blank" rel="noopener noreferrer">Powered by <img src="img/logotus.jpg" alt="Unknown Shoppers" style="height:18px; vertical-align:middle"></a>
+  </footer>
+
+  <script src="https://www.gstatic.com/firebasejs/9.6.11/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.6.11/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.6.11/firebase-firestore-compat.js"></script>
+  <script src="firebase-config.js"></script>
+  <script src="firebase-init.js"></script>
+  <script src="script.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+  <script>
+  (function(){
+    const EQ_SRC = 'docs/INVENTARIO GENERAL PCT 2025 UNIFICADO.csv';
+    const body = document.getElementById('emi-body');
+    const countEl = document.getElementById('emi-count');
+    const badge = document.getElementById('emi-badge');
+
+    function setUser(){ try{ const u = window.auth?.currentUser; document.getElementById('emi-user').textContent = u?.email || '—'; }catch{} }
+    function setDate(){ const d = new Date(); const pad=n=>String(n).padStart(2,'0'); document.getElementById('emi-date').textContent = `${pad(d.getDate())}/${pad(d.getMonth()+1)}/${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`; }
+
+    function recompute(){
+      const rows = Array.from(body.querySelectorAll('tr'));
+      countEl.textContent = String(rows.length);
+      let hasHigh = false;
+      rows.forEach(tr=>{ const sel = tr.querySelector('select'); if (sel && sel.value === 'Alta') hasHigh = true; });
+      if (!rows.length){ badge.textContent='—'; badge.className='status-badge'; return; }
+      const ok = !hasHigh; badge.textContent = ok ? 'Conforme' : 'No conforme'; badge.className = 'status-badge ' + (ok ? 'ok' : 'bad');
+    }
+
+    function addRow(){
+      const tr = document.createElement('tr');
+      const idx = body.children.length + 1;
+      tr.innerHTML = `
+        <td>P${idx}</td>
+        <td><input type="text" class="input" placeholder="Posición" style="width:150px"></td>
+        <td><input type="number" step="0.1" min="0" class="input" style="width:110px"></td>
+        <td>
+          <select class="input" style="width:130px">
+            <option value="Baja">Baja</option>
+            <option value="Media">Media</option>
+            <option value="Alta">Alta</option>
+          </select>
+        </td>
+        <td><input type="text" class="input" placeholder="Observaciones" style="width:220px"></td>
+        <td><button class="btn ghost del">✕</button></td>`;
+      body.appendChild(tr);
+      tr.querySelector('select').addEventListener('change', recompute);
+      tr.querySelectorAll('input').forEach(inp=> inp.addEventListener('input', recompute));
+      tr.querySelector('.del').addEventListener('click', ()=>{ tr.remove(); recompute(); });
+      recompute();
+    }
+
+    function clearAll(){ body.innerHTML=''; recompute(); }
+
+    function loadEquipos(){
+      Papa.parse(EQ_SRC, { download:true, skipEmptyLines:true, complete: (res)=>{
+        const data = res?.data || []; if (!data.length) return;
+        const headers = data[0]||[]; const rows = data.slice(1);
+        const idx = headers.findIndex(h=>/EQUIPO\s*\/\s*ACTIVO|EQUIPO\s*ACTIVO|EQUIPO/i.test(String(h)));
+        const dl = document.getElementById('emi-eq-list');
+        const set = new Set();
+        rows.forEach(r=>{ const v = String(r[idx]||'').trim(); if (/^PCT\-/.test(v)) set.add(v); });
+        dl.innerHTML = Array.from(set).sort().map(v=>`<option value="${v}"></option>`).join('');
+      }});
+    }
+
+    document.getElementById('emi-add').addEventListener('click', addRow);
+    document.getElementById('emi-clear').addEventListener('click', clearAll);
+    document.getElementById('emi-save').addEventListener('click', ()=>{
+      alert('Guardado pendiente de implementar (colección Firestore: emi_tests).');
+    });
+    document.getElementById('emi-print').addEventListener('click', ()=>{ window.print(); });
+
+    setUser(); setDate(); loadEquipos(); addRow();
+  })();
+  </script>
+</body>
+</html>
+

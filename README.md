@@ -143,6 +143,26 @@ Sistema web para gestionar inventario, inspecciones y actividad operativa de equ
   - En `matestrep.html` sin `?id=`: formulario editable con autocompletado de Equipo/Activo desde CSV y captura de geolocalización.
   - Guardado: intenta Firestore (`material_tests`); si falla, guarda borrador en `localStorage` (`mtr_draft`).
 
+## Certificaciones y cumplimiento (objetivo)
+
+- **ISO 9001:2015 (Sistema de Gestión de la Calidad)**
+  - Alineación: control de documentos (PDF imprimible), trazabilidad por Equipo/Activo, metadatos de usuario/fecha, roles y permisos.
+  - Próximos pasos: control de versiones formal, flujos de aprobación, registro de auditoría (quién cambió qué/cuándo).
+
+- **ISO/IEC 17025:2017 / NMX-EC-17025-IMNC (Laboratorios de ensayo y calibración)**
+  - Alineación: registro de métodos de ensayo (mecánicos, dureza, Charpy), resultados con límites y conformidad, vínculo a inventario y estado de calibración del equipo, metadatos y geolocalización.
+  - Próximos pasos: gestión de incertidumbre de medición, evidencia de trazabilidad metrológica, firmas electrónicas del responsable/técnico, control de versiones de métodos y especificaciones.
+
+- **ISO/IEC 27001 (Seguridad de la Información)**
+  - Alineación: control de acceso por roles, autenticación Firebase, copia en Firestore (respaldo gestionado), separación de entornos.
+  - Próximos pasos: política de retención y respaldo, cifrado de datos en tránsito/repouso (configuración), bitácora de accesos, hardening de hosting y secretos.
+
+- **Estándares técnicos (alineación de métodos, no certificación del software)**
+  - ASTM/ASME relevantes para MTR: ASTM E8/E8M (tensión), ASTM E23 (Charpy), ASTM E10/E18 (dureza), ASTM A370 / ASME SA‑370 (propiedades mecánicas).
+  - Próximos pasos: parametrizar criterios por norma/material, reporte explícito del método/versionado y anexos de calculadora/curvas.
+
+Notas: Este repositorio no declara cumplimiento automático; se proveen capacidades para facilitar auditorías y conformidad. La certificación depende de la operación, procedimientos y controles de la organización.
+
 ## Desarrollo local
 - Servir el directorio: `python3 -m http.server 8080`
 - Abrir: `http://localhost:8080/`

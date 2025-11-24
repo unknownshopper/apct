@@ -13,6 +13,28 @@
     setExpanded(isOpen);
   });
 
+  // Collapse all nav dropdowns by default (ensure clean initial state)
+  try {
+    const dropdowns = nav.querySelectorAll('.nav-dropdown details');
+    dropdowns.forEach(d => { if (d.hasAttribute('open')) d.removeAttribute('open'); });
+    // Make dropdowns mutually exclusive when opening
+    dropdowns.forEach(d => {
+      d.addEventListener('toggle', () => {
+        if (d.open) {
+          dropdowns.forEach(other => { if (other !== d && other.open) other.removeAttribute('open'); });
+        }
+      });
+      // Keep summary aria-expanded in sync
+      const summary = d.querySelector('summary');
+      if (summary) {
+        summary.setAttribute('aria-expanded', 'false');
+        d.addEventListener('toggle', () => {
+          summary.setAttribute('aria-expanded', d.open ? 'true' : 'false');
+        });
+      }
+    });
+  } catch {}
+
   // Close when clicking outside
   document.addEventListener('click', (e) => {
     if (!nav.classList.contains('open')) return;
@@ -21,6 +43,34 @@
       setExpanded(false);
     }
   });
+
+  // Network status dot inside user-box
+  try {
+    const userBox = document.querySelector('.user-box');
+    if (userBox) {
+      let status = document.getElementById('net-status');
+      if (!status) {
+        status = document.createElement('div');
+        status.id = 'net-status';
+        const dot = document.createElement('span'); dot.id = 'net-dot';
+        const label = document.createElement('span'); label.className = 'label'; label.id = 'net-label';
+        status.appendChild(dot);
+        status.appendChild(label);
+        userBox.appendChild(status);
+      }
+      const dotEl = document.getElementById('net-dot');
+      const labelEl = document.getElementById('net-label');
+      const setNet = () => {
+        const online = navigator.onLine;
+        dotEl.className = online ? 'online' : 'offline';
+        dotEl.id = 'net-dot';
+        labelEl.textContent = online ? 'Firebase online' : 'Firebase offline';
+      };
+      window.addEventListener('online', setNet);
+      window.addEventListener('offline', setNet);
+      setNet();
+    }
+  } catch {}
 
   // Close with Escape key
   document.addEventListener('keydown', (e) => {
@@ -260,6 +310,8 @@
 
   // Initialize from Firebase Auth state
   function bindAuthState() {
+    // Reduce Firestore logging noise if supported
+    try { if (window.firebase?.firestore?.setLogLevel) { window.firebase.firestore.setLogLevel('error'); } } catch {}
     // Soporte para logout inmediato via querystring
     try{
       const p = new URLSearchParams(location.search);
