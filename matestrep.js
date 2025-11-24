@@ -37,6 +37,10 @@
           <div class="value"><input id="pono" class="input" type="text" style="width:160px"></div>
         </div>
         <div>
+          <div class="label">Equipo/Activo</div>
+          <div class="value"><input id="equip" class="input" type="text" placeholder="EQ-0001" style="width:180px"></div>
+        </div>
+        <div>
           <div class="label">Fecha</div>
           <div class="value"><input id="date" class="input" type="date" style="width:160px"></div>
         </div>
@@ -204,6 +208,64 @@
     $('#mtr-clear')?.addEventListener('click', ()=>{ buildState({}); showToast('Limpio'); });
     $('#mtr-save')?.addEventListener('click', save);
     $('#mtr-load')?.addEventListener('click', loadDraft);
+
+    // Cargar inventario para Equipos/Activos y autocompletar
+    try{
+      const CSV_SRC = 'docs/INVENTARIO GENERAL PCT 2025 UNIFICADO.csv';
+      if (window.Papa){
+        window.Papa.parse(CSV_SRC, {
+          download: true,
+          header: false,
+          complete: (res)=>{
+            try{
+              const rows = Array.isArray(res.data) ? res.data : [];
+              // Detectar clave de equipo/activo buscando en varias columnas
+              function pickKey(r){
+                const cands = [r[2], r[3], r[1], r[4]]; // orden de probables según inventario
+                for (const c of cands){
+                  const v = String(c||'').trim();
+                  if (!v) continue;
+                  if (/TOMAR\s*SERIAL/i.test(v)) continue;
+                  if (/^SERIAL$/i.test(v)) continue;
+                  if (/^PCT\-/i.test(v)) return v; // aceptar solo claves PCT-...
+                }
+                return '';
+              }
+              function pickDesc(r){
+                // Prioriza descripción larga si existe
+                const d = String(r[5]||r[4]||'').trim();
+                return d;
+              }
+              const items = rows
+                .filter(r=> Array.isArray(r) && r.length>5)
+                .map(r=> ({ key: pickKey(r), desc: pickDesc(r) }))
+                .filter(it=> it.key);
+              const unique = new Map();
+              for (const it of items){ if (!unique.has(it.key)) unique.set(it.key, it.desc); }
+              try{ window._equipIndex = unique; }catch{}
+              const list = $('#equipList');
+              if (list){
+                list.innerHTML = '';
+                for (const [k,v] of unique){ const opt = document.createElement('option'); opt.value = k; opt.label = v; list.appendChild(opt); }
+              }
+              const input = $('#equip'); const descEl = $('#equipDesc');
+              function syncDesc(){ const k = String(input.value||'').trim(); const d = unique.get(k) || ''; if (descEl) descEl.textContent = d; }
+              if (input){ input.addEventListener('input', syncDesc); input.addEventListener('change', syncDesc); }
+              // Si ya hay un valor cargado, sincronizar
+              setTimeout(()=>{
+                syncDesc();
+                // Si no es válido, autoasignar el primero disponible
+                const k = String(input?.value||'').trim();
+                if (!k || !unique.has(k)){
+                  const first = unique.keys().next().value;
+                  if (first && input){ input.value = first; syncDesc(); }
+                }
+              }, 0);
+            }catch{}
+          }
+        });
+      }
+    }catch{}
   }
 
   function gather(){
@@ -211,7 +273,7 @@
     const data = {
       head: {
         prov: $('#prov')?.value||'', grade: $('#grade')?.value||'', standard: $('#standard')?.value||'',
-        heatno: $('#heatno')?.value||'', pono: $('#pono')?.value||'', date: $('#date')?.value||''
+        heatno: $('#heatno')?.value||'', pono: $('#pono')?.value||'', equip: $('#equip')?.value||'', date: $('#date')?.value||''
       },
       chem: {},
       ht: {
