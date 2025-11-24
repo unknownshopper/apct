@@ -227,7 +227,7 @@
                   if (!v) continue;
                   if (/TOMAR\s*SERIAL/i.test(v)) continue;
                   if (/^SERIAL$/i.test(v)) continue;
-                  if (/^PCT\-/i.test(v)) return v; // aceptar solo claves PCT-...
+                  if (/^PCT\-[A-Z0-9-]+$/i.test(v)) return v; // aceptar sólo PCT-...
                 }
                 return '';
               }
@@ -257,8 +257,8 @@
                 // Si no es válido, autoasignar el primero disponible
                 const k = String(input?.value||'').trim();
                 if (!k || !unique.has(k)){
-                  const first = unique.keys().next().value;
-                  if (first && input){ input.value = first; syncDesc(); }
+                  const keys = Array.from(unique.keys());
+                  if (keys.length){ const rand = keys[Math.floor(Math.random()*keys.length)]; input.value = rand; syncDesc(); }
                 }
               }, 0);
             }catch{}

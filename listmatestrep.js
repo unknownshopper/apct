@@ -1,10 +1,44 @@
 (function(){
-  const SEED_VERSION = 2;
+  const SEED_VERSION = 3;
   function $(s, c){ return (c||document).querySelector(s); }
   function $all(s, c){ return Array.from((c||document).querySelectorAll(s)); }
   function fmtDate(ts){ try{ const d = ts instanceof Date ? ts : new Date(ts); return d.toISOString().slice(0,10);}catch{return ''} }
 
-  function makeSeed(count){
+  function getEquipKeys(){
+    try{
+      let keys = JSON.parse(localStorage.getItem('mtr_equip_keys')||'[]');
+      if (Array.isArray(keys) && keys.length>0) return Promise.resolve(keys);
+    }catch{}
+    return new Promise((resolve)=>{
+      if (!window.Papa){ resolve([]); return; }
+      window.Papa.parse('docs/INVENTARIO GENERAL PCT 2025 UNIFICADO.csv', {
+        download:true,
+        header:false,
+        complete: (res)=>{
+          try{
+            const rows = Array.isArray(res.data)? res.data : [];
+            const keys = [];
+            for (const r of rows){
+              if (!Array.isArray(r)) continue;
+              const cands = [r[2], r[3], r[1], r[4]];
+              for (const c of cands){
+                const v = String(c||'').trim();
+                if (!v) continue;
+                if (/TOMAR\s*SERIAL/i.test(v)) continue;
+                if (/^SERIAL$/i.test(v)) continue;
+                if (/^PCT\-/i.test(v)) { keys.push(v); break; }
+              }
+            }
+            const uniq = Array.from(new Set(keys));
+            try{ localStorage.setItem('mtr_equip_keys', JSON.stringify(uniq)); }catch{}
+            resolve(uniq);
+          }catch{ resolve([]); }
+        }
+      });
+    });
+  }
+
+  async function makeSeed(count){
     const rnd = (min, max, d=3)=> Number((min + Math.random()*(max-min)).toFixed(d));
     const ranges30CrMoA = {
       C:[0.26,0.34], Si:[0.17,0.37], Mn:[0.40,0.70], P:[0,0.030], S:[0,0.030], Cr:[0.80,1.10], Mo:[0.15,0.25], Ni:[0,0.30], Cu:[0,0.30]
@@ -14,6 +48,13 @@
     };
     const arr = [];
     const base = new Date();
+    const keys = await getEquipKeys();
+    // Mezclar claves para variedad y usar un offset aleatorio
+    let pool = Array.isArray(keys) ? keys.slice() : [];
+    if (pool.length > 1){
+      for (let i=pool.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [pool[i],pool[j]] = [pool[j],pool[i]]; }
+    }
+    const randStart = Math.floor(Math.random() * Math.max(1,pool.length));
     for (let i=0;i<count;i++){
       const d = new Date(base.getTime() - i*86400000);
       const idx = String(i+1).padStart(3,'0');
@@ -25,6 +66,7 @@
         const avg = Math.round((v1+v2+v3)/3);
         return { v1, v2, v3, avg };
       });
+      const equip = (pool && pool.length>0) ? pool[(i + randStart) % pool.length] : `PCT-DEMO-${idx}`;
       arr.push({
         id: 'seed-'+idx,
         createdAtTS: d,
@@ -34,7 +76,8 @@
           prov: i%3===0 ? 'Jiangsu Hongda' : (i%3===1 ? 'Baosteel' : 'TISCO'),
           standard: 'ASTM A370/ASTM A29',
           pono: 'PO-'+idx,
-          date: d.toISOString().slice(0,10)
+          date: d.toISOString().slice(0,10),
+          equip
         },
         chem,
         ht: { normalize: 860, quench: 860, media: (i%2?'Aire':'Aceite'), temper1: 650, temper2: 550 },
@@ -65,9 +108,11 @@
     let seed = [];
     try{ seed = JSON.parse(localStorage.getItem('mtr_seed_list')||'[]'); }catch{ seed = []; }
     const curVer = Number(localStorage.getItem('mtr_seed_version')||'0');
-    const needsRegen = curVer !== SEED_VERSION || !seed || seed.length===0 || !seed[0]?.chem || !seed[0]?.charpy || !seed[0]?.mech;
+    const allSameEquip = Array.isArray(seed) && seed.length>1 && seed.every(s => s?.head?.equip === seed[0]?.head?.equip);
+    const badEquip = Array.isArray(seed) && seed.some(s => !/^PCT\-/.test(String(s?.head?.equip||'')));
+    const needsRegen = curVer !== SEED_VERSION || !seed || seed.length===0 || !seed[0]?.chem || !seed[0]?.charpy || !seed[0]?.mech || allSameEquip || badEquip;
     if (needsRegen){
-      seed = makeSeed(30);
+      seed = await makeSeed(30);
       try{ localStorage.setItem('mtr_seed_list', JSON.stringify(seed)); localStorage.setItem('mtr_seed_version', String(SEED_VERSION)); }catch{}
     }
     return seed.concat(arr);
