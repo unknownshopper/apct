@@ -44,7 +44,7 @@
       header h1 { font-size: 18px; margin: 0; }
       header .subtitle { color: var(--muted); font-size: 14px; }
       .container {
-        max-width: 1200px;
+        max-width: none;
         margin: 0 auto;
         padding: 20px;
         width: 100%;
@@ -52,17 +52,27 @@
       .grid-2 {
         display: grid;
         grid-template-columns: 1fr;
-        gap: 16px;
+        gap: 24px;
         grid-template-areas:
           "viewer"
           "panel";
       }
       @media (min-width: 960px) {
         .grid-2 {
-          grid-template-columns: 380px 1fr;
-          grid-template-areas: "panel viewer";
+          grid-template-columns: 400px 1fr 1fr;
+          grid-template-areas: "panel viewer viewer";
           align-items: start;
         }
+        .viewer { grid-column: 2 / 4; }
+        #report-params-page { grid-column: 2; }
+        #report { grid-column: 3; }
+      }
+      @media (min-width: 1440px) {
+        .grid-2 { grid-template-columns: 420px 1fr 1fr; }
+      }
+      @media (min-width: 960px) {
+        .grid-2 > .report { grid-column: auto; }
+        .grid-2 > .print-page { grid-column: auto; }
       }
       .panel { grid-area: panel; }
       .viewer { grid-area: viewer; }
@@ -90,7 +100,8 @@
         border-right: 1px solid var(--border);
         background: rgba(10,16,30,0.25);
         max-height: none;
-        overflow: visible;
+        overflow: auto;
+        z-index: 1;
       }
       .panel h3 { margin: 0 0 10px; font-size: 14px; color: var(--muted); }
       .field { display: grid; gap: 6px; margin-bottom: 12px; }
@@ -140,8 +151,23 @@
       .stage {
         position: relative;
         width: 100%;
-        max-width: 900px;
+        max-width: 700px;
         aspect-ratio: 1 / 1;
+      }
+      @media (min-width: 1280px) {
+        .stage { max-width: 820px; }
+      }
+      @media (min-width: 1600px) {
+        .stage { max-width: 960px; }
+      }
+
+      /* Ensure the circular chart fits in the viewport height on desktop */
+      @media (min-width: 960px) {
+        /* Keep square, fit within both viewport height and width */
+        .stage {
+          width: clamp(520px, min(65vw, calc(100dvh - 260px)), 880px);
+          max-height: none;
+        }
       }
 
       /* Desktop: keep the left panel within viewport and scroll its content */
@@ -178,6 +204,39 @@
         background: rgba(10,16,30,0.25);
       }
       .dot { width: 10px; height: 10px; border-radius: 999px; display: inline-block; }
+      .report {
+        max-width: 820px;
+        margin: 28px auto 0;
+        padding: 16px 18px;
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        background: linear-gradient(180deg, rgba(28,40,72,0.35), rgba(19,27,46,0.55));
+        box-shadow: 0 12px 30px rgba(0,0,0,0.35);
+        position: relative;
+        z-index: 2;
+      }
+      .report h3 { margin: 0 0 14px; text-align: center; font-size: 18px; }
+      .report table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 13px;
+      }
+      .report th, .report td {
+        border: 1px solid var(--border);
+        padding: 10px 12px;
+        text-align: left;
+      }
+      .report th {
+        color: var(--muted);
+        font-weight: 600;
+        width: 42%;
+        background: rgba(27,39,69,0.55);
+      }
+      .report tr:nth-child(odd) td { background: rgba(13,19,38,0.45); }
+      .report .cols { display: grid; grid-template-columns: 1fr; gap: 12px; }
+      @media (min-width: 720px) {
+        .report .cols { grid-template-columns: 1fr 1fr; }
+      }
       footer {
         color: var(--muted);
         font-size: 12px;
@@ -185,9 +244,38 @@
         border-top: 1px solid var(--border);
       }
       @media (min-width: 640px) {
-        .viewer { padding: 24px; }
+        .viewer { padding: 20px; }
       }
 
+      /* Print-friendly layout and light theme */
+      @media print {
+        @page { size: A4 auto; margin: 12mm; }
+        :root { color-scheme: light; }
+        body { background: #ffffff !important; color: #111827 !important; }
+        header { background: transparent; border-color: #e5e7eb; position: static; }
+        .container { max-width: none; padding: 0; }
+        .card { background: #ffffff; border-color: #e5e7eb; box-shadow: none; overflow: visible; }
+        .actions { display: none !important; }
+        .panel { display: none !important; }
+        .viewer { padding: 0; break-after: page; }
+        .frame { border-color: #e5e7eb; }
+        .stage { max-width: 170mm; margin: 0 auto; }
+        .sample-bg { display: none !important; }
+        input, select, textarea { background: #ffffff; color: #111827; border-color: #cbd5e1; }
+        label { color: #374151; }
+        .legend { display: none; }
+        footer { border-color: #e5e7eb; color: #6b7280; }
+        .report { background: #ffffff; border-color: #e5e7eb; }
+        .report h3 { font-size: 18px; }
+        .report table { page-break-inside: avoid; }
+        .report th, .report td { border-color: #e5e7eb; }
+        .report th { background: #f8fafc; }
+        .report tr:nth-child(odd) td { background: #fafafa; }
+        .muted { color: #6b7280; }
+        .badge { display:inline-block; min-width:10px; height:10px; border-radius:999px; margin-right:8px; }
+        .no-break { page-break-inside: avoid; }
+        .print-page { break-after: page; }
+      }
       /* Mobile optimizations */
       @media (max-width: 639px) {
         .row { grid-template-columns: 1fr; }
@@ -442,14 +530,42 @@
                 </div>
               </div>
             </div>
-          </div>
-        </section>
-      </main>
+            <section class="report print-page" id="report-params-page" aria-label="Parámetros de la prueba">
+              <h3>Parámetros de la prueba</h3>
+              <table>
+                <thead><tr><th>Parámetro</th><th>Valor</th></tr></thead>
+                <tbody id="print-params-body"></tbody>
+              </table>
+            </section>
+            <section class="report" id="report" aria-label="Reporte de prueba">
+              <h3>Reporte de prueba</h3>
+              <div class="cols">
+                <table>
+                  <thead><tr><th>Series</th><th>Detalle</th></tr></thead>
+                  <tbody id="report-series"></tbody>
+                </table>
+              </div>
+              <div class="no-break" style="margin-top:12px">
+                <table style="width:100%">
+                  <thead><tr><th>Métricas</th><th>Detalle</th></tr></thead>
+                  <tbody id="report-metrics"></tbody>
+                </table>
+              </div>
+              <div style="margin-top:12px">
+                <table style="width:100%">
+                  <thead><tr><th>Resultados</th><th>Detalle</th></tr></thead>
+                  <tbody id="report-results"></tbody>
+                </table>
+                <pre id="issues" style="margin-top:10px; white-space:pre-wrap; font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace; font-size:12px"></pre>
+              </div>
+            </section>
+          </section>
+        </main>
 
-      <footer>
-        <div class="container">© <span id="y"></span> Prueba de barómetro — AK‑BARTON L‑10 7.2</div>
-      </footer>
-    </div>
+        <footer>
+          <div class="container">© <span id="y"></span> Prueba de barómetro — AK‑BARTON L‑10 7.2</div>
+        </footer>
+      </div>
 
     <script>
       document.getElementById('y').textContent = new Date().getFullYear();
@@ -459,6 +575,34 @@
       const sampleEl = document.getElementById('sample');
       const toggleSample = document.getElementById('toggle-sample');
       const sampleSelect = document.getElementById('sample-select');
+      let isPrintMode = false;
+
+      function getPalette(){
+        if (isPrintMode) {
+          return {
+            bg: '#e5e7eb',          // disk fill
+            baseStroke: '#cbd5e1',   // outer circle
+            ringMinor: '#cbd5e1',
+            ringMajor: '#94a3b8',
+            text: '#111827',
+            spokeMinor: '#cbd5e1',
+            spokeMajor: '#64748b',
+            hubFill: '#d1d5db',
+            title: '#111827'
+          };
+        }
+        return {
+          bg: '#0a1020',
+          baseStroke: '#22304d',
+          ringMinor: '#22304d',
+          ringMajor: '#33507f',
+          text: '#9fb3d1',
+          spokeMinor: '#22304d',
+          spokeMajor: '#33507f',
+          hubFill: '#101a34',
+          title: '#e8eefc'
+        };
+      }
 
       function resizeCanvas() {
         const rect = canvas.parentElement.getBoundingClientRect();
@@ -544,12 +688,13 @@
         const radius = Math.min(w,h)*0.48 * rScale;
         const inner = radius*0.08;
         ctx.clearRect(0,0,w,h);
+        const pal = getPalette();
 
         // Base
         ctx.save();
         ctx.translate(cx, cy);
-        ctx.strokeStyle = '#22304d';
-        ctx.fillStyle = '#0a1020';
+        ctx.strokeStyle = pal.baseStroke;
+        ctx.fillStyle = pal.bg;
         ctx.lineWidth = 1;
         ctx.beginPath();
         ctx.arc(0,0,radius,0,Math.PI*2);
@@ -564,10 +709,10 @@
           const r = inner + (radius - inner) * ((pVal - minP) / rangeP);
           ctx.beginPath();
           ctx.arc(0,0,r,0,Math.PI*2);
-          ctx.strokeStyle = i % 5 === 0 ? '#33507f' : '#22304d';
+          ctx.strokeStyle = i % 5 === 0 ? pal.ringMajor : pal.ringMinor;
           ctx.stroke();
           if (i % 2 === 0) {
-            ctx.fillStyle = '#9fb3d1';
+            ctx.fillStyle = pal.text;
             ctx.font = '12px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto';
             ctx.textAlign = 'left';
             ctx.textBaseline = 'middle';
@@ -583,7 +728,7 @@
           ctx.beginPath();
           ctx.moveTo(Math.cos(ang)*inner, Math.sin(ang)*inner);
           ctx.lineTo(Math.cos(ang)*radius, Math.sin(ang)*radius);
-          ctx.strokeStyle = i % 6 === 0 ? '#33507f' : '#22304d';
+          ctx.strokeStyle = i % 6 === 0 ? pal.spokeMajor : pal.spokeMinor;
           ctx.stroke();
           if (i % 6 === 0) {
             // label
@@ -591,7 +736,7 @@
             const lr = radius + 18;
             ctx.translate(Math.cos(ang)*lr, Math.sin(ang)*lr);
             ctx.rotate(ang + Math.PI/2);
-            ctx.fillStyle = '#9fb3d1';
+            ctx.fillStyle = pal.text;
             ctx.font = '12px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto';
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
@@ -603,13 +748,13 @@
         // Center hub
         ctx.beginPath();
         ctx.arc(0,0,inner*0.7,0,Math.PI*2);
-        ctx.fillStyle = '#101a34';
+        ctx.fillStyle = pal.hubFill;
         ctx.fill();
-        ctx.strokeStyle = '#22304d';
+        ctx.strokeStyle = pal.ringMinor;
         ctx.stroke();
 
         // Title
-        ctx.fillStyle = '#e8eefc';
+        ctx.fillStyle = pal.title;
         ctx.font = '600 14px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto';
         ctx.textAlign = 'center';
         ctx.fillText('AK‑BARTON L‑10 7.2 — Simulación', 0, -radius - 24);
@@ -738,6 +883,97 @@
         ctx.restore();
       }
 
+      function renderReport(params){
+        const rp = document.getElementById('print-params-body');
+        const rs = document.getElementById('report-series');
+        const rr = document.getElementById('report-results');
+        const rmet = document.getElementById('report-metrics');
+        if (!rp || !rs || !rr) return;
+        const timeFmt = (mins)=>{
+          const hh = Math.floor(mins/60).toString().padStart(2,'0');
+          const mm = Math.floor(mins%60).toString().padStart(2,'0');
+          return `${hh}:${mm}`;
+        };
+        // Parámetros + alineación + protocolo
+        const hold = parseFloat(document.getElementById('holdMin').value || '20');
+        const rampUpMax = parseFloat(document.getElementById('rampUpMax').value || '0.9');
+        const rampDown60 = parseFloat(document.getElementById('rampDown60').value || '3');
+        const rows = [
+          ['Unidad', params.unit],
+          ['Presión mín.', `${params.minP}`],
+          ['Presión máx.', `${params.maxP}`],
+          ['Paso retícula presión', `${params.tickP}`],
+          ['Periodo (min para 360°)', `${params.period}`],
+          ['Paso radial tiempo (min)', `${params.tickT}`],
+          ['Inicio (hh:mm)', timeFmt(params.startMinutes)],
+          ['Resolución (min/muestra)', `${params.dt}`],
+          ['Transición', params.transition],
+          ['Auto‑rampa si Δp≠0', params.autoRamp ? 'Sí' : 'No'],
+          ['Inicio automático', params.applyStart ? `t=${params.tStart}, p=${params.pStart}` : 'No'],
+          ['Fin automático', params.applyEnd ? `t=${params.tEnd}, p=${params.pEnd}` : 'No'],
+          ['Offset angular (°)', `${params.angleOffset}`],
+          ['Escala radial', `${params.rScale}`],
+          ['Centro (px)', `${params.centerX}, ${params.centerY}`],
+          ['Opacidad muestra', `${params.sampleOpacity}`],
+          ['Protocolo · Estabilización (min)', `${hold}`],
+          ['Protocolo · Rampa subida máx (min)', `${rampUpMax}`],
+          ['Protocolo · Despresurización 60→0 (min)', `${rampDown60}`],
+        ];
+        rp.innerHTML = rows.map(([k,v])=>`<tr><th>${k}</th><td>${v}</td></tr>`).join('');
+
+        function sInfo(name, color, show, arr){
+          const pts = arr.length;
+          let dur = 0; if (pts) { const s=[...arr].sort((a,b)=>a.t-b.t); dur = Math.max(0,(s[s.length-1].t)-(s[0].t)); }
+          const chip = `<span class="badge" style="background:${color}"></span>`;
+          return `<tr><th>${chip}${name}${show?'':' (oculta)'}</th><td>${pts} puntos · duración ${dur.toFixed(2)} min</td></tr>`;
+        }
+        rs.innerHTML = [
+          sInfo('Serie A', params.colorA, params.showA, params.seriesA),
+          sInfo('Serie B', params.colorB, params.showB, params.seriesB),
+          sInfo('Serie C', params.colorC, params.showC, params.seriesC)
+        ].join('');
+
+        rr.innerHTML = [
+          `<tr><th>Despresurización</th><td>${params.showDepress? 'Mostrar' : 'Oculta'} · color ${params.colorDepress}</td></tr>`,
+          `<tr><th>Muestra</th><td>${document.getElementById('toggle-sample').checked? 'Visible' : 'Oculta'}</td></tr>`
+        ].join('');
+
+        // Métricas ejecutivas (preferentemente Serie C; si no, A o B)
+        if (rmet) {
+          const tolPsi = parseFloat(document.getElementById('tolPsi').value || '0.5');
+          const epsMin = parseFloat(document.getElementById('epsMin').value || '0.1');
+          const choose = (arr)=> arr && arr.length ? [...arr].sort((a,b)=>a.t-b.t) : null;
+          const C = choose(params.seriesC) || choose(params.seriesA) || choose(params.seriesB);
+          const metrics = [];
+          if (C && C.length>1) {
+            const t0  = timeAtPressure(C, 0)  ?? (C[0]?.t||0);
+            const t20 = timeAtPressure(C, 20);
+            const t40 = timeAtPressure(C, 40);
+            const t60 = timeAtPressure(C, 60);
+            if (t20!=null && t0!=null)  metrics.push(['Rampa 0→20',  `${(t20-t0).toFixed(2)} min (≤ ${rampUpMax} esperado)`]);
+            if (t40!=null && t20!=null) metrics.push(['Rampa 20→40', `${(t40-t20).toFixed(2)} min (≤ ${rampUpMax} esperado)`]);
+            if (t60!=null && t40!=null) metrics.push(['Rampa 40→60', `${(t60-t40).toFixed(2)} min (≤ ${rampUpMax} esperado)`]);
+
+            const win20 = bandEntryExit(C, 20, tolPsi);
+            const win40 = bandEntryExit(C, 40, tolPsi);
+            const win60 = bandEntryExit(C, 60, tolPsi);
+            if (win20) metrics.push(['Estabilidad 20 psi', `${(win20[1]-win20[0]).toFixed(2)} min (≈ ${hold})`]);
+            if (win40) metrics.push(['Estabilidad 40 psi', `${(win40[1]-win40[0]).toFixed(2)} min (≈ ${hold})`]);
+            if (win60) metrics.push(['Estabilidad 60 psi', `${(win60[1]-win60[0]).toFixed(2)} min (≈ ${hold})`]);
+
+            if (win60) {
+              const tStartDesc = win60[1];
+              const tZero = timeAtPressure(C, 0);
+              if (tZero!=null && tZero>tStartDesc) {
+                const d = tZero - tStartDesc;
+                metrics.push(['Despresurización 60→0', `${d.toFixed(2)} min (≈ ${rampDown60})`]);
+              }
+            }
+          }
+          rmet.innerHTML = metrics.length ? metrics.map(([k,v])=>`<tr><th>${k}</th><td>${v}</td></tr>`).join('') : `<tr><td colspan="2" class="muted">Sin datos suficientes para métricas.</td></tr>`;
+        }
+      }
+
       function drawAll() {
         const params = getParams();
         drawGrid(params);
@@ -750,6 +986,7 @@
         if (params.showA) drawOneSeries(params.seriesA, params.colorA, params, 'A');
         if (params.showB) drawOneSeries(params.seriesB, params.colorB, params, 'B');
         if (params.showC) drawOneSeries(params.seriesC, params.colorC, params, 'C');
+        renderReport(params);
 
         // Annotate start time near first dot of visible series
         const seriesOrder = [ ['A', params.colorA, params.showA], ['B', params.colorB, params.showB] ];
@@ -759,7 +996,7 @@
           const w = canvas.width / (window.devicePixelRatio||1);
           const h = canvas.height / (window.devicePixelRatio||1);
           ctx.save();
-          ctx.fillStyle = '#e8eefc';
+          ctx.fillStyle = getPalette().text;
           ctx.font = '12px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto';
           ctx.textAlign = 'left';
           ctx.textBaseline = 'bottom';
@@ -919,6 +1156,20 @@
         link.href = canvas.toDataURL('image/png');
         link.click();
       });
+
+      // Print palette switching
+      function enterPrint(){ isPrintMode = true; resizeCanvas(); drawAll(); }
+      function exitPrint(){ isPrintMode = false; resizeCanvas(); drawAll(); }
+      if (typeof window.matchMedia === 'function'){
+        const mql = window.matchMedia('print');
+        if (mql && typeof mql.addEventListener === 'function'){
+          mql.addEventListener('change', (e)=>{ e.matches ? enterPrint() : exitPrint(); });
+        } else if (mql && typeof mql.addListener === 'function') {
+          mql.addListener((e)=>{ e.matches ? enterPrint() : exitPrint(); });
+        }
+      }
+      window.addEventListener('beforeprint', enterPrint);
+      window.addEventListener('afterprint', exitPrint);
 
       document.getElementById('btn-draw').addEventListener('click', drawAll);
       document.getElementById('btn-clear').addEventListener('click', ()=>{
