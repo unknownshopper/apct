@@ -875,3 +875,52 @@ table.inventory tbody::before {
 tr.editing-row {
   background-color: #fef3c7 !important;
 }
+
+/* === Material Test Report page styles (scoped) === */
+[data-page="matestrep"] main { max-width: 1200px; }
+[data-page="matestrep"] .meta { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px 18px; margin-bottom: 14px; }
+[data-page="matestrep"] .label { color: var(--muted); font-size: 0.9rem; }
+[data-page="matestrep"] .value { color: var(--text-100); font-weight: 600; }
+[data-page="matestrep"] .input { height: 34px; padding: 6px 10px; border: 1px solid var(--steel-400); border-radius: 8px; outline: none; font: inherit; background:#fff; }
+[data-page="matestrep"] .input:focus { border-color: rgba(2,132,199,0.45); box-shadow: 0 0 0 3px rgba(11,179,217,0.12); }
+[data-page="matestrep"] textarea { padding: 8px 10px; border: 1px solid var(--steel-400); border-radius: 8px; font: inherit; background:#fff; }
+[data-page="matestrep"] textarea:focus { border-color: rgba(2,132,199,0.45); box-shadow: 0 0 0 3px rgba(11,179,217,0.12); outline: none; }
+[data-page="matestrep"] .table-wrap { overflow:auto; border:1px solid var(--steel-400); border-radius:10px; background:#ffffff; margin-top:8px; }
+[data-page="matestrep"] table { width:100%; border-collapse: collapse; min-width: 720px; }
+[data-page="matestrep"] table th, 
+[data-page="matestrep"] table td { padding: 10px 12px; border-bottom:1px solid rgba(15,23,42,0.08); text-align:left; }
+[data-page="matestrep"] table thead th { background:#f8fafc; position: sticky; top: 0; z-index: 5; box-shadow: 0 1px 0 rgba(0,0,0,0.04); }
+[data-page="matestrep"] .row { display:grid; grid-template-columns: repeat(12, 1fr); gap: 12px; margin: 8px 0; }
+[data-page="matestrep"] .grid2 { display:grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 8px; }
+@media (max-width: 900px){ [data-page="matestrep"] .meta{ grid-template-columns: 1fr; } [data-page="matestrep"] .grid2{ grid-template-columns: 1fr; } [data-page="matestrep"] table{ min-width:640px; } }
+[data-page="matestrep"] .preview { border:1px dashed #94a3b8; border-radius:10px; padding:4px; background:#fff; }
+
+/* Generic buttons for actions */
+.btn { display:inline-flex; align-items:center; gap:.5rem; padding:.55rem .85rem; background:#ffffff; color:#111827; border:1px solid #e5e7eb; border-radius:10px; font-weight:600; cursor:pointer; }
+.btn:hover { background:#f8fafc; }
+.btn.ghost { background:transparent; border-color:#cbd5e1; }
+
+/* Readonly (view) mode */
+[data-readonly="1"] [data-page="matestrep"] .input,
+[data-readonly="1"] [data-page="matestrep"] textarea { border: none !important; background: transparent !important; padding-left: 0; padding-right: 0; color: #111827; pointer-events: none; }
+[data-readonly="1"] [data-page="matestrep"] input[type="file"] { display: none; }
+[data-readonly="1"] [data-page="matestrep"] .actions .btn:not(#mtr-print) { display: none; }
+
+/* Conformity highlights */
+[data-page="matestrep"] .ok { color:#166534; background:#dcfce7; border-color:#86efac !important; }
+[data-page="matestrep"] .bad { color:#991b1b; background:#fee2e2; border-color:#fca5a5 !important; }
+[data-page="matestrep"] .status-badge { display:inline-block; padding:6px 10px; border-radius:999px; border:1px solid #e5e7eb; font-weight:700; margin: 8px 0; }
+
+/* Print-friendly layout for Material Test Report */
+@media print {
+  [data-page="matestrep"] header,
+  [data-page="matestrep"] .actions,
+  [data-page="matestrep"] footer { display: none !important; }
+  [data-page="matestrep"] main { max-width: 100%; margin: 0; padding: 0 14mm; }
+  [data-page="matestrep"] .page-logo { padding-top: 6mm; }
+  [data-page="matestrep"] .input,
+  [data-page="matestrep"] textarea { border: none !important; box-shadow: none !important; padding-left: 0; padding-right: 0; }
+  [data-page="matestrep"] table { border-collapse: collapse; min-width: auto; }
+  [data-page="matestrep"] table th,
+  [data-page="matestrep"] table td { border: 1px solid #e5e7eb; }
+}

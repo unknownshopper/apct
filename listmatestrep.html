@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Listado de Material Tests - PCT</title>
+  <meta name="description" content="Listado de reportes de pruebas de material.">
+  <link rel="stylesheet" href="styles.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+  <link rel="icon" type="image/x-icon" href="img/logo.ico">
+  <link rel="shortcut icon" href="img/logo.ico">
+  <meta name="color-scheme" content="light">
+  <meta name="theme-color" content="#ffffff">
+</head>
+<body data-page="matestrep-list">
+  <header>
+    <div class="logo"><img src="img/logopctch.png" alt="Logo" /></div>
+    <button class="menu-toggle" aria-label="Abrir menú" aria-controls="primary-nav" aria-expanded="false">☰</button>
+    <nav id="primary-nav">
+      <ul>
+        <li><a href="index.html">Dashboard</a></li>
+        <li class="nav-dropdown"><details><summary>Pruebas</summary><ul>
+          <li><a href="pruebas.html">Pruebas</a></li>
+          <li><a href="stockpruebas.html">Stock de pruebas</a></li>
+          <li><a href="listapruebas.html">Lista de pruebas</a></li>
+        </ul></details></li>
+        <li><a href="tareas.html">Tareas</a></li>
+        <li class="nav-dropdown"><details><summary>Inspección</summary><ul>
+          <li><a href="inspeccion.html">Inspección primaria</a></li>
+          <li><a href="reginspecciones.html">Registro de inspecciones</a></li>
+        </ul></details></li>
+        <li><a href="ingral.html">Inventario</a></li>
+        <li class="nav-dropdown"><details><summary>Actividad</summary><ul>
+          <li><a href="actividad.html">Registro de actividad</a></li>
+          <li><a href="regactividad.html">Historial de registros</a></li>
+        </ul></details></li>
+        <li class="nav-dropdown"><details open><summary>Reportes</summary><ul>
+          <li><a href="matestrep.html">Material Test Report</a></li>
+          <li><a class="active" href="listmatestrep.html">Listado de Material Tests</a></li>
+        </ul></details></li>
+      </ul>
+    </nav>
+    <div class="user-box">
+      <span id="user-email"></span>
+      <a id="login-link" href="login.html">Login</a>
+      <button id="logout-btn" type="button" style="display:none">Salir</button>
+    </div>
+  </header>
+
+  <main class="wide">
+    <h1>Listado de Material Tests</h1>
+    <div class="table-wrap">
+      <table class="inventory" id="mtrList">
+        <thead>
+          <tr>
+            <th>Fecha</th>
+            <th>Material/Grado</th>
+            <th>Heat No.</th>
+            <th>Proveedor</th>
+            <th>Creado por</th>
+            <th>Acciones</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </main>
+
+  <footer> <a href="https://unknownshoppers.com" target="_blank" rel="noopener noreferrer">Powered by <img src="img/logotus.jpg" alt="Unknown Shoppers" style="height:18px; vertical-align:middle"></a></footer>
+
+  <script src="https://www.gstatic.com/firebasejs/9.6.11/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.6.11/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.6.11/firebase-firestore-compat.js"></script>
+  <script src="firebase-config.js"></script>
+  <script src="firebase-init.js"></script>
+  <script src="script.js"></script>
+  <script src="listmatestrep.js"></script>
+</body>
+</html>
