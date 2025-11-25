@@ -192,11 +192,88 @@
 
     document.getElementById('emi-add').addEventListener('click', addRow);
     document.getElementById('emi-clear').addEventListener('click', clearAll);
-    document.getElementById('emi-save').addEventListener('click', ()=>{
-      alert('Guardado pendiente de implementar (colección Firestore: emi_tests).');
-    });
+    async function saveToFirestore(){
+      const KEY='emi_pending_saves';
+      let payload;
+      try{
+        const equipo = (document.getElementById('emi-eq').value||'').trim();
+        const metodo = (document.getElementById('emi-method').value||'').trim();
+        const speed = parseFloat(document.getElementById('emi-speed').value||'');
+        const gain = parseFloat(document.getElementById('emi-gain').value||'');
+        const thr = parseFloat(document.getElementById('emi-thr').value||'');
+        const user = (window.auth?.currentUser?.email)||'';
+        const fechaText = document.getElementById('emi-date').textContent||'';
+        const indicaciones = Array.from(body.querySelectorAll('tr')).map((tr,i)=>{
+          const tds = tr.querySelectorAll('td');
+          return {
+            punto: `P${i+1}`,
+            posicion: tds[1]?.querySelector('input')?.value||'',
+            longitud: parseFloat(tds[2]?.querySelector('input')?.value||'')||0,
+            severidad: tds[3]?.querySelector('select')?.value||'Baja',
+            observaciones: tds[4]?.querySelector('input')?.value||''
+          };
+        });
+        const total = indicaciones.length;
+        const hasHigh = indicaciones.some(r=> String(r.severidad)==='Alta');
+        const conforme = !hasHigh;
+        payload = {
+          equipo, metodo, user,
+          velocidad: isNaN(speed)? null : speed,
+          ganancia: isNaN(gain)? null : gain,
+          umbral: isNaN(thr)? null : thr,
+          fechaTexto: fechaText,
+          fechaISO: new Date().toISOString(),
+          totalIndicaciones: total,
+          conformidad: conforme? 'Conforme':'No conforme',
+          estado: conforme? 'ACTIVO':'INACTIVO',
+          indicaciones,
+          createdAt: (window.firebase?.firestore?.FieldValue?.serverTimestamp?.())||null
+        };
+        const btn = document.getElementById('emi-save');
+        if (btn) { btn.disabled = true; btn.textContent = 'Guardando...'; }
+        if (!window.firebase || !window.firebase.firestore){ throw new Error('Firebase no disponible'); }
+        const db = window.firebase.firestore();
+        const docRef = await db.collection('emi_tests').add(payload);
+        if (btn) { btn.disabled = false; btn.textContent = 'Guardar'; }
+        alert('Guardado EMI exitoso. ID: ' + docRef.id);
+      } catch(err){
+        console.error('Error guardando EMI', err);
+        // fallback local
+        try{
+          const list = JSON.parse(localStorage.getItem(KEY)||'[]');
+          if (payload){ list.push({ when: Date.now(), data: payload }); }
+          localStorage.setItem(KEY, JSON.stringify(list));
+        }catch{}
+        alert('No se pudo guardar en Firestore. Revisa conexión.');
+        const btn = document.getElementById('emi-save'); if (btn){ btn.disabled=false; btn.textContent='Guardar'; }
+      }
+    }
+    document.getElementById('emi-save').addEventListener('click', saveToFirestore);
     document.getElementById('emi-print').addEventListener('click', ()=>{ window.print(); });
 
+    async function flushPending(){
+      const KEY='emi_pending_saves';
+      try{
+        if (!window.navigator.onLine) return;
+        if (!window.firebase || !window.firebase.firestore) return;
+        const db = window.firebase.firestore();
+        const list = JSON.parse(localStorage.getItem(KEY)||'[]');
+        if (!Array.isArray(list) || !list.length) return;
+        const remain=[];
+        for (const item of list){
+          try{
+            const toSend = item?.data; if (!toSend) continue;
+            await db.collection('emi_tests').add(toSend);
+          }catch(e){ remain.push(item); }
+        }
+        if (remain.length){ localStorage.setItem(KEY, JSON.stringify(remain)); }
+        else { localStorage.removeItem(KEY); }
+      }catch(e){ console.warn('flushPending EMI falló', e); }
+    }
+    window.addEventListener('online', flushPending);
+
+    // intentar enviar pendientes al iniciar
+    flushPending();
     setUser(); setDate(); loadEquipos(); addRow();
   })();
   </script>

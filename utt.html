@@ -193,11 +193,74 @@
     document.getElementById('utt-clear').addEventListener('click', clearAll);
     tolEl.addEventListener('input', recompute);
 
-    document.getElementById('utt-save').addEventListener('click', ()=>{
-      alert('Guardado pendiente de implementar (colección Firestore: utt_tests).');
-    });
+    async function saveToFirestore(){
+      const KEY='utt_pending_saves';
+      let payload;
+      try{
+        const equipo = (document.getElementById('utt-eq').value||'').trim();
+        const metodo = (document.getElementById('utt-method').value||'').trim();
+        const user = (window.auth?.currentUser?.email)||'';
+        const fechaText = document.getElementById('utt-date').textContent||'';
+        const nominal = parseFloat(document.getElementById('utt-nom').value||'');
+        const tol = parseFloat(document.getElementById('utt-tol').value||'');
+        const lecturas = Array.from(body.querySelectorAll('tr')).map((tr,i)=>{
+          const v = parseFloat(tr.querySelector('input')?.value||'');
+          return { punto: `P${i+1}`, espesor: isNaN(v)? null : v };
+        });
+        const vals = lecturas.map(x=>x.espesor).filter(v=> typeof v==='number');
+        const min = vals.length? Math.min(...vals) : null;
+        const avg = vals.length? vals.reduce((a,b)=>a+b,0)/vals.length : null;
+        const conforme = (min!=null && !isNaN(tol)) ? (min >= tol) : null;
+        payload = {
+          equipo, metodo, user,
+          fechaTexto: fechaText,
+          fechaISO: new Date().toISOString(),
+          nominal: isNaN(nominal)? null : nominal,
+          tolerancia: isNaN(tol)? null : tol,
+          min: min==null? null : Number(min.toFixed(2)),
+          promedio: avg==null? null : Number(avg.toFixed(2)),
+          conformidad: conforme==null? '—' : (conforme? 'Conforme' : 'No conforme'),
+          estado: conforme===false? 'INACTIVO' : 'ACTIVO',
+          lecturas,
+          createdAt: (window.firebase?.firestore?.FieldValue?.serverTimestamp?.())||null
+        };
+        const btn = document.getElementById('utt-save'); if (btn){ btn.disabled=true; btn.textContent='Guardando...'; }
+        if (!window.firebase || !window.firebase.firestore){ throw new Error('Firebase no disponible'); }
+        const db = window.firebase.firestore();
+        const docRef = await db.collection('utt_tests').add(payload);
+        if (btn){ btn.disabled=false; btn.textContent='Guardar'; }
+        alert('Guardado UTT exitoso. ID: ' + docRef.id);
+      }catch(err){
+        console.error('Error guardando UTT', err);
+        try{ const list=JSON.parse(localStorage.getItem(KEY)||'[]'); if(payload){ list.push({when:Date.now(), data: payload}); } localStorage.setItem(KEY, JSON.stringify(list)); }catch{}
+        alert('No se pudo guardar en Firestore. Revisa conexión.');
+        const btn = document.getElementById('utt-save'); if (btn){ btn.disabled=false; btn.textContent='Guardar'; }
+      }
+    }
+    document.getElementById('utt-save').addEventListener('click', saveToFirestore);
     document.getElementById('utt-print').addEventListener('click', ()=>{ window.print(); });
 
+    async function flushPending(){
+      const KEY='utt_pending_saves';
+      try{
+        if (!window.navigator.onLine) return;
+        if (!window.firebase || !window.firebase.firestore) return;
+        const db = window.firebase.firestore();
+        const list = JSON.parse(localStorage.getItem(KEY)||'[]');
+        if (!Array.isArray(list) || !list.length) return;
+        const remain=[];
+        for (const item of list){
+          try{ const toSend=item?.data; if(!toSend) continue; await db.collection('utt_tests').add(toSend); }
+          catch(e){ remain.push(item); }
+        }
+        if (remain.length){ localStorage.setItem(KEY, JSON.stringify(remain)); }
+        else { localStorage.removeItem(KEY); }
+      }catch(e){ console.warn('flushPending UTT falló', e); }
+    }
+    window.addEventListener('online', flushPending);
+
+    // intentar enviar pendientes al iniciar
+    flushPending();
     setUser(); setDate(); loadEquipos(); addRow(); addRow();
   })();
   </script>

@@ -49,13 +49,13 @@
     <div class="table-wrap">
       <table id="emi-list-table" class="inventory">
         <thead>
-          <tr>
-            <th>Fecha</th>
-            <th>Equipo/Activo</th>
-            <th>Método/Norma</th>
-            <th>Total indicaciones</th>
-            <th>Conformidad</th>
-            <th>Usuario</th>
+          <tr id="emi-head">
+            <th data-key="fecha">Fecha</th>
+            <th data-key="equipo">Equipo/Activo</th>
+            <th data-key="metodo">Método/Norma</th>
+            <th data-key="total">Total indicaciones</th>
+            <th data-key="conformidad">Conformidad</th>
+            <th data-key="usuario">Usuario</th>
           </tr>
         </thead>
         <tbody>
@@ -75,6 +75,205 @@
   <script src="firebase-config.js"></script>
   <script src="firebase-init.js"></script>
   <script src="script.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+  <script>
+  (function(){
+    const EQ_SRC = 'docs/INVENTARIO GENERAL PCT 2025 UNIFICADO.csv';
+    const KEY = 'emi_seed_list_v2';
+    const table = document.getElementById('emi-list-table').querySelector('tbody');
+    let ALL = []; let SORT={ key:'fecha', dir:'desc' };
+    function pick(arr, n){ const a=[...arr]; const out=[]; while(a.length && out.length<n){ const i=Math.floor(Math.random()*a.length); out.push(a.splice(i,1)[0]); } return out; }
+    function randInt(a,b){ return Math.floor(Math.random()*(b-a+1))+a; }
+    function fmtDate(d){ const p=n=>String(n).padStart(2,'0'); return `${p(d.getDate())}/${p(d.getMonth()+1)}/${d.getFullYear()}`; }
+    function dateFromOffsetDays(days){ const t=new Date(); t.setDate(t.getDate()-days); return t; }
+    function dateMonthsAgo(m){ const t=new Date(); t.setMonth(t.getMonth()-m); return t; }
+    function parseDDMMYYYY(s){ const [dd,mm,yyyy] = String(s).split('/').map(x=>parseInt(x,10)); return new Date(yyyy, (mm||1)-1, dd||1); }
+    function seedFromEquip(list){
+      const methods=['API Spec 5CT','ISO 15590-3','ASTM E570'];
+      const users=['inspector01@pct.com','inspector02@pct.com','supervisor01@pct.com'];
+      const rows=[];
+      // ~30% con progresión de 4 años
+      const progCount = Math.max(5, Math.floor(list.length*0.3));
+      const progSet = new Set(list.slice(0, progCount));
+      list.forEach(eq=>{
+        if (progSet.has(eq)){
+          // 4 pruebas: 48, 36, 24, 12 meses; aumentar indicaciones y última No conforme
+          const months=[48,36,24,12];
+          months.forEach((m,idx)=>{
+            const total = idx===0? randInt(0,2) : idx===1? randInt(1,3) : idx===2? randInt(2,5) : randInt(6,10);
+            const conform = idx===3 ? 'No conforme' : 'Conforme';
+            rows.push({
+              fecha: fmtDate(dateMonthsAgo(Math.floor(m))),
+              equipo: eq,
+              metodo: methods[randInt(0,methods.length-1)],
+              total: total,
+              conformidad: conform,
+              usuario: users[randInt(0,users.length-1)],
+              estado: conform==='Conforme' ? 'ACTIVO' : 'INACTIVO'
+            });
+          });
+        } else {
+          // patrón estándar: 1 reciente + 0-3 previas
+          const recent = {
+            fecha: fmtDate(dateFromOffsetDays(randInt(0,45))),
+            equipo: eq,
+            metodo: methods[randInt(0,methods.length-1)],
+            total: randInt(0,4),
+            conformidad: 'Conforme',
+            usuario: users[randInt(0,users.length-1)],
+            estado: 'ACTIVO'
+          };
+          rows.push(recent);
+          const prevCount = randInt(0,3);
+          const usedMonths = new Set();
+          for (let i=0;i<prevCount;i++){
+            let m; if (i===0) m=randInt(1,6); else if (i===1) m=randInt(12,24); else m=randInt(24,36);
+            while (usedMonths.has(m)) m = randInt(1,36);
+            usedMonths.add(m);
+            rows.push({
+              fecha: fmtDate(dateMonthsAgo(m)),
+              equipo: eq,
+              metodo: methods[randInt(0,methods.length-1)],
+              total: randInt(0,6),
+              conformidad: 'Conforme',
+              usuario: users[randInt(0,users.length-1)],
+              estado: 'ACTIVO'
+            });
+          }
+        }
+      });
+      // ordenar por fecha desc
+      rows.sort((a,b)=> parseDDMMYYYY(b.fecha) - parseDDMMYYYY(a.fecha));
+      return rows;
+    }
+    function render(rows){
+      table.innerHTML = rows.map(r=>{
+        const equipo = r.estado==='INACTIVO' ? `${r.equipo} (INACTIVO)` : r.equipo;
+        return `<tr>
+          <td>${r.fecha}</td>
+          <td>${equipo}</td>
+          <td>${r.metodo}</td>
+          <td style="text-align:right">${r.total}</td>
+          <td><span class="status-badge ${r.conformidad==='Conforme'?'ok':'bad'}">${r.conformidad}</span></td>
+          <td>${r.usuario}</td>
+        </tr>`;
+      }).join('');
+    }
+    function parseDate(s){ const [dd,mm,yy] = String(s).split('/').map(x=>parseInt(x,10)); return new Date(yy,(mm||1)-1,dd||1).getTime(); }
+    function sortAll(){
+      const key = SORT.key; const dir = SORT.dir==='asc'?1:-1;
+      const rows = [...ALL].sort((a,b)=>{
+        let va=a[key], vb=b[key];
+        if (key==='fecha'){ va=parseDate(va); vb=parseDate(vb); }
+        if (key==='total'){ va=Number(va); vb=Number(vb); }
+        if (va<vb) return -1*dir; if (va>vb) return 1*dir; return 0;
+      });
+      render(rows);
+      try{ document.querySelectorAll('#emi-head th').forEach(th=> th.removeAttribute('aria-sort')); const th=document.querySelector(`#emi-head th[data-key="${key}"]`); if (th) th.setAttribute('aria-sort', SORT.dir); }catch{}
+    }
+    function loadSeeds(){
+      try{ const v = JSON.parse(localStorage.getItem(KEY)||'[]'); if (v && v.length){ ALL=v; sortAll(); return true; } }catch{}
+      return false;
+    }
+    function saveSeeds(rows){ try{ localStorage.setItem(KEY, JSON.stringify(rows)); }catch{} }
+
+    async function loadFromFirestore(){
+      try{
+        if (!window.firebase || !window.firebase.firestore) return false;
+        const db = window.firebase.firestore();
+        const snap = await db.collection('emi_tests').orderBy('fechaISO','desc').limit(500).get();
+        if (snap.empty) return false;
+        const rows = snap.docs.map(d=>{
+          const x=d.data()||{};
+          // map to list row format
+          const fecha = x.fechaTexto ? String(x.fechaTexto).slice(0,10) : (x.fechaISO? new Date(x.fechaISO) : null);
+          const ddmmyyyy = (fecha instanceof Date) ? (('0'+fecha.getDate()).slice(-2)+'/'+('0'+(fecha.getMonth()+1)).slice(-2)+'/'+fecha.getFullYear()) : String(fecha||'');
+          return {
+            fecha: ddmmyyyy,
+            equipo: x.estado==='INACTIVO' ? `${x.equipo} (INACTIVO)` : x.equipo,
+            metodo: x.metodo||'',
+            total: x.totalIndicaciones||0,
+            conformidad: x.conformidad||'—',
+            usuario: x.user||''
+          };
+        });
+        ALL = rows; sortAll();
+        return true;
+      }catch(e){ console.warn('loadFromFirestore EMI', e); return false; }
+    }
+
+    async function uploadSeedsIfEmpty(){
+      try{
+        if (!window.firebase || !window.firebase.firestore) return false;
+        const FLAG='emi_seed_uploaded_v1';
+        if (localStorage.getItem(FLAG)) return false;
+        const db = window.firebase.firestore();
+        const snap = await db.collection('emi_tests').limit(1).get();
+        if (!snap.empty) { localStorage.setItem(FLAG,'1'); return false; }
+        const local = JSON.parse(localStorage.getItem(KEY)||'[]');
+        if (!Array.isArray(local) || !local.length) return false;
+        // convert to payloads
+        const batchSize = Math.min(local.length, 100);
+        for (let i=0;i<batchSize;i++){
+          const r = local[i];
+          const payload = {
+            equipo: r.equipo,
+            metodo: r.metodo,
+            user: r.usuario||'',
+            velocidad: null, ganancia: null, umbral: null,
+            fechaTexto: r.fecha,
+            fechaISO: new Date().toISOString(),
+            totalIndicaciones: Number(r.total)||0,
+            conformidad: r.conformidad,
+            estado: /No conforme/i.test(r.conformidad)? 'INACTIVO' : 'ACTIVO',
+            indicaciones: [],
+            createdAt: (window.firebase?.firestore?.FieldValue?.serverTimestamp?.())||null
+          };
+          await db.collection('emi_tests').add(payload);
+        }
+        localStorage.setItem(FLAG,'1');
+        return true;
+      }catch(e){ console.warn('uploadSeedsIfEmpty EMI', e); return false; }
+    }
+
+    (async function init(){
+      // 1) intenta cargar de Firestore
+      const okFS = await loadFromFirestore();
+      if (okFS) return;
+      // 2) si no hay en Firestore, genera/carga seeds locales
+      if (!loadSeeds()){
+        Papa.parse(EQ_SRC, { download:true, skipEmptyLines:true, complete: async (res)=>{
+          const data = res?.data || []; if (!data.length) return;
+          const headers = data[0]||[]; const rows = data.slice(1);
+          const idx = headers.findIndex(h=>/EQUIPO\s*\/\s*ACTIVO|EQUIPO\s*ACTIVO|EQUIPO/i.test(String(h)));
+          const set = new Set();
+          rows.forEach(r=>{ const v = String(r[idx]||'').trim(); if (/^PCT\-/.test(v)) set.add(v); });
+          const picked = pick(Array.from(set).sort(), 30);
+          const seeds = seedFromEquip(picked);
+          ALL = seeds; saveSeeds(seeds); sortAll();
+          // 3) intenta subir seeds si la colección está vacía
+          await uploadSeedsIfEmpty();
+          // 4) recarga desde Firestore si ya subió
+          await loadFromFirestore();
+        }});
+      } else {
+        // si ya hay seeds locales, intenta subirlos si FS está vacío
+        await uploadSeedsIfEmpty();
+        await loadFromFirestore();
+      }
+    })();
+    // Sort handlers on header
+    document.querySelectorAll('#emi-head th').forEach(th=>{
+      th.style.cursor='pointer';
+      th.addEventListener('click', ()=>{
+        const k = th.getAttribute('data-key');
+        if (SORT.key===k){ SORT.dir = SORT.dir==='asc'?'desc':'asc'; }
+        else { SORT.key=k; SORT.dir='asc'; }
+        sortAll();
+      });
+    });
+  })();
+  </script>
 </body>
 </html>
 

@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Lista UTT - PCT</title>
+  <meta name="description" content="Listado de pruebas UTT registradas">
+  <link rel="icon" type="image/x-icon" href="img/logo.ico">
+  <link rel="shortcut icon" href="img/logo.ico">
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body data-page="listutt">
+  <header>
+    <div class="logo"><img src="img/logopctch.png" alt="Logo" /></div>
+    <button class="menu-toggle" aria-label="Abrir menú" aria-controls="primary-nav" aria-expanded="false">☰</button>
+    <nav id="primary-nav">
+      <ul>
+        <li><a href="index.html">Dashboard</a></li>
+        <li class="nav-dropdown"><details open><summary>Pruebas</summary><ul>
+          <li><a href="matestrep.html">MTR Material Test Report</a></li>
+          <li><a href="listmatestrep.html">Lista de pruebas (MTR)</a></li>
+          <li><a href="utt.html">Pruebas UTT</a></li>
+          <li><a class="active" href="listutt.html">Lista UTT</a></li>
+          <li><a href="emi.html">Pruebas EMI</a></li>
+          <li><a href="listemi.html">Lista EMI</a></li>
+          <li><a href="pruebas.html">Pruebas</a></li>
+          <li><a href="stockpruebas.html">Stock de pruebas</a></li>
+          <li><a href="listapruebas.html">Lista de pruebas</a></li>
+        </ul></details></li>
+        <li><a href="tareas.html">Tareas</a></li>
+        <li><a href="inspeccion.html">Inspección</a></li>
+        <li><a href="ingral.html">Inventario</a></li>
+        <li class="nav-dropdown"><details><summary>Actividad</summary><ul>
+          <li><a href="actividad.html">Registro de actividad</a></li>
+          <li><a href="regactividad.html">Historial de registros</a></li>
+        </ul></details></li>
+        <li><a href="reportes.html">Reportes</a></li>
+      </ul>
+    </nav>
+    <div class="user-box">
+      <span id="user-email"></span>
+      <a id="login-link" href="login.html">Login</a>
+      <button id="logout-btn" type="button" style="display:none">Salir</button>
+    </div>
+  </header>
+
+  <main class="wide">
+    <h1>Lista de Pruebas UTT</h1>
+    <div class="table-wrap">
+      <table id="utt-list-table" class="inventory">
+        <thead>
+          <tr id="utt-head">
+            <th data-key="fecha">Fecha</th>
+            <th data-key="equipo">Equipo/Activo</th>
+            <th data-key="metodo">Método/Norma</th>
+            <th data-key="lecturas">Lecturas</th>
+            <th data-key="min">Min</th>
+            <th data-key="tol">Tolerancia</th>
+            <th data-key="conformidad">Conformidad</th>
+            <th data-key="usuario">Usuario</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td colspan="8" style="text-align:center;">Pendiente de cargar datos</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </main>
+
+  <footer>
+    <a href="https://unknownshoppers.com" target="_blank" rel="noopener noreferrer">Powered by <img src="img/logotus.jpg" alt="Unknown Shoppers" style="height:18px; vertical-align:middle"></a>
+  </footer>
+
+  <script src="https://www.gstatic.com/firebasejs/9.6.11/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.6.11/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.6.11/firebase-firestore-compat.js"></script>
+  <script src="firebase-config.js"></script>
+  <script src="firebase-init.js"></script>
+  <script src="script.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+  <script>
+  (function(){
+    const EQ_SRC = 'docs/INVENTARIO GENERAL PCT 2025 UNIFICADO.csv';
+    const KEY = 'utt_seed_list_v2';
+    const TB = document.getElementById('utt-list-table').querySelector('tbody');
+    let ALL=[]; let SORT={ key:'fecha', dir:'desc' };
+    function pick(arr, n){ const a=[...arr]; const out=[]; while(a.length && out.length<n){ const i=Math.floor(Math.random()*a.length); out.push(a.splice(i,1)[0]); } return out; }
+    function randInt(a,b){ return Math.floor(Math.random()*(b-a+1))+a; }
+    function todayOffset(d){ const t=new Date(); t.setDate(t.getDate()-d); const p=n=>String(n).padStart(2,'0'); return `${p(t.getDate())}/${p(t.getMonth()+1)}/${t.getFullYear()}`; }
+
+    function seedFromEquip(list){
+      const methods=['ASME V Art. 5','ISO 16810','API RP 2X'];
+      const users=['inspector01@pct.com','inspector02@pct.com','supervisor01@pct.com'];
+      const rows=[];
+      // seleccionar subconjunto para progresión de 4 años (≈ 30% de la lista)
+      const progCount = Math.max(5, Math.floor(list.length*0.3));
+      const progSet = new Set(list.slice(0, progCount));
+      list.forEach(eq=>{
+        if (progSet.has(eq)){
+          // 4 pruebas: 48, 36, 24, 12 meses atrás (cronológicas en datos; luego ordenaremos desc)
+          const tol = [4.5,6.0,9.5,12.5][randInt(0,3)];
+          const months = [48, 36, 24, 12];
+          months.forEach((m,idx)=>{
+            const n = randInt(6,12);
+            // degradación: margen sobre tol decreciente; última por debajo de tol
+            const margin = idx===0? 2.5 : idx===1? 1.5 : idx===2? 0.5 : -0.4;
+            const base = tol + margin;
+            const vals = Array.from({length:n},()=> (base + Math.random()*0.4).toFixed(2));
+            const min = Math.min(...vals.map(parseFloat)).toFixed(2);
+            const conform = parseFloat(min) >= tol;
+            rows.push({
+              fecha: todayOffset(m*30),
+              equipo: eq,
+              metodo: methods[randInt(0,methods.length-1)],
+              lecturas: n,
+              min,
+              tol,
+              conformidad: conform? 'Conforme':'No conforme',
+              usuario: users[randInt(0,users.length-1)],
+              estado: conform? 'ACTIVO':'INACTIVO'
+            });
+          });
+        } else {
+          // comportamiento estándar (reciente + 0-3 previas aleatorias)
+          const tol = [4.5,6.0,9.5,12.5][randInt(0,3)];
+          const n = randInt(6,12);
+          const vals = Array.from({length:n},()=> (tol + Math.random()*2.2 + 0.3).toFixed(2));
+          const min = Math.min(...vals.map(parseFloat)).toFixed(2);
+          const conform = parseFloat(min) >= tol;
+          rows.push({
+            fecha: todayOffset(randInt(0,45)),
+            equipo: eq,
+            metodo: methods[randInt(0,methods.length-1)],
+            lecturas: n,
+            min,
+            tol,
+            conformidad: conform? 'Conforme':'No conforme',
+            usuario: users[randInt(0,users.length-1)],
+            estado: conform? 'ACTIVO':'INACTIVO'
+          });
+          const prevCount = randInt(0,3);
+          const usedMonths = new Set();
+          for (let i=0;i<prevCount;i++){
+            let m; if (i===0) m=randInt(1,6); else if (i===1) m=randInt(12,24); else m=randInt(24,36);
+            while (usedMonths.has(m)) m = randInt(1,36);
+            usedMonths.add(m);
+            const tol2 = [4.5,6.0,9.5,12.5][randInt(0,3)];
+            const n2 = randInt(6,12);
+            const vals2 = Array.from({length:n2},()=> (tol2 + Math.random()*2.2 + 0.3).toFixed(2));
+            const min2 = Math.min(...vals2.map(parseFloat)).toFixed(2);
+            const conf2 = parseFloat(min2) >= tol2;
+            rows.push({
+              fecha: todayOffset(m*30),
+              equipo: eq,
+              metodo: methods[randInt(0,methods.length-1)],
+              lecturas: n2,
+              min: min2,
+              tol: tol2,
+              conformidad: conf2? 'Conforme':'No conforme',
+              usuario: users[randInt(0,users.length-1)],
+              estado: conf2? 'ACTIVO':'INACTIVO'
+            });
+          }
+        }
+      });
+      // ordenar desc por fecha dd/mm/yyyy
+      const parseDDMMYYYY = (s)=>{ const [dd,mm,yy] = String(s).split('/').map(x=>parseInt(x,10)); return new Date(yy,(mm||1)-1,dd||1); };
+      rows.sort((a,b)=> parseDDMMYYYY(b.fecha) - parseDDMMYYYY(a.fecha));
+      return rows;
+    }
+
+    function render(rows){
+      TB.innerHTML = rows.map(r=>{
+        const equipo = r.estado==='INACTIVO'? `${r.equipo} (INACTIVO)` : r.equipo;
+        return `<tr>
+          <td>${r.fecha}</td>
+          <td>${equipo}</td>
+          <td>${r.metodo}</td>
+          <td style="text-align:right">${r.lecturas}</td>
+          <td style="text-align:right">${r.min}</td>
+          <td style="text-align:right">${r.tol.toFixed? r.tol.toFixed(2) : r.tol}</td>
+          <td><span class="status-badge ${r.conformidad==='Conforme'?'ok':'bad'}">${r.conformidad}</span></td>
+          <td>${r.usuario}</td>
+        </tr>`;
+      }).join('');
+    }
+    function parseDate(s){ const [dd,mm,yy]=String(s).split('/').map(x=>parseInt(x,10)); return new Date(yy,(mm||1)-1,dd||1).getTime(); }
+    function sortAll(){
+      const key = SORT.key; const dir = SORT.dir==='asc'?1:-1;
+      const rows = [...ALL].sort((a,b)=>{
+        let va=a[key], vb=b[key];
+        if (key==='fecha'){ va=parseDate(va); vb=parseDate(vb); }
+        if (key==='lecturas' || key==='min' || key==='tol'){ va=Number(va); vb=Number(vb); }
+        if (va<vb) return -1*dir; if (va>vb) return 1*dir; return 0;
+      });
+      render(rows);
+      // actualizar indicador visual (aria-sort)
+      try{ document.querySelectorAll('#utt-head th').forEach(th=> th.removeAttribute('aria-sort')); const th=document.querySelector(`#utt-head th[data-key="${key}"]`); if (th) th.setAttribute('aria-sort', SORT.dir); }catch{}
+    }
+    function normalizeDateStr(s){
+      s = String(s||'').trim();
+      if (/^\d{4}-\d{2}-\d{2}$/.test(s)) { const [y,m,d] = s.split('-'); return `${d}/${m}/${y}`; }
+      return s;
+    }
+    function applyFilters(){
+      const qd = normalizeDateStr(document.getElementById('f-date').value);
+      const qe = document.getElementById('f-eq').value.toLowerCase();
+      const qm = document.getElementById('f-met').value.toLowerCase();
+      const qn = parseInt(document.getElementById('f-n').value||'');
+      const qmin = parseFloat(document.getElementById('f-min').value||'');
+      const qtol = parseFloat(document.getElementById('f-tol').value||'');
+      const qc = document.getElementById('f-conf').value;
+      const qu = document.getElementById('f-user').value.toLowerCase();
+      const rows = ALL.filter(r=>{
+        const okd = !qd || String(r.fecha).includes(qd);
+        const oke = !qe || String(r.equipo).toLowerCase().includes(qe);
+        const okm = !qm || String(r.metodo).toLowerCase().includes(qm);
+        const okn = isNaN(qn) || Number(r.lecturas)>=qn;
+        const okmin = isNaN(qmin) || Number(r.min)>=qmin;
+        const oktol = isNaN(qtol) || Number(r.tol)>=qtol;
+        const okc = !qc || r.conformidad===qc;
+        const oku = !qu || String(r.usuario).toLowerCase().includes(qu);
+        return okd && oke && okm && okn && okmin && oktol && okc && oku;
+      });
+      render(rows);
+    }
+
+    function loadSeeds(){
+      try{ const v = JSON.parse(localStorage.getItem(KEY)||'[]'); if (v && v.length){ ALL=v; sortAll(); return true; } }catch{}
+      return false;
+    }
+    function saveSeeds(rows){ try{ localStorage.setItem(KEY, JSON.stringify(rows)); }catch{} }
+
+    async function loadFromFirestore(){
+      try{
+        if (!window.firebase || !window.firebase.firestore) return false;
+        const db = window.firebase.firestore();
+        const snap = await db.collection('utt_tests').orderBy('fechaISO','desc').limit(500).get();
+        if (snap.empty) return false;
+        const rows = snap.docs.map(d=>{
+          const x=d.data()||{};
+          const fecha = x.fechaTexto ? String(x.fechaTexto).slice(0,10) : (x.fechaISO? new Date(x.fechaISO) : null);
+          const ddmmyyyy = (fecha instanceof Date) ? (('0'+fecha.getDate()).slice(-2)+'/'+('0'+(fecha.getMonth()+1)).slice(-2)+'/'+fecha.getFullYear()) : String(fecha||'');
+          return {
+            fecha: ddmmyyyy,
+            equipo: x.estado==='INACTIVO'? `${x.equipo} (INACTIVO)` : x.equipo,
+            metodo: x.metodo||'',
+            lecturas: Array.isArray(x.lecturas)? x.lecturas.length : (x.lecturas||0),
+            min: typeof x.min==='number'? x.min.toFixed(2) : (x.min||'—'),
+            tol: typeof x.tolerancia==='number'? x.tolerancia.toFixed(2) : (x.tolerancia||'—'),
+            conformidad: x.conformidad||'—',
+            usuario: x.user||''
+          };
+        });
+        ALL = rows; sortAll();
+        return true;
+      }catch(e){ console.warn('loadFromFirestore UTT', e); return false; }
+    }
+
+    async function uploadSeedsIfEmpty(){
+      try{
+        if (!window.firebase || !window.firebase.firestore) return false;
+        const FLAG='utt_seed_uploaded_v1';
+        if (localStorage.getItem(FLAG)) return false;
+        const db = window.firebase.firestore();
+        const snap = await db.collection('utt_tests').limit(1).get();
+        if (!snap.empty) { localStorage.setItem(FLAG,'1'); return false; }
+        const local = JSON.parse(localStorage.getItem(KEY)||'[]');
+        if (!Array.isArray(local) || !local.length) return false;
+        const batchSize = Math.min(local.length, 100);
+        for (let i=0;i<batchSize;i++){
+          const r = local[i];
+          const payload = {
+            equipo: r.equipo,
+            metodo: r.metodo,
+            user: r.usuario||'',
+            fechaTexto: r.fecha,
+            fechaISO: new Date().toISOString(),
+            nominal: null,
+            tolerancia: (typeof r.tol==='number')? r.tol : parseFloat(r.tol)||null,
+            min: (typeof r.min==='number')? r.min : parseFloat(r.min)||null,
+            promedio: null,
+            conformidad: r.conformidad,
+            estado: /No conforme/i.test(r.conformidad)? 'INACTIVO' : 'ACTIVO',
+            lecturas: [],
+            createdAt: (window.firebase?.firestore?.FieldValue?.serverTimestamp?.())||null
+          };
+          await db.collection('utt_tests').add(payload);
+        }
+        localStorage.setItem(FLAG,'1');
+        return true;
+      }catch(e){ console.warn('uploadSeedsIfEmpty UTT', e); return false; }
+    }
+
+    (async function init(){
+      const okFS = await loadFromFirestore();
+      if (okFS) return;
+      if (!loadSeeds()){
+        Papa.parse(EQ_SRC, { download:true, skipEmptyLines:true, complete: async (res)=>{
+          const data = res?.data || []; if (!data.length) return;
+          const headers = data[0]||[]; const rows = data.slice(1);
+          const idx = headers.findIndex(h=>/EQUIPO\s*\/\s*ACTIVO|EQUIPO\s*ACTIVO|EQUIPO/i.test(String(h)));
+          const set = new Set();
+          rows.forEach(r=>{ const v = String(r[idx]||'').trim(); if (/^PCT\-/.test(v)) set.add(v); });
+          const picked = pick(Array.from(set).sort(), 30);
+          const seeds = seedFromEquip(picked);
+          ALL = seeds; saveSeeds(seeds); sortAll();
+          await uploadSeedsIfEmpty();
+          await loadFromFirestore();
+        }});
+      } else {
+        await uploadSeedsIfEmpty();
+        await loadFromFirestore();
+      }
+    })();
+    // Sort handlers on header
+    document.querySelectorAll('#utt-head th').forEach(th=>{
+      th.style.cursor='pointer';
+      th.addEventListener('click', ()=>{
+        const k = th.getAttribute('data-key');
+        if (SORT.key===k){ SORT.dir = SORT.dir==='asc'?'desc':'asc'; }
+        else { SORT.key=k; SORT.dir='asc'; }
+        sortAll();
+      });
+    });
+  })();
+  </script>
+</body>
+</html>
