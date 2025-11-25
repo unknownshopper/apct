@@ -207,7 +207,31 @@ Sistema web para gestionar inventario, inspecciones y actividad operativa de equ
   - ASTM/ASME relevantes para MTR: ASTM E8/E8M (tensión), ASTM E23 (Charpy), ASTM E10/E18 (dureza), ASTM A370 / ASME SA‑370 (propiedades mecánicas).
   - Próximos pasos: parametrizar criterios por norma/material, reporte explícito del método/versionado y anexos de calculadora/curvas.
 
-Notas: Este repositorio no declara cumplimiento automático; se proveen capacidades para facilitar auditorías y conformidad. La certificación depende de la operación, procedimientos y controles de la organización.
+## Integración futura (opcional): Evidencias con Dropbox
+
+- **Alcance**: almacenamiento de evidencias (fotos/PDF/testimonios) de pruebas, inspecciones y actividad, con trazabilidad y cadena de custodia.
+- **Arquitectura recomendada**: Cliente → Cloud Function (Firebase) → Dropbox.
+  - Evita exponer secretos en el cliente y centraliza permisos/rutas.
+- **Estructura sugerida en Dropbox**: `/APPCT/{año}/{mes}/{tipo}/{id_registro}/evidencia_{n}.{ext}` y `metadata.json` (opcional).
+- **Metadatos (Firestore)** por evidencia:
+  - `registroId`, `tipo` (utt|emi|inspeccion|actividad), `dropbox_file_id`, `dropbox_path`, `dropbox_content_hash`
+  - `sha256_cliente` (hash local previo al envío), `mime`, `size`, `user_uid`, `email`, `role`, `geo`, `serverTimestamp`
+  - Opcional: `app_version`, `device_info`, `aprobaciones[]`, `firmas[]`.
+- **Metadatos en Dropbox**: usar File Properties Templates (`registroId`, `tipo`, `uid`, `timestamp_iso`).
+- **Flujo Cloud Function `uploadEvidence`** (Node.js):
+  1. Valida sesión/claims (Auth).
+  2. Calcula carpeta destino por `tipo`/`registroId` y sube (Upload Session si >150MB).
+  3. Adjunta propiedades de plantilla y devuelve `{ file_id, path_display, content_hash, preview_link }`.
+  4. Persiste documento de evidencia en Firestore con metadatos y `sha256_cliente`.
+- **Seguridad**:
+  - Scopes mínimos en Dropbox (App Folder o rutas acotadas); tokens/refresh sólo en backend.
+  - No usar enlaces públicos; si se comparten, links con expiración.
+- **Razones para Dropbox**: previsualización de imágenes/PDF, versiones, auditoría/retención empresarial.
+- **Alternativa**: Google Cloud Storage con URLs firmadas (más nativo/óptimo en costos a gran escala).
+- **Pasos siguientes**:
+  - Crear app en Dropbox (OAuth2, PKCE si se usara cliente, pero recomendado backend), configurar plantilla de propiedades.
+  - Implementar Cloud Function `uploadEvidence` y roles/claims necesarios.
+  - Añadir botón "Adjuntar evidencia" en APPCT (UTT/EMI/Inspección/Actividad) y cola offline con reintentos.
 
 ## Desarrollo local
 - Servir el directorio: `python3 -m http.server 8080`

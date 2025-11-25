@@ -402,6 +402,81 @@
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
   <script>
     (function(){
+      async function sha256Hex(file){
+        const ab = await file.arrayBuffer();
+        const hash = await crypto.subtle.digest('SHA-256', ab);
+        const bytes = new Uint8Array(hash);
+        return Array.from(bytes).map(b=>b.toString(16).padStart(2,'0')).join('');
+      }
+
+      function imgToThumb(file, maxW=360){
+        return new Promise((resolve)=>{
+          try{
+            const img = new Image();
+            img.onload = ()=>{
+              const scale = Math.min(1, maxW / img.width);
+              const w = Math.max(1, Math.round(img.width * scale));
+              const h = Math.max(1, Math.round(img.height * scale));
+              const c = document.createElement('canvas'); c.width=w; c.height=h;
+              const cx = c.getContext('2d'); cx.drawImage(img,0,0,w,h);
+              resolve(c.toDataURL('image/jpeg', 0.8));
+            };
+            img.onerror = ()=> resolve(null);
+            img.src = URL.createObjectURL(file);
+          }catch{ resolve(null); }
+        });
+      }
+
+      function persistEvidencias(){
+        try{
+          const data = window._evidencias_meta || {};
+          localStorage.setItem('inspeccion:evidencias', JSON.stringify(data));
+        }catch{}
+      }
+
+      function rehydrateEvidencias(){
+        try{
+          const raw = localStorage.getItem('inspeccion:evidencias');
+          if (!raw) return;
+          const meta = JSON.parse(raw);
+          window._evidencias_meta = meta || {};
+          Object.keys(meta||{}).forEach(rowNum=>{
+            const detail = document.querySelector(`.subopt-detail[data-subfor="${rowNum}"]`) || document.getElementById(`elasto-detail-${rowNum}`);
+            if (!detail) return;
+            const cta = ensurePhotoCta(detail, Number(rowNum));
+            if (!cta) return;
+            cta.style.display = 'flex';
+            const img = cta.querySelector('.thumb');
+            if (img && meta[rowNum] && meta[rowNum][0] && meta[rowNum][0].thumb){ img.src = meta[rowNum][0].thumb; img.style.display='inline-block'; }
+          });
+        }catch{}
+      }
+
+      function showToast(msg){
+        try{
+          const el = document.getElementById('toast');
+          if (!el) return;
+          el.textContent = msg || 'Guardado exitosamente';
+          el.style.display = 'block';
+          clearTimeout(showToast._t);
+          showToast._t = setTimeout(()=>{ el.style.display = 'none'; }, 2000);
+        }catch{}
+      }
+
+      function resetForm(){
+        try{
+          const equip = document.getElementById('equipNumberInput'); if (equip) equip.value = '';
+          const diam = document.getElementById('diametroInput'); if (diam) diam.value = '';
+          const lon = document.getElementById('longitudInput'); if (lon){ lon.value = ''; lon.disabled = false; lon.readOnly = false; }
+          const lonUnit = document.getElementById('longitudUnit'); if (lonUnit) lonUnit.textContent = 'ft';
+          const fig = document.getElementById('conexionBadge'); if (fig) fig.textContent = 'Pendiente';
+          const serialSpan = document.getElementById('serialValue'); if (serialSpan) serialSpan.textContent = '';
+          const lugar = document.getElementById('lugarInput'); if (lugar) lugar.value = 'Base de Operaciones PCT';
+          // Reset de badges y observaciones
+          applyDefaultSelections();
+          renderObservaciones([], { scroll: false });
+        }catch{}
+      }
       const INGRAL_SRC = 'docs/INVENTARIO GENERAL PCT 2025 UNIFICADO.csv';
       let ingrIndex = null; // Map por equipo/activo
 
@@ -422,30 +497,6 @@
             const other = detail.querySelector('.elasto-other');
             if (other){ other.value = ''; const wrap = detail.querySelector('.other-wrap'); if (wrap) wrap.style.display='none'; }
           }
-
-      function showToast(msg){
-        const el = document.getElementById('toast');
-        if (!el) return;
-        el.textContent = msg || 'Guardado exitosamente';
-        el.style.display = 'block';
-        clearTimeout(showToast._t);
-        showToast._t = setTimeout(()=>{ el.style.display = 'none'; }, 2000);
-      }
-
-      function resetForm(){
-        // Limpiar entradas principales
-        const equip = document.getElementById('equipNumberInput'); if (equip) equip.value = '';
-        const diam = document.getElementById('diametroInput'); if (diam) diam.value = '';
-        const lon = document.getElementById('longitudInput'); if (lon){ lon.value = ''; lon.disabled = false; lon.readOnly = false; }
-        const lonUnit = document.getElementById('longitudUnit'); if (lonUnit) lonUnit.textContent = 'ft';
-        const fig = document.getElementById('conexionBadge'); if (fig) fig.textContent = 'Pendiente';
-        const serialSpan = document.getElementById('serialValue'); if (serialSpan) serialSpan.textContent = '';
-        const lugar = document.getElementById('lugarInput'); if (lugar) lugar.value = 'Base de Operaciones PCT';
-        // Reset de badges a valores por defecto
-        applyDefaultSelections();
-        // Ocultar observaciones
-        renderObservaciones([]);
-      }
 
         });
         // Subopciones elastómero y manejo de 'Otro'
@@ -543,6 +594,54 @@
         });
       }
 
+      function ensurePhotoCta(container, rowNum){
+        if (!container) return null;
+        let cta = container.querySelector('.photo-cta');
+        if (!cta){
+          cta = document.createElement('div');
+          cta.className = 'photo-cta';
+          cta.innerHTML = `
+            <button type="button" class="btn take-photo">Tomar foto</button>
+            <input type="file" accept="image/*" capture="environment" class="file-input" style="display:none">
+            <img class="thumb" alt="Preview evidencia" style="display:none" />
+          `;
+          container.appendChild(cta);
+          const btn = cta.querySelector('.take-photo');
+          const file = cta.querySelector('.file-input');
+          const img = cta.querySelector('.thumb');
+          btn.addEventListener('click', ()=> file.click());
+          file.addEventListener('change', async ()=>{
+            const f = file.files && file.files[0];
+            if (!f) return;
+            const url = URL.createObjectURL(f);
+            img.src = url; img.style.display = 'inline-block';
+            // Calcular hash y miniatura para persistencia
+            let hex = '';
+            try { hex = await sha256Hex(f); } catch{}
+            let thumb = null;
+            try { thumb = await imgToThumb(f, 360); } catch{}
+            // Guardar en memoria para futuro backend/Dropbox
+            window._evidencias = window._evidencias || {};
+            if (!window._evidencias[rowNum]) window._evidencias[rowNum] = [];
+            window._evidencias[rowNum].push({ file: f, when: Date.now() });
+            // Guardar metadatos persistentes
+            window._evidencias_meta = window._evidencias_meta || {};
+            if (!window._evidencias_meta[rowNum]) window._evidencias_meta[rowNum] = [];
+            window._evidencias_meta[rowNum].push({ name: f.name, size: f.size, type: f.type, sha256: hex, thumb, when: Date.now() });
+            persistEvidencias();
+          });
+        }
+        return cta;
+      }
+
+      function setOkBadStyles(td, badge){
+        if (!td || !badge) return;
+        td.querySelectorAll('.badge').forEach(b=>{ b.classList.remove('ok','bad'); });
+        const txt = String(badge.textContent||'').trim().toLowerCase();
+        if (txt === 'bueno' || txt === 'operativo') badge.classList.add('ok');
+        if (txt === 'malo' || txt === 'no operativo') badge.classList.add('bad');
+      }
+
       function initGenericBadgeToggles(){
         const table = document.querySelector('table.inspection');
         if (!table) return;
@@ -567,6 +666,11 @@
                   wrap.style.display = 'none';
                 }
               }
+              // Habilitar botón de foto al seleccionar subopción
+              const tr = row.closest('tr');
+              const rowNum = parseInt(tr?.querySelector('.num')?.textContent||'0',10);
+              const cta = ensurePhotoCta(row, rowNum);
+              if (cta) cta.style.display = 'flex';
               updateEvaluation();
             }
             return;
@@ -575,6 +679,7 @@
           if (!td) return;
           td.querySelectorAll('.badge').forEach(b=>b.classList.remove('active'));
           badge.classList.add('active');
+          setOkBadStyles(td, badge);
           // Mostrar/ocultar subopciones si aplica cuando el valor es Malo
           const tr = badge.closest('tr');
           const rowNum = parseInt(tr?.querySelector('.num')?.textContent||'0', 10);
@@ -583,6 +688,9 @@
           if (subBox){
             if (isMalo){
               subBox.style.display = 'block';
+              // No mostrar foto hasta elegir una subopción concreta
+              const cta = ensurePhotoCta(subBox, rowNum);
+              if (cta) cta.style.display = 'none';
             } else {
               subBox.style.display = 'none';
               subBox.querySelectorAll('.subopt').forEach(s=>s.classList.remove('active'));
@@ -590,13 +698,23 @@
               const input = subBox.querySelector('.subopt-other');
               if (wrap) wrap.style.display = 'none';
               if (input) input.value = '';
+              const cta = subBox.querySelector('.photo-cta');
+              if (cta) cta.style.display = 'none';
             }
           }
           updateEvaluation();
         });
         // Recalcular al cambiar elastómero también
         document.querySelectorAll('.badge-row[data-elasto] .elasto-main').forEach(b=>{
-          b.addEventListener('click', ()=>{ setTimeout(updateEvaluation, 0); });
+          b.addEventListener('click', ()=>{ 
+            const td = b.closest('td');
+            if (td){ td.querySelectorAll('.elasto-main').forEach(x=>x.classList.remove('ok','bad'));
+              const val = (b.dataset.val||'').toLowerCase();
+              if (val==='bueno') b.classList.add('ok');
+              if (val==='malo') b.classList.add('bad');
+            }
+            setTimeout(updateEvaluation, 0); 
+          });
         });
       }
 
@@ -758,7 +876,7 @@
           }
           // Construir listado de observaciones (todas las filas en "Malo")
           const obs = collectObservations();
-          renderObservaciones(obs);
+          renderObservaciones(obs, { scroll: true });
           // Confirmación antes de guardar
           const proceed = confirm(obs.length ? 'Revisar observaciones listadas. ¿Desea guardar?' : 'Sin observaciones en "Malo". ¿Desea guardar?');
           if (!proceed) return;
@@ -826,6 +944,7 @@
           })();
           showToast('Guardado exitosamente');
           resetForm();
+      rehydrateEvidencias();
         });
       }
 
@@ -902,7 +1021,7 @@
         return String(td.textContent||'').trim();
       }
 
-      function renderObservaciones(obs){
+      function renderObservaciones(obs, opts){
         const sec = document.getElementById('observacionesSection');
         const ul = document.getElementById('observacionesList');
         if (!sec || !ul) return;
@@ -914,7 +1033,8 @@
             li.textContent = t;
             ul.appendChild(li);
           });
-          if (sec.scrollIntoView) sec.scrollIntoView({behavior:'smooth', block:'start'});
+          const doScroll = !!(opts && opts.scroll);
+          if (doScroll && sec.scrollIntoView) sec.scrollIntoView({behavior:'smooth', block:'start'});
         } else {
           sec.style.display = 'none';
         }
@@ -922,7 +1042,8 @@
 
       function refreshObservaciones(){
         const obs = collectObservations();
-        renderObservaciones(obs);
+        // No desplazarse automáticamente en cada cambio
+        renderObservaciones(obs, { scroll: false });
       }
 
       async function ready(){

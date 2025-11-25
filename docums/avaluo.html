@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Avalúo de APPCT</title>
+  <link rel="stylesheet" href="../styles.css">
+  <meta name="description" content="Documento de avalúo: valor actual y potencial de APPCT (aplicación de PCT)">
+  <meta name="color-scheme" content="light">
+  <style>
+    :root { --bg:#f9fafb; --card:#ffffff; --muted:#6b7280; --border:#e5e7eb; --accent:#111827; }
+    html,body { margin:0; padding:0; background:var(--bg); font-family: system-ui, -apple-system, Segoe UI, Roboto, Inter, Arial, sans-serif; color:#111827; }
+    .doc { max-width: 960px; margin: 28px auto; padding: 0 16px; background: transparent; border: 0; }
+    .doc h1 { font-size: 28px; margin: 0 0 8px; }
+    .doc h2 { font-size: 20px; margin: 20px 0 8px; }
+    .doc h3 { font-size: 16px; margin: 14px 0 6px; }
+    .kv { display: grid; grid-template-columns: 220px 1fr; gap: 8px 16px; }
+    .small { color: var(--muted); font-size: 12px; }
+    .pill { display: inline-block; padding: 2px 8px; border-radius: 999px; background: #eef2ff; color: #3730a3; font-size: 12px; margin-right: 6px; }
+    .card, section { background: var(--card); border:1px solid var(--border); border-radius: 12px; padding: 20px; margin-top: 12px; }
+    ul { margin: 6px 0 0 18px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+    th, td { border: 1px solid var(--border); padding: 10px; text-align: left; }
+    th { background: #f3f4f6; }
+    .val { font-weight: 600; }
+    .cta { margin-top: 16px; display: flex; gap: 8px; }
+    .header { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:12px; }
+    .brand { display:flex; align-items:center; gap:10px; }
+    .brand img { height:32px; width:auto; max-height:32px; max-width:140px; }
+    .btn { appearance: none; background:#111827; color:#fff; border:1px solid #111827; border-radius:8px; padding:8px 12px; cursor:pointer; font-weight:600; }
+    .btn:hover { background:#1f2937; border-color:#1f2937; }
+  </style>
+  <link rel="icon" type="image/x-icon" href="../img/logo.ico">
+  <link rel="shortcut icon" href="../img/logo.ico">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
+  <script>
+    (function(){ document.title = 'Avalúo de APPCT - ' + (new Date()).toISOString().slice(0,10); })();
+  </script>
+  <style>
+    @media print {
+      @page { size: A4; margin: 14mm 14mm 16mm 14mm; }
+      body { background:#fff; }
+      .no-print { display:none }
+      .card, section { border:none; box-shadow:none; break-inside: avoid; page-break-inside: avoid; margin: 0 0 10mm 0; }
+      .header { break-inside: avoid; page-break-inside: avoid; }
+      .brand img { height:24px; max-height:24px; width:auto; max-width:120px; }
+      h1, h2, h3 { break-after: avoid; page-break-after: avoid; }
+      table, thead, tbody, tr, th, td { break-inside: avoid; page-break-inside: avoid; }
+    }
+  </style>
+</head>
+<body>
+  <main class="doc">
+    <div class="header">
+      <div class="brand">
+        <img src="../img/logotus.jpg" alt="The Unknown Shopper">
+        <div>
+          <h1>Avalúo de APPCT</h1>
+          <div class="small">Proveedor: The Unknown Shopper · Cliente: PCT</div>
+          <div class="small">Documento vivo. Última actualización: <span id="last-update"></span></div>
+        </div>
+      </div>
+      <div class="no-print">
+        <button class="btn" onclick="window.print()">Imprimir / PDF</button>
+      </div>
+    </div>
+
+    <section class="card">
+      <h2>Resumen ejecutivo</h2>
+      <p>
+        Este documento estima el valor actual y potencial de APPCT (aplicación de PCT), considerando su alcance implementado
+        a la fecha, los entregables desarrollados, la base tecnológica (Firebase/Firestore) y el roadmap previsto.
+      </p>
+      <div class="kv">
+        <div>Estado del sistema</div><div><span class="pill">Operativo</span><span class="pill">En evolución</span></div>
+        <div>Base tecnológica</div><div>Firebase Auth, Firestore (Web), JS/HTML/CSS, módulos funcionales APPCT</div>
+        <div>Horizonte de evaluación</div><div>12–24 meses (ajustable)</div>
+        <div>Valor estimado actual</div><div class="val">MXN <span id="val-actual">—</span> (rango)</div>
+        <div>Valor potencial (con roadmap)</div><div class="val">MXN <span id="val-pot">—</span> (rango)</div>
+      </div>
+    </section>
+
+    <section>
+      <h2>Alcance actual y entregables</h2>
+      <h3>Módulos y funcionalidades implementadas</h3>
+      <ul>
+        <li>Autenticación de usuarios y roles (Firebase Auth, custom claims mediante Admin SDK).</li>
+        <li>Inventario e inspección primaria (carga y visualización de CSVs, normalización básica).</li>
+        <li>Registro de actividad y su historial con Firestore + caché local para resiliencia offline.</li>
+        <li>Pruebas técnicas: UTT (Ultrasonic Thickness Test) con cálculo de mínimos, promedio y conformidad.</li>
+        <li>Pruebas MTR/EMI con páginas de captura/listado en progreso.</li>
+        <li>Reportes y páginas de listado/consulta asociadas.</li>
+        <li>Estructura UI responsive y navegación unificada.</li>
+      </ul>
+
+      <h3>Entregables técnicos</h3>
+      <ul>
+        <li>Configuración de Firebase Web y scripts de inicialización.</li>
+        <li>Integración Firestore (lectura/escritura) y manejo de errores con fallback a localStorage.</li>
+        <li>Script de asignación de roles vía Admin SDK (operación puntual).</li>
+        <li>Recursos de UI, estilos, componentes, y documentación mínima en el código.</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>Estimación de valor actual (Referencia)</h2>
+      <p class="small">Nota: sustituir montos por cifras reales una vez validadas horas, tarifas y ahorros.</p>
+      <table>
+        <thead>
+          <tr><th>Componente</th><th>Base de valuación</th><th>Monto (MXN)</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Desarrollo Frontend (UI + Flujos)</td><td>Horas invertidas × tarifa</td><td contenteditable>20,000</td></tr>
+          <tr><td>Integración Firebase/Firestore</td><td>Horas + complejidad + pruebas</td><td contenteditable>15,000</td></tr>
+          <tr><td>Módulos de Pruebas (UTT/MTR/EMI)</td><td>Horas + alcance funcional</td><td contenteditable>18,000</td></tr>
+          <tr><td>Inventario/Inspección/Actividad</td><td>Horas + utilidad operativa</td><td contenteditable>16,000</td></tr>
+          <tr><td>Reportes y listados</td><td>Horas + calidad de datos</td><td contenteditable>12,000</td></tr>
+          <tr><td>Gestión de roles y seguridad básica</td><td>Implementación + revisión</td><td contenteditable>9,000</td></tr>
+          <tr><td><strong>Total estimado actual</strong></td><td></td><td class="val" id="total-actual">90,000</td></tr>
+        </tbody>
+      </table>
+      <div class="small">Se recomienda documentar horas por módulo y anexarlas para trazabilidad.</div>
+    </section>
+
+    <section>
+      <h2>Roadmap y valor potencial</h2>
+      <h3>Próximas funcionalidades sugeridas</h3>
+      <ul>
+        <li>Endurecimiento de reglas de Firestore por rol y colección.</li>
+        <li>App Check para reducir abuso de llamadas desde clientes no autorizados.</li>
+        <li>Reportes avanzados (gráficas, KPIs, exportación).</li>
+        <li>Flujos completos de MTR y EMI (validaciones, firmas, auditoría).</li>
+        <li>Mejoras offline-first y sincronización diferida robusta.</li>
+        <li>Integraciones externas (ERP/CRM) según necesidades.</li>
+      </ul>
+      <h3>Estimación de valor potencial</h3>
+      <table>
+        <thead>
+          <tr><th>Línea de evolución</th><th>Impacto esperado</th><th>Valor estimado (MXN)</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Seguridad y cumplimiento</td><td>Reducción de riesgo y pérdidas</td><td contenteditable>12,000 – 18,000</td></tr>
+          <tr><td>Productividad operativa</td><td>Ahorro de tiempo por automatización</td><td contenteditable>40,000 – 60,000</td></tr>
+          <tr><td>Calidad de datos y trazabilidad</td><td>Mejor toma de decisiones</td><td contenteditable>20,000 – 30,000</td></tr>
+          <tr><td>Integraciones</td><td>Eliminación de reprocesos</td><td contenteditable>25,000 – 40,000</td></tr>
+          <tr><td><strong>Total potencial</strong></td><td></td><td class="val" id="total-pot">112,000 – 173,000</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>Opciones de precio y mantenimiento</h2>
+      <h3>Paquetes</h3>
+      <ul>
+        <li><strong>Opción 1 – Entrega actual:</strong> 150,000 – 190,000 MXN. Mantenimiento: 6,000 MXN/mes.</li>
+        <li><strong>Opción 2 – Profesional:</strong> 210,000 MXN (incluye hardening y reportes avanzados básicos). Mantenimiento: 8,000 MXN/mes.</li>
+        <li><strong>Opción 3 – Empresa:</strong> 280,000 MXN (incluye MTR/EMI completos y offline mejorado). Mantenimiento: 10,000 MXN/mes.</li>
+      </ul>
+      <h3>Costos operativos (Firebase estimado)</h3>
+      <ul>
+        <li><strong>Uso bajo/medio:</strong> 500 – 3,000 MXN/mes según lecturas, escrituras y almacenamiento.</li>
+        <li>Recomendación: iniciar con monitoreo y ajustar.</li>
+      </ul>
+      <h3>Alternativa tipo licencia</h3>
+      <ul>
+        <li><strong>Setup:</strong> 60,000 MXN + <strong>Licencia:</strong> 4,000 MXN/mes + <strong>Soporte:</strong> 6,000 MXN/mes (mín. 12 meses).</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>Costos (CAPEX / OPEX)</h2>
+      <div class="kv">
+        <div>Infraestructura (OPEX)</div><div>Firebase/Firestore según uso mensual (lecturas/escrituras/almacenamiento).</div>
+        <div>Mantenimiento evolutivo</div><div>Horas mensuales de soporte y mejoras.</div>
+        <div>Licencias / herramientas</div><div>Actualmente no críticas (revisar si aplica).</div>
+        <div>Capacitación / adopción</div><div>Horas iniciales de onboarding y soporte a usuarios.</div>
+      </div>
+    </section>
+
+    <section>
+      <h2>Supuestos y riesgos</h2>
+      <ul>
+        <li>El ecosistema seguirá basado en Firebase/Firestore sin cambios drásticos de arquitectura.</li>
+        <li>Los volúmenes de datos y usuarios se mantienen dentro de los umbrales planificados.</li>
+        <li>Las reglas de seguridad se fortalecerán en el corto plazo para minimizar exposición.</li>
+        <li>Rotación de claves del service account y restricción de la apiKey en GCP.</li>
+      </ul>
+      <h3>Riesgos a gestionar</h3>
+      <ul>
+        <li>Uso indebido desde clientes no autorizados si App Check no está habilitado.</li>
+        <li>Reglas de Firestore demasiado permisivas durante fases de prueba.</li>
+        <li>Dependencia de conexión estable sin mecanismos offline más robustos.</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>Metodología de valuación</h2>
+      <ul>
+        <li>Cost approach: horas × tarifa por componente entregado.</li>
+        <li>Value-in-use: estimación de ahorros/productividad por módulo.</li>
+        <li>Riesgo/ajustes: descuentos por incertidumbre técnica y de adopción.</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>Anexos</h2>
+      <ul>
+        <li>Inventario de pantallas y módulos.</li>
+        <li>Bitácora de horas por entregable.</li>
+        <li>Estimaciones de uso y costos Firebase (lecturas/escrituras/GB/egreso).</li>
+      </ul>
+    </section>
+
+    <footer class="small" style="margin-top:24px; color:#6b7280;">
+      Documento interno de estimación. Las cifras aquí expresadas son referenciales y sujetas a validación.
+    </footer>
+  </main>
+
+  <script>
+    (function(){
+      try {
+        const el = document.getElementById('last-update');
+        if (el) el.textContent = new Date().toLocaleString('es-MX');
+        // Valores de resumen ejecutivo
+        const va = document.getElementById('val-actual');
+        const vp = document.getElementById('val-pot');
+        if (va) va.textContent = '90,000';
+        if (vp) vp.textContent = '130,000 – 180,000';
+      } catch {}
+    })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Propuesta Comercial - Sistema PCT</title>
+  <link rel="icon" type="image/x-icon" href="../img/logo.ico">
+  <link rel="shortcut icon" href="../img/logo.ico">
+  <meta name="description" content="Propuesta comercial para implementación y evolución del sistema PCT">
+  <style>
+    :root {
+      --bg:#f9fafb; --card:#ffffff; --muted:#6b7280; --border:#e5e7eb; --accent:#111827;
+    }
+    html,body { margin:0; padding:0; background:var(--bg); font-family: system-ui, -apple-system, Segoe UI, Roboto, Inter, Arial, sans-serif; color:#111827; }
+    .wrap { max-width: 960px; margin: 28px auto; padding: 0 16px; }
+    .card { background: var(--card); border:1px solid var(--border); border-radius: 12px; padding: 20px; }
+    h1 { font-size: 28px; margin: 0 0 8px; }
+    h2 { font-size: 20px; margin: 20px 0 8px; }
+    h3 { font-size: 16px; margin: 14px 0 6px; }
+    .muted { color: var(--muted); font-size: 13px; }
+    .grid { display:grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .pill { display:inline-block; background:#eef2ff; color:#3730a3; border-radius:999px; padding:2px 10px; font-size:12px; margin-right:6px; }
+    ul { margin: 6px 0 0 18px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+    th, td { border:1px solid var(--border); padding:10px; text-align:left; }
+    th { background:#f3f4f6; }
+    .price { font-weight:700; }
+    .cta { display:flex; gap:8px; margin-top:10px; }
+    .header { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:12px; }
+    .brand { display:flex; align-items:center; gap:10px; }
+    .brand img { height:32px; }
+    .footer { color:var(--muted); font-size:12px; margin-top: 16px; }
+    .sign { display:grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-top: 20px; }
+    .sign .box { height: 96px; border:1px dashed var(--border); border-radius:8px; padding:8px; }
+    .note { background:#fffbeb; border:1px solid #fef3c7; padding:10px; border-radius:8px; font-size:13px; }
+    .btn { appearance: none; background:#111827; color:#fff; border:1px solid #111827; border-radius:8px; padding:8px 12px; cursor:pointer; font-weight:600; }
+    .btn:hover { background:#1f2937; border-color:#1f2937; }
+    @media print {
+      @page { size: A4; margin: 14mm 14mm 16mm 14mm; }
+      body { background:#fff; }
+      .no-print { display:none }
+      .card { border:none; box-shadow:none; break-inside: avoid; page-break-inside: avoid; margin: 0 0 10mm 0; }
+      .wrap { max-width: none; margin: 0; padding: 0; }
+      .header { break-inside: avoid; page-break-inside: avoid; }
+      h1, h2, h3 { break-after: avoid; page-break-after: avoid; }
+      table, thead, tbody, tr, th, td { break-inside: avoid; page-break-inside: avoid; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="header">
+      <div class="brand">
+        <img src="../img/logotus.jpg" alt="The Unknown Shopper">
+        <div>
+          <h1>Propuesta Comercial</h1>
+          <div class="muted">Proveedor: The Unknown Shopper · Cliente: PCT</div>
+          <div class="muted">APPCT – Gestión operativa y pruebas técnicas</div>
+        </div>
+      </div>
+      <div class="no-print">
+        <button class="btn" onclick="window.print()">Imprimir / PDF</button>
+      </div>
+    </div>
+
+    <section class="card">
+      <h2>Resumen</h2>
+      <p>
+        Presentamos nuestra propuesta para la entrega de APPCT en su estado actual y su evolución en fases
+        sucesivas. La aplicación integra autenticación, gestión de inventario e inspección, registro de actividad y
+        módulos de pruebas (UTT/MTR/EMI), construido sobre Firebase Auth y Firestore.
+      </p>
+      <div class="grid">
+        <div>
+          <div class="muted">Estado</div>
+          <div><span class="pill">Operativo</span><span class="pill">Escalable</span></div>
+        </div>
+        <div>
+          <div class="muted">Vigencia de la propuesta</div>
+          <div>15 días naturales</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Alcance (versión actual)</h2>
+      <ul>
+        <li>Autenticación de usuarios y roles (Firebase Auth + custom claims).</li>
+        <li>Inventario e inspección primaria (ingesta CSV, normalización básica).</li>
+        <li>Registro de actividad + historial con Firestore y caché local.</li>
+        <li>Módulo UTT con cálculo de mínimos, promedio y conformidad.</li>
+        <li>Páginas en progreso: MTR/EMI; reportes y listados.</li>
+        <li>Interfaz responsive, navegación y estilos unificados.</li>
+      </ul>
+    </section>
+
+    <section class="card">
+      <h2>Paquetes y precios</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Paquete</th>
+            <th>Incluye</th>
+            <th>Precio</th>
+            <th>Mantenimiento mensual</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Opción 1 – Entrega actual</strong></td>
+            <td>
+              Sistema en su estado actual; soporte de estabilización menor.
+            </td>
+            <td class="price">$90,000 MXN</td>
+            <td>$6,000 MXN</td>
+          </tr>
+          <tr>
+            <td><strong>Opción 2 – Profesional</strong></td>
+            <td>
+              Entrega actual + hardening de reglas Firestore y App Check + reportes avanzados básicos.
+            </td>
+            <td class="price">$130,000 MXN</td>
+            <td>$8,000 MXN</td>
+          </tr>
+          <tr>
+            <td><strong>Opción 3 – Empresa</strong></td>
+            <td>
+              Todo lo anterior + MTR/EMI completos + mejoras offline (sincronización diferida y resiliencia).
+            </td>
+            <td class="price">$180,000 MXN</td>
+            <td>$10,000 MXN</td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="note" style="margin-top:8px;">
+        Los costos de operación de Firebase (Auth/Firestore/Storage) no están incluidos en los valores anteriores; estimados
+        de referencia: $500 – $3,000 MXN/mes según uso (lecturas, escrituras y almacenamiento).
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Cronograma sugerido</h2>
+      <ul>
+        <li><strong>Semana 1–2:</strong> estabilización, endurecimiento de reglas y App Check (si aplica).</li>
+        <li><strong>Semana 3–5:</strong> MTR/EMI funcional completos (validaciones, firmas, auditoría básica).</li>
+        <li><strong>Semana 6–7:</strong> reportes avanzados, KPIs y exportaciones.</li>
+        <li><strong>Semana 8:</strong> cierre de fase, capacitación y pase a producción.</li>
+      </ul>
+      <div class="muted">El cronograma puede ajustarse según prioridades y disponibilidad.</div>
+    </section>
+
+    <section class="card">
+      <h2>Condiciones comerciales</h2>
+      <ul>
+        <li>Forma de pago: 50% anticipo, 50% contra entrega de cada fase.</li>
+        <li>Precios en MXN, no incluyen IVA.</li>
+        <li>Vigencia de la propuesta: 15 días naturales.</li>
+        <li>El alcance podrá ajustarse previo acuerdo comercial.</li>
+      </ul>
+    </section>
+
+    <section class="card">
+      <h2>Contactos y firma</h2>
+      <div class="grid">
+        <div>
+          <h3>Contacto técnico</h3>
+          <div class="muted">Nombre, correo, teléfono</div>
+        </div>
+        <div>
+          <h3>Contacto comercial</h3>
+          <div class="muted">Nombre, correo, teléfono</div>
+        </div>
+      </div>
+      <div class="sign">
+        <div>
+          <div class="muted">Aceptación del cliente</div>
+          <div class="box"></div>
+        </div>
+        <div>
+          <div class="muted">Representante PCT</div>
+          <div class="box"></div>
+        </div>
+      </div>
+      <div class="footer">Gracias por la oportunidad de colaborar. Estamos listos para iniciar.</div>
+    </section>
+  </div>
+</body>
+</html>
