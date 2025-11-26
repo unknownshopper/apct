@@ -1094,12 +1094,14 @@
           renderDatalist(list, filtered);
         });
         input.addEventListener('change', ()=> applyFromEquipo(input.value));
-        input.addEventListener('blur', ()=> applyFromEquipo(input.value));
 
         const isTouch = ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
         const isSmall = window.matchMedia && window.matchMedia('(max-width: 768px)').matches;
         if (isTouch || isSmall){
+          try { input.removeAttribute('list'); } catch{}
           setupMobileEquipPicker(input, ALL);
+        } else {
+          input.addEventListener('blur', ()=> applyFromEquipo(input.value));
         }
       }
 
@@ -1126,13 +1128,14 @@
 
         function open(){
           overlay.classList.add('open');
+          try { document.body.classList.add('no-scroll'); } catch{}
           render('');
           // Copiar query inicial desde input
           try { search.value = String(anchorInput.value||''); } catch {}
           render(search.value);
           setTimeout(()=>{ try{ search.focus(); search.select(); }catch{} }, 0);
         }
-        function close(){ overlay.classList.remove('open'); }
+        function close(){ overlay.classList.remove('open'); try { document.body.classList.remove('no-scroll'); } catch{} }
         function render(q){
           const query = String(q||'').toLowerCase();
           const items = (!query ? allOptions : allOptions.filter(v=>v.toLowerCase().includes(query))).slice(0,200);

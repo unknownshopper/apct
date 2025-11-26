@@ -956,6 +956,12 @@ table.inventory tbody::before {
 .mobile-picker-item:active { transform: translateY(1px); }
 .mobile-picker-empty { color: #64748b; padding: 12px; text-align: center; }
 
+/* Evitar scroll de fondo cuando el panel móvil está abierto */
+body.no-scroll {
+  overflow: hidden !important;
+  touch-action: none;
+}
+
 @media (max-width: 768px) {
   [data-page="inspeccion"] main { margin: 24px auto; padding: 22px 18px; }
   [data-page="inspeccion"] .meta { grid-template-columns: 1fr; gap: 10px 12px; }
