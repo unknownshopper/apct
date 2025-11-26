@@ -1083,6 +1083,7 @@
         const input = document.getElementById('equipNumberInput');
         const list = document.getElementById('equipNumberList');
         if (!input || !list) return;
+        try { input.setAttribute('autocomplete','off'); input.setAttribute('autocorrect','off'); input.setAttribute('spellcheck','false'); } catch{}
         const idx = await fetchIngralIndex();
         const ALL = Array.from(idx.keys());
         renderDatalist(list, ALL);
@@ -1098,7 +1099,7 @@
         const isTouch = ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
         const isSmall = window.matchMedia && window.matchMedia('(max-width: 768px)').matches;
         if (isTouch || isSmall){
-          try { input.removeAttribute('list'); } catch{}
+          try { input.removeAttribute('list'); input.readOnly = true; } catch{}
           setupMobileEquipPicker(input, ALL);
         } else {
           input.addEventListener('blur', ()=> applyFromEquipo(input.value));

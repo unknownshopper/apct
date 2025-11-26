@@ -211,6 +211,7 @@
           : '';
         const diamTxt = r.parametros && r.parametros.diametro ? r.parametros.diametro : '';
         const serialTxt = r.parametros && r.parametros.serial ? r.parametros.serial : '';
+        const cxTxt = r.parametros && r.parametros.conexion ? r.parametros.conexion : 'Pendiente';
         const cells = [
           fmtDate(r.fechaTs || r.fecha),
           r.equipoActivo || '',
@@ -218,16 +219,23 @@
           r.cliente || '',
           r.lugar || '',
           diamTxt,
-          r.parametros && r.parametros.conexion ? r.parametros.conexion : '',
+          cxTxt,
           longTxt,
           serialTxt,
           r.evaluacion || '',
           r.usuario || '',
           obsTxt
         ];
-        cells.forEach(val => {
+        cells.forEach((val, j) => {
           const td = document.createElement('td');
-          td.textContent = val == null ? '' : String(val);
+          if (j === 6 && String(val).trim().toLowerCase() === 'pendiente'){
+            const b = document.createElement('span');
+            b.className = 'ri-badge pending';
+            b.textContent = 'Pendiente';
+            td.appendChild(b);
+          } else {
+            td.textContent = val == null ? '' : String(val);
+          }
           tr.appendChild(td);
         });
         frag.appendChild(tr);
@@ -245,13 +253,19 @@
         view = allRows.slice();
       } else {
         view = allRows.filter(r => {
+          const p = r.parametros || {};
+          const longTxt = (p.longitud ? `${p.longitud} ${p.longitudUnidad||''}` : '');
           const haystack = [
             r.equipoActivo,
             r.cliente,
             r.lugar,
             r.usuario,
             r.tipo,
-            r.evaluacion
+            r.evaluacion,
+            p.diametro,
+            p.conexion,
+            longTxt,
+            p.serial
           ].concat(Array.isArray(r.observaciones) ? r.observaciones : [])
            .join(' | ')
            .toLowerCase();

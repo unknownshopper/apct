@@ -11,6 +11,11 @@
   --shadow: 0 10px 24px rgba(2,132,199,0.08);
 }
 
+/* En móviles, ocultar datalist si el navegador no lo soporta y renderiza las options como texto */
+@media (max-width: 768px){
+  datalist { display: none !important; }
+}
+
 /* Hide print header on screen */
 .print-header { display: none; }
 
@@ -960,6 +965,22 @@ table.inventory tbody::before {
 body.no-scroll {
   overflow: hidden !important;
   touch-action: none;
+}
+
+/* Badge ligera usada en reginspecciones */
+.ri-badge {
+  display: inline-block;
+  padding: 4px 8px;
+  border-radius: 999px;
+  border: 1px solid #e5e7eb;
+  font-size: 0.85rem;
+  color: #334155;
+  background: #fff;
+}
+.ri-badge.pending {
+  border-color: #f59e0b;
+  color: #92400e;
+  background: rgba(245, 158, 11, 0.12);
 }
 
 @media (max-width: 768px) {
