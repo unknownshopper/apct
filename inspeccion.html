@@ -897,6 +897,7 @@
               await ready();
               const db = window.db;
               const equipo = document.getElementById('equipNumberInput')?.value||'';
+              try { if (equipo) { await applyFromEquipo(equipo); } } catch {}
               const diametro = document.getElementById('diametroInput')?.value||'';
               const conexion = document.getElementById('conexionBadge')?.textContent||'';
               const longitudVal = document.getElementById('longitudInput')?.value||'';

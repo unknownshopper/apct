@@ -199,6 +199,10 @@
       });
     }
 
+    function val(obj, pathArr){
+      try { return pathArr.reduce((a,k)=> (a && a[k] != null ? a[k] : undefined), obj); } catch { return undefined; }
+    }
+
     function renderBody(rows){
       const frag = document.createDocumentFragment();
       rows.forEach(r => {
@@ -206,18 +210,25 @@
         const obsTxt = Array.isArray(r.observaciones)
           ? r.observaciones.join(' \u2022 ')
           : (r.observaciones || '');
-        const longTxt = (r.parametros && r.parametros.longitud)
-          ? `${r.parametros.longitud} ${r.parametros.longitudUnidad || ''}`.trim()
-          : '';
-        const diamTxt = r.parametros && r.parametros.diametro ? r.parametros.diametro : '';
-        const serialTxt = r.parametros && r.parametros.serial ? r.parametros.serial : '';
-        const cxTxt = r.parametros && r.parametros.conexion ? r.parametros.conexion : 'Pendiente';
+        const equipo = r.equipoActivo || val(r,['meta','equipoActivo']) || r.equipo || '';
+        const tipo = r.tipo || val(r,['meta','tipo']) || '';
+        const cliente = r.cliente || val(r,['meta','cliente']) || '';
+        const lugar = r.lugar || val(r,['meta','lugar']) || '';
+        const diamVal = val(r,['parametros','diametro']) || r.diametro || val(r,['meta','diametro']) || '';
+        const cxVal = val(r,['parametros','conexion']) || r.conexion || val(r,['meta','conexion']) || '';
+        const longVal = val(r,['parametros','longitud']) || r.longitud || val(r,['meta','longitud']) || '';
+        const longUnit = val(r,['parametros','longitudUnidad']) || r.longitudUnidad || val(r,['meta','longitudUnidad']) || '';
+        const serialVal = val(r,['parametros','serial']) || r.serial || val(r,['meta','serial']) || '';
+        const longTxt = longVal ? `${longVal} ${longUnit || ''}`.trim() : '';
+        const diamTxt = diamVal || '';
+        const serialTxt = serialVal || '';
+        const cxTxt = cxVal || 'Pendiente';
         const cells = [
           fmtDate(r.fechaTs || r.fecha),
-          r.equipoActivo || '',
-          r.tipo || '',
-          r.cliente || '',
-          r.lugar || '',
+          equipo,
+          tipo,
+          cliente,
+          lugar,
           diamTxt,
           cxTxt,
           longTxt,
@@ -254,18 +265,18 @@
       } else {
         view = allRows.filter(r => {
           const p = r.parametros || {};
-          const longTxt = (p.longitud ? `${p.longitud} ${p.longitudUnidad||''}` : '');
+          const longTxt = (p.longitud ? `${p.longitud} ${p.longitudUnidad||''}` : (r.longitud ? `${r.longitud} ${r.longitudUnidad||''}` : ''));
           const haystack = [
-            r.equipoActivo,
-            r.cliente,
-            r.lugar,
+            r.equipoActivo, val(r,['meta','equipoActivo']), r.equipo,
+            r.cliente, val(r,['meta','cliente']),
+            r.lugar, val(r,['meta','lugar']),
             r.usuario,
             r.tipo,
             r.evaluacion,
-            p.diametro,
-            p.conexion,
+            p.diametro, r.diametro, val(r,['meta','diametro']),
+            p.conexion, r.conexion, val(r,['meta','conexion']),
             longTxt,
-            p.serial
+            p.serial, r.serial, val(r,['meta','serial'])
           ].concat(Array.isArray(r.observaciones) ? r.observaciones : [])
            .join(' | ')
            .toLowerCase();
@@ -307,6 +318,28 @@
           const d = doc.data() || {};
           rows.push(d);
         });
+        if (rows.length){
+          try{
+            const d = rows[0] || {};
+            console.log('[reginspecciones] sample', {
+              keys: Object.keys(d||{}),
+              equipoActivo: d.equipoActivo,
+              equipo: d.equipo,
+              meta_equipoActivo: d.meta && d.meta.equipoActivo,
+              parametros: d.parametros,
+              diametro: d.diametro,
+              meta_diametro: d.meta && d.meta.diametro,
+              conexion: d.conexion,
+              meta_conexion: d.meta && d.meta.conexion,
+              longitud: d.longitud,
+              longitudUnidad: d.longitudUnidad,
+              meta_longitud: d.meta && d.meta.longitud,
+              meta_longitudUnidad: d.meta && d.meta.longitudUnidad,
+              serial: d.serial,
+              meta_serial: d.meta && d.meta.serial
+            });
+          }catch{}
+        }
         allRows = rows;
         view = rows.slice();
         renderBody(view);
