@@ -1086,6 +1086,7 @@
         const idx = await fetchIngralIndex();
         const ALL = Array.from(idx.keys());
         renderDatalist(list, ALL);
+        // Desktop: mantener datalist nativo
         input.addEventListener('input', () => {
           const q = String(input.value||'').toLowerCase();
           if (!q){ renderDatalist(list, ALL); return; }
@@ -1094,6 +1095,68 @@
         });
         input.addEventListener('change', ()=> applyFromEquipo(input.value));
         input.addEventListener('blur', ()=> applyFromEquipo(input.value));
+
+        const isTouch = ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
+        const isSmall = window.matchMedia && window.matchMedia('(max-width: 768px)').matches;
+        if (isTouch || isSmall){
+          setupMobileEquipPicker(input, ALL);
+        }
+      }
+
+      function setupMobileEquipPicker(anchorInput, allOptions){
+        if (!anchorInput) return;
+        let overlay = document.getElementById('equip-mobile-picker');
+        if (!overlay){
+          overlay = document.createElement('div');
+          overlay.id = 'equip-mobile-picker';
+          overlay.className = 'mobile-picker-overlay';
+          overlay.innerHTML = `
+            <div class="mobile-picker-panel">
+              <div class="mobile-picker-header">
+                <input type="text" class="mobile-picker-search" placeholder="Buscar equipo/activo..." aria-label="Buscar equipo" />
+                <button type="button" class="mobile-picker-close" aria-label="Cerrar">✕</button>
+              </div>
+              <div class="mobile-picker-list" role="listbox" aria-label="Resultados"></div>
+            </div>`;
+          document.body.appendChild(overlay);
+        }
+        const search = overlay.querySelector('.mobile-picker-search');
+        const closeBtn = overlay.querySelector('.mobile-picker-close');
+        const list = overlay.querySelector('.mobile-picker-list');
+
+        function open(){
+          overlay.classList.add('open');
+          render('');
+          // Copiar query inicial desde input
+          try { search.value = String(anchorInput.value||''); } catch {}
+          render(search.value);
+          setTimeout(()=>{ try{ search.focus(); search.select(); }catch{} }, 0);
+        }
+        function close(){ overlay.classList.remove('open'); }
+        function render(q){
+          const query = String(q||'').toLowerCase();
+          const items = (!query ? allOptions : allOptions.filter(v=>v.toLowerCase().includes(query))).slice(0,200);
+          list.innerHTML = '';
+          if (!items.length){
+            const empty = document.createElement('div'); empty.className='mobile-picker-empty'; empty.textContent = 'Sin resultados'; list.appendChild(empty); return;
+          }
+          for (const v of items){
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'mobile-picker-item';
+            btn.textContent = v;
+            btn.addEventListener('click', ()=>{ anchorInput.value = v; applyFromEquipo(v); close(); });
+            list.appendChild(btn);
+          }
+        }
+        search.addEventListener('input', ()=> render(search.value));
+        closeBtn.addEventListener('click', close);
+        overlay.addEventListener('click', (e)=>{ if (e.target === overlay) close(); });
+
+        // Abrir al enfocar o tocar el input
+        const openHandler = (e)=>{ e.preventDefault(); open(); };
+        anchorInput.addEventListener('focus', openHandler);
+        anchorInput.addEventListener('click', openHandler);
       }
 
       // Inicialización global
