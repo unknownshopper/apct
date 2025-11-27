@@ -36,9 +36,9 @@
         <li class="nav-dropdown"><details><summary>Pruebas</summary><ul>
           <li><a href="matestrep.html">MTR Material Test Report</a></li>
           <li><a href="listmatestrep.html">Lista de pruebas (MTR)</a></li>
-          <li><a href="pruebas.html">Pruebas</a></li>
-          <li><a href="stockpruebas.html">Stock de pruebas</a></li>
-          <li><a href="listapruebas.html">Lista de pruebas</a></li>
+          <li><a href="pruebas.html">Pruebas PND (pruebas no destructibles)</a></li>
+          <li><a href="stockpruebas.html">PND x equipo</a></li>
+          <li><a href="listapruebas.html">Registro PND</a></li>
           <li><a href="utt.html">Pruebas UTT</a></li>
           <li><a href="listutt.html">Lista UTT</a></li>
           <li><a href="emi.html">Pruebas EMI</a></li>
@@ -65,6 +65,8 @@
       <div class="group">
         <input id="q" type="text" placeholder="Buscar..." aria-label="Buscar" />
         <button id="clearQ" class="btn-primary" type="button">Limpiar</button>
+        <button id="btnGenSerials" class="btn-primary" type="button">Generar seriales faltantes</button>
+        <button id="btnExportCSV" class="btn-primary" type="button" style="display:none;">Descargar CSV actualizado</button>
       </div>
       <div class="toolbar-count" id="count">0 registros</div>
     </div>
@@ -110,7 +112,8 @@
 
     function renderHead(){
       const tr = document.createElement('tr');
-      headers.forEach((h, idx)=>{
+      const heads = headers;
+      heads.forEach((h, idx)=>{
         const th = document.createElement('th');
         th.textContent = h;
         th.setAttribute('role','button');
@@ -132,8 +135,27 @@
         const row = data[i];
         for (let j=0;j<headers.length;j++){
           const td = document.createElement('td');
+          const colName = headers[j];
           const v = row[j] == null ? '' : row[j];
-          td.textContent = v;
+          if (colName === 'EDO'){
+            const btn = document.createElement('button');
+            btn.textContent = String(v||'').trim() || 'ON';
+            btn.className = 'btn-secondary';
+            btn.style.padding = '2px 8px';
+            btn.style.fontSize = '12px';
+            btn.onclick = ()=>{
+              const cur = String(row[j]||'').trim().toUpperCase();
+              const next = (cur === 'ON') ? 'OFF' : 'ON';
+              row[j] = next;
+              btn.textContent = next;
+              // Mostrar botón de exportación
+              const ex = document.getElementById('btnExportCSV');
+              if (ex) ex.style.display = '';
+            };
+            td.appendChild(btn);
+          } else {
+            td.textContent = v;
+          }
           tr.appendChild(td);
         }
         frag.appendChild(tr);
@@ -208,10 +230,100 @@
       });
     }
 
+    function familyFrom(row){
+      const eq = String(row[headers.indexOf('EQUIPO / ACTIVO')]||'').toUpperCase();
+      const prod = String(row[headers.indexOf('PRODUCTO')]||'').toUpperCase();
+      if (/\bXO\b|CROSS\s*OVER|XO API/i.test(prod+eq)) return 'XO';
+      if (/CARRETE ADAPTADOR/i.test(prod+eq)) return 'CA';
+      if (/CARRETE ESPACIADOR/i.test(prod+eq)) return 'CE';
+      if (/BRIDA ADAPTADORA/i.test(prod+eq)) return 'DSA';
+      if (/BRIDA DE PRUEBA/i.test(prod+eq)) return 'BP';
+      if (/CARRETE DE CONTROL/i.test(prod+eq)) return 'CC';
+      return 'OT';
+    }
+
+    function toInch(n){ const x = parseFloat(String(n).replace(',', '.')); if (isNaN(x)) return null; return Math.round(x); }
+    function sideCode(row, side){
+      const dIdx = headers.indexOf(side===1?'DIAMETRO 1':'DIAMETRO 2');
+      const tIdx = headers.indexOf(side===1?'TIPO 1':'TIPO 2');
+      const cIdx = headers.indexOf(side===1?'CONEXIÓN 1':'CONEXIÓN 2');
+      const pIdx = headers.indexOf(side===1?'PRESION 1':'PRESION 2');
+      const dia = toInch(row[dIdx]);
+      const tipo = String(row[tIdx]||'').toUpperCase();
+      const conx = String(row[cIdx]||'').toUpperCase();
+      const pres = String(row[pIdx]||'').toUpperCase();
+      let letter = 'X';
+      if (/FLANGE|FLG|R-\d+|BX-\d+|RX-\d+/i.test(tipo+conx)) letter = 'F';
+      else if (/(^|\b)(1502|602|206)(\b|$)/.test(conx)) letter = 'W';
+      else if (/NPT/.test(conx)) letter = 'N';
+      else if (/H\b|HEMBRA/.test(conx)) letter = 'F';
+      else if (/M\b|MACHO/.test(conx)) letter = 'M';
+      const d = dia!=null? String(dia):'';
+      return d+letter;
+    }
+
+    function buildConn(row){
+      const a = sideCode(row,1), b = sideCode(row,2);
+      return (a||'') + '/' + (b||'');
+    }
+
+    function computeExistingSequences(){
+      const seqMap = new Map(); // key: fam|conn -> max
+      const sIdx = headers.indexOf('SERIAL');
+      for (const r of rows){
+        const s = String(r[sIdx]||'');
+        const m = s.match(/^PCT-(\d+|XX|00)-([A-Z]{2,3})-([0-9A-Z/]+)-(\d{3})$/);
+        if (!m) continue;
+        const fam = m[2]; const conn = m[3]; const n = parseInt(m[4],10)||0;
+        const key = fam+'|'+conn;
+        seqMap.set(key, Math.max(seqMap.get(key)||0, n));
+      }
+      return seqMap;
+    }
+
+    function generateSerials(){
+      const sIdx = headers.indexOf('SERIAL');
+      const seq = computeExistingSequences();
+      const medidaFrom = (r)=>{
+        const dIdx = headers.indexOf('DIAMETRO 1');
+        const val = toInch(r[dIdx]);
+        return (val==null? '00' : String(val));
+      };
+      let changed = 0;
+      for (const r of rows){
+        const cur = String(r[sIdx]||'').trim();
+        if (cur) { continue; }
+        const fam = familyFrom(r);
+        const conn = buildConn(r).replace(/\s+/g,'');
+        const key = fam+'|'+conn;
+        const next = (seq.get(key)||0)+1; seq.set(key, next);
+        const seqStr = String(next).padStart(3,'0');
+        const serial = `PCT-${medidaFrom(r)}-${fam}-${conn}-${seqStr}`;
+        r[sIdx] = serial;
+        changed++;
+      }
+      renderHead(); renderBody(view);
+      const btn = document.getElementById('btnExportCSV');
+      btn.style.display = changed>0 ? '' : 'none';
+    }
+
+    function exportUpdatedCSV(){
+      const sIdx = headers.indexOf('SERIAL');
+      const out = [headers, ...rows];
+      const csv = Papa.unparse(out);
+      const blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'INVENTARIO GENERAL PCT 2025 UNIFICADO.csv';
+      a.click();
+    }
+
     q.addEventListener('input', applyFilter);
     clearQ.addEventListener('click', ()=>{ q.value=''; applyFilter(); q.focus(); });
 
     document.addEventListener('DOMContentLoaded', load);
+    document.getElementById('btnGenSerials').addEventListener('click', generateSerials);
+    document.getElementById('btnExportCSV').addEventListener('click', exportUpdatedCSV);
   })();
   </script>
 </body>

@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Stock de Pruebas - PCT</title>
+    <title>PND x equipo - PCT</title>
     
     <!-- SEO Meta Tags -->
     <meta name="description" content="Control de stock y disponibilidad de pruebas en el sistema PCT.">
@@ -13,7 +13,7 @@
     <!-- Open Graph / Facebook -->
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://pc-t.mx/stockpruebas.html">
-    <meta property="og:title" content="Stock de Pruebas - PCT">
+    <meta property="og:title" content="PND x equipo - PCT">
     <meta property="og:description" content="Control de stock y disponibilidad de pruebas en el sistema PCT.">
     <meta property="og:site_name" content="PCT">
     
@@ -28,24 +28,17 @@
       <nav id="primary-nav">
         <ul>
           <li><a href="index.html">Dashboard</a></li>
-          <li class="nav-dropdown"><details><summary>Pruebas</summary><ul>
-              <li><a href="matestrep.html">MTR Material Test Report</a></li>
-              <li><a href="listmatestrep.html">Lista de pruebas (MTR)</a></li>
-              <li><a href="utt.html">Pruebas UTT</a></li>
-              <li><a href="listutt.html">Lista UTT</a></li>
-              <li><a href="emi.html">Pruebas EMI</a></li>
-              <li><a href="listemi.html">Lista EMI</a></li>
-              <li><a href="pruebas.html">Pruebas</a></li>
-              <li><a class="active" href="stockpruebas.html">Stock de pruebas</a></li>
-              <li><a href="listapruebas.html">Lista de pruebas</a></li>
-            </ul></details></li>
-          <li><a href="tareas.html">Tareas</a></li>
-          <li><a href="inspeccion.html">Inspección</a></li>
-          <li><a href="ingral.html">Inventario</a></li>
           <li class="nav-dropdown"><details><summary>Actividad</summary><ul>
               <li><a href="actividad.html">Registro de actividad</a></li>
               <li><a href="regactividad.html">Historial de registros</a></li>
             </ul></details></li>
+          <li class="nav-dropdown"><details open><summary>Pruebas</summary><ul>
+              <li><a href="pruebas.html">Pruebas PND (pruebas no destructibles)</a></li>
+              <li><a class="active" href="stockpruebas.html">PND x equipo</a></li>
+              <li><a href="listapruebas.html">Registro PND</a></li>
+            </ul></details></li>
+          <li><a href="inspeccion.html">Inspección</a></li>
+          <li><a href="tareas.html">Tareas</a></li>
           <li><a href="reportes.html">Reportes</a></li>
         </ul>
       </nav>
@@ -56,7 +49,7 @@
       </div>
     </header>
     <main class="wide">
-      <h1 style="margin-bottom: 1rem;">Stock Pruebas</h1>
+      <h1 style="margin-bottom: 1rem;">PND x equipo</h1>
       <div id="inventory-tools" class="toolbar">
         <div class="group">
           <button id="btn-clear-filters" class="btn-primary">Limpiar filtros</button>
@@ -124,8 +117,11 @@
 
         function applyFilters(rows) {
           const entries = Object.entries(FILTERS).filter(([, v]) => v !== undefined && v !== null && String(v).trim() !== '');
-          if (entries.length === 0) return rows;
-          return rows.filter((row) => {
+          // Filtro global: excluir equipos con EDO != ON si existe columna
+          const edoIdx = HEADERS.indexOf('EDO');
+          const base = rows.filter(r => edoIdx === -1 ? true : String(r[edoIdx]||'').trim().toUpperCase() === 'ON');
+          if (entries.length === 0) return base;
+          return base.filter((row) => {
             for (const [colName, val] of entries) {
               const colIdx = HEADERS.indexOf(colName);
               if (colIdx === -1) continue;
@@ -314,6 +310,11 @@
             const rows = parseCSV(text);
             HEADERS = rows[0].slice();
             ALL_ROWS = rows.slice(1);
+            // Aplicar filtro EDO=ON desde la carga inicial
+            const edoIdx = HEADERS.indexOf('EDO');
+            if (edoIdx !== -1) {
+              ALL_ROWS = ALL_ROWS.filter(r => String(r[edoIdx]||'').trim().toUpperCase() === 'ON');
+            }
             renderTable(rows);
           } catch (err) {
             console.error(err);

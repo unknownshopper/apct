@@ -36,27 +36,20 @@
     <nav id="primary-nav">
       <ul>
         <li><a href="index.html">Dashboard</a></li>
-        <li class="nav-dropdown"><details><summary>Pruebas</summary><ul>
-          <li><a href="matestrep.html">MTR Material Test Report</a></li>
-          <li><a href="listmatestrep.html">Lista de pruebas (MTR)</a></li>
-          <li><a href="pruebas.html">Pruebas</a></li>
-          <li><a href="stockpruebas.html">Stock de pruebas</a></li>
-          <li><a href="listapruebas.html">Lista de pruebas</a></li>
-          <li><a href="utt.html">Pruebas UTT</a></li>
-          <li><a href="listutt.html">Lista UTT</a></li>
-          <li><a href="emi.html">Pruebas EMI</a></li>
-          <li><a href="listemi.html">Lista EMI</a></li>
-        </ul></details></li>
-        <li><a href="tareas.html">Tareas</a></li>
-        <li class="nav-dropdown"><details><summary>Inspección</summary><ul>
-          <li><a href="inspeccion.html">Inspección primaria</a></li>
-          <li><a href="reginspecciones.html">Registro de inspecciones</a></li>
-        </ul></details></li>
-        <li><a href="ingral.html">Inventario</a></li>
         <li class="nav-dropdown"><details open><summary>Actividad</summary><ul>
           <li><a href="actividad.html">Registro de actividad</a></li>
           <li><a class="active" href="regactividad.html">Historial de registros</a></li>
         </ul></details></li>
+        <li class="nav-dropdown"><details><summary>Pruebas</summary><ul>
+          <li><a href="pruebas.html">Pruebas PND (pruebas no destructibles)</a></li>
+          <li><a href="stockpruebas.html">PND x equipo</a></li>
+          <li><a href="listapruebas.html">Registro PND</a></li>
+        </ul></details></li>
+        <li class="nav-dropdown"><details><summary>Inspección</summary><ul>
+          <li><a href="inspeccion.html">Inspección primaria</a></li>
+          <li><a href="reginspecciones.html">Registro de inspecciones</a></li>
+        </ul></details></li>
+        <li><a href="tareas.html">Tareas</a></li>
         <li><a href="reportes.html">Reportes</a></li>
       </ul>
     </nav>
@@ -83,11 +76,11 @@
         <div class="stat-value" id="totalRegistros">0</div>
       </div>
       <div class="stat-card">
-        <div class="stat-label">Equipos Internos</div>
+        <div class="stat-label">Propio</div>
         <div class="stat-value" id="totalInternos">0</div>
       </div>
       <div class="stat-card">
-        <div class="stat-label">Equipos Externos</div>
+        <div class="stat-label">Terceros</div>
         <div class="stat-value" id="totalExternos">0</div>
       </div>
       <div class="stat-card">
@@ -97,6 +90,18 @@
       <div class="stat-card">
         <div class="stat-label">Renta Total</div>
         <div class="stat-value" id="rentaTotal">$0.00</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Actividades activas</div>
+        <div class="stat-value" id="totalActivas">0</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Vencidas</div>
+        <div class="stat-value" id="totalVencidas">0</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">En servicio (días)</div>
+        <div class="stat-value" id="avgDiasServicio">0</div>
       </div>
     </div>
 

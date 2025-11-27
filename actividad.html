@@ -42,25 +42,20 @@
     <nav id="primary-nav">
       <ul>
         <li><a href="index.html">Dashboard</a></li>
-        <li class="nav-dropdown"><details><summary>Pruebas</summary><ul>
-          <li><a href="matestrep.html">MTR Material Test Report</a></li>
-          <li><a href="listmatestrep.html">Lista de pruebas (MTR)</a></li>
-          <li><a href="pruebas.html">Pruebas</a></li>
-          <li><a href="stockpruebas.html">Stock de pruebas</a></li>
-          <li><a href="listapruebas.html">Lista de pruebas</a></li>
-          <li><a href="utt.html" title="Próximamente">Pruebas UTT</a></li>
-          <li><a href="emi.html" title="Próximamente">Pruebas EMI</a></li>
-        </ul></details></li>
-        <li><a href="tareas.html">Tareas</a></li>
-        <li class="nav-dropdown"><details><summary>Inspección</summary><ul>
-          <li><a href="inspeccion.html">Inspección primaria</a></li>
-          <li><a href="reginspecciones.html">Registro de inspecciones</a></li>
-        </ul></details></li>
-        <li><a href="ingral.html">Inventario</a></li>
         <li class="nav-dropdown"><details open><summary>Actividad</summary><ul>
           <li><a class="active" href="actividad.html">Registro de actividad</a></li>
           <li><a href="regactividad.html">Historial de registros</a></li>
         </ul></details></li>
+        <li class="nav-dropdown"><details><summary>Pruebas</summary><ul>
+          <li><a href="pruebas.html">Pruebas PND (pruebas no destructibles)</a></li>
+          <li><a href="stockpruebas.html">PND x equipo</a></li>
+          <li><a href="listapruebas.html">Registro PND</a></li>
+        </ul></details></li>
+        <li class="nav-dropdown"><details><summary>Inspección</summary><ul>
+          <li><a href="inspeccion.html">Inspección primaria</a></li>
+          <li><a href="reginspecciones.html">Registro de inspecciones</a></li>
+        </ul></details></li>
+        <li><a href="tareas.html">Tareas</a></li>
         <li><a href="reportes.html">Reportes</a></li>
       </ul>
     </nav>
@@ -169,6 +164,21 @@
     let inventorySet = new Set(); // para verificación rápida de pertenencia
     let externalOptionsByProvider = new Map(); // proveedor -> Set de claves sugeridas
 
+    // Estado para selector múltiple de equipos (lotes)
+    let multiSelectEquipos = new Set();
+    let multiModalEl = null;
+    let multiSearchInput = null;
+    let multiListEl = null;
+
+    function generateLoteId(){
+      const d = new Date();
+      const pad = (n)=> String(n).padStart(2,'0');
+      const ts = `${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`;
+      const abc = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+      const rnd = Array.from({length:3},()=>abc[Math.floor(Math.random()*abc.length)]).join('');
+      return `L-${ts}-${rnd}`;
+    }
+
     // Sincronización con Firestore
     const COLLECTION_NAME = 'activityRecords';
     let firebaseReady = false;
@@ -231,6 +241,75 @@
       dl.innerHTML = '';
       (options||[]).forEach(opt=>{ const o=document.createElement('option'); o.value=opt; dl.appendChild(o); });
       return dl;
+    }
+
+    // Modal de selección múltiple con buscador
+    function openMultiSelector(onConfirm){
+      // Crear modal si no existe
+      if (!multiModalEl){
+        multiModalEl = document.createElement('div');
+        multiModalEl.id = 'multi-modal';
+        multiModalEl.style.position = 'fixed';
+        multiModalEl.style.inset = '0';
+        multiModalEl.style.background = 'rgba(0,0,0,.45)';
+        multiModalEl.style.display = 'grid';
+        multiModalEl.style.placeItems = 'center';
+        multiModalEl.style.zIndex = '1000';
+        const panel = document.createElement('div');
+        panel.style.background = '#fff';
+        panel.style.color = '#111827';
+        panel.style.borderRadius = '10px';
+        panel.style.width = 'min(720px, 92vw)';
+        panel.style.maxHeight = '82vh';
+        panel.style.display = 'flex';
+        panel.style.flexDirection = 'column';
+        panel.style.boxShadow = '0 10px 30px rgba(0,0,0,.25)';
+        panel.style.border = '1px solid #e5e7eb';
+        const head = document.createElement('div');
+        head.style.padding = '10px 12px'; head.style.borderBottom = '1px solid #e5e7eb'; head.style.display='flex'; head.style.gap='8px';
+        const title = document.createElement('div'); title.textContent = 'Seleccionar equipos (múltiple)'; title.style.fontWeight='600'; title.style.flex='1';
+        const closeBtn = document.createElement('button'); closeBtn.textContent = '✖'; closeBtn.onclick = ()=> document.body.removeChild(multiModalEl);
+        head.appendChild(title);
+        multiSearchInput = document.createElement('input'); multiSearchInput.type='text'; multiSearchInput.placeholder='Buscar...'; multiSearchInput.style.flex='2'; multiSearchInput.style.padding='6px 8px'; multiSearchInput.style.border='1px solid #e5e7eb'; multiSearchInput.style.borderRadius='6px';
+        head.appendChild(multiSearchInput); head.appendChild(closeBtn);
+        const body = document.createElement('div'); body.style.padding='8px 12px'; body.style.overflow='auto'; body.style.flex='1';
+        multiListEl = document.createElement('div'); body.appendChild(multiListEl);
+        const foot = document.createElement('div'); foot.style.padding='10px 12px'; foot.style.borderTop='1px solid #e5e7eb'; foot.style.display='flex'; foot.style.justifyContent='flex-end'; foot.style.gap='8px';
+        const cancel = document.createElement('button'); cancel.textContent='Cancelar'; cancel.onclick = ()=> document.body.removeChild(multiModalEl);
+        const ok = document.createElement('button'); ok.textContent='Agregar seleccionados'; ok.style.background='#111827'; ok.style.color='#fff'; ok.style.padding='6px 10px'; ok.style.borderRadius='6px';
+        ok.onclick = ()=>{
+          const checks = multiListEl.querySelectorAll('input[type="checkbox"]:checked');
+          const selected = Array.from(checks).map(c=>c.value);
+          if (onConfirm) onConfirm(selected);
+          try{ document.body.removeChild(multiModalEl); }catch{}
+        };
+        foot.appendChild(cancel); foot.appendChild(ok);
+        panel.appendChild(head); panel.appendChild(body); panel.appendChild(foot);
+        multiModalEl.appendChild(panel);
+      } else {
+        // limpiar selección previa si reusamos modal
+        const checks = multiListEl?.querySelectorAll('input[type="checkbox"]') || [];
+        checks.forEach(c=> c.checked = false);
+      }
+
+      // Render de lista filtrable
+      function renderList(term){
+        const t = String(term||'').toLowerCase();
+        multiListEl.innerHTML='';
+        const opts = (inventoryOptions||[]).filter(x => !t || x.toLowerCase().includes(t));
+        opts.forEach(val=>{
+          const row = document.createElement('label'); row.style.display='flex'; row.style.alignItems='center'; row.style.gap='8px'; row.style.padding='6px 4px';
+          const cb = document.createElement('input'); cb.type='checkbox'; cb.value=val;
+          // marcar si ya estaba elegido en set
+          cb.checked = multiSelectEquipos.has(val);
+          const span = document.createElement('span'); span.textContent = val; span.style.flex='1';
+          row.appendChild(cb); row.appendChild(span); multiListEl.appendChild(row);
+        });
+      }
+      renderList('');
+      multiSearchInput.oninput = ()=> renderList(multiSearchInput.value);
+      document.body.appendChild(multiModalEl);
+      try{ multiSearchInput.focus(); }catch{}
     }
 
     function endOfMonth(dt){
@@ -301,13 +380,13 @@
       if (!td) return;
       const firstCell = cells[0];
       const selEl = firstCell.querySelector('select');
-      const tipo = selEl ? selEl.value : (firstCell.textContent||'EQUIPOS INTERNOS');
+      const tipo = (selEl ? selEl.value : (firstCell.textContent||'propio')).toString().trim().toLowerCase();
       const oldVal = (td.querySelector('input')?.value) || td.textContent || '';
       td.innerHTML = '';
       const input = document.createElement('input');
       input.type = 'text';
       input.value = String(oldVal||'').trim();
-      if (tipo === 'EQUIPOS INTERNOS'){
+      if (tipo === 'propio'){
         ensureDatalist('dl-inventory-equipos', inventoryOptions||[]);
         input.setAttribute('list', 'dl-inventory-equipos');
         input.placeholder = 'Equipo/Activo (inventario)';
@@ -339,9 +418,8 @@
         const cells = tr.children;
         if (!cells || cells.length === 0) return;
         const sel = cells[0].querySelector('select');
-        let tipo = 'EQUIPOS INTERNOS';
-        if (sel) tipo = sel.value;
-        else tipo = (cells[0].textContent||'EQUIPOS INTERNOS').trim();
+        let tipo = 'propio';
+        if (sel) tipo = sel.value; else tipo = (cells[0].textContent||'propio').trim().toLowerCase();
         // Obtener días en servicio desde columna visible
         let dias = 0;
         if (diasServicioVisibleIdx >= 0){
@@ -354,7 +432,7 @@
         }
         if (dias > 0){
           total++;
-          if (tipo === 'EQUIPOS INTERNOS') internos++; else externos++;
+          if (tipo === 'propio') internos++; else externos++;
         }
       });
       activityCards.innerHTML = '';
@@ -380,24 +458,24 @@
         // Celda de selección por fila (solo en filas 1 y 4 visibles)
         const tdSel = document.createElement('td');
         // Determinar tipo por PROPIEDAD
-        let pre = 'EQUIPOS INTERNOS';
+        let pre = 'propio';
         if (propiedadIdx >= 0){
           const prop = String(row[propiedadIdx]||'').trim().toUpperCase();
-          if (prop === 'PCT') pre = 'EQUIPOS INTERNOS';
-          else if (prop) pre = 'EQUIPOS EXTERNOS';
+          if (prop === 'PCT') pre = 'propio';
+          else if (prop) pre = 'terceros';
         }
         if (i === 0 || i === 3){
           const select = document.createElement('select');
           select.innerHTML = `
-            <option value="EQUIPOS INTERNOS">EQUIPOS INTERNOS</option>
-            <option value="EQUIPOS EXTERNOS">EQUIPOS EXTERNOS</option>
+            <option value="propio">Propio</option>
+            <option value="terceros">Terceros</option>
           `;
           select.value = pre;
           tdSel.appendChild(select);
         } else {
           const tag = document.createElement('span');
           tag.className = 'sel-tag readonly';
-          tag.textContent = pre;
+          tag.textContent = (pre === 'propio') ? 'Propio' : 'Terceros';
           tdSel.appendChild(tag);
         }
         
@@ -481,16 +559,16 @@
             }
           }
           // Render editable para EQUIPO / ACTIVO
-          const isEquipoCol = /^(EQUIPO\s*\/\s*ACTIVO|EQUIPO\s*ACTIVO|EQUIPO)$/i.test(normalizeHeader(label).toUpperCase());
+          const isEquipoCol = /^(EQUIPO\s*\/\s*ACTIVO|EQUIPO\s*ACTIVO|EQUIPO ACTIVO|EQUIPO)$/i.test(normalizeHeader(label).toUpperCase());
           if (isEquipoCol){
             // Interno/Externo según la primera celda
             const selCell = tdSel;
             const selEl = selCell.querySelector('select');
-            const tipo = selEl ? selEl.value : (selCell.textContent||'EQUIPOS INTERNOS');
+            const tipo = (selEl ? selEl.value : (selCell.textContent||'propio')).toString().trim().toLowerCase();
             const input = document.createElement('input');
             input.type = 'text';
             input.value = String(v||'');
-            if (tipo === 'EQUIPOS INTERNOS'){
+            if (tipo === 'propio'){
               // Autocompletar desde inventario
               ensureDatalist('dl-inventory-equipos', inventoryOptions||[]);
               input.setAttribute('list', 'dl-inventory-equipos');
@@ -512,22 +590,22 @@
               // Determinar tipo por primera celda y equipo de la fila
               const selCell = tdSel;
               const selEl = selCell.querySelector('select');
-              const tipo = selEl ? selEl.value : (selCell.textContent||'EQUIPOS INTERNOS');
+              const tipo = (selEl ? selEl.value : (selCell.textContent||'propio')).toString().trim().toLowerCase();
               // Obtener valor de equipo desde la fila base (headers)
               const idxEquipoHeader = headers.findIndex(h=>/^EQUIPO\s*\/\s*ACTIVO|EQUIPO\s*ACTIVO|EQUIPO$/i.test(normalizeHeader(h).toUpperCase()));
               const equipoVal = idxEquipoHeader>=0 ? String(row[idxEquipoHeader]||'').trim() : '';
               const descInv = invDescByEquipo.get(equipoVal) || invDescByEquipo.get(equipoVal.toUpperCase()) || '';
-              if (tipo === 'EQUIPOS INTERNOS' && descInv){ v = descInv; console.log('[actividad] DESC autofill', { equipo: equipoVal, desc: v }); }
+              if (tipo === 'propio' && descInv){ v = descInv; console.log('[actividad] DESC autofill', { equipo: equipoVal, desc: v }); }
               td.textContent = v;
             } else if (/^(SERIAL|#)$/i.test(normalizeHeader(label).toUpperCase())){
               // Autorelleno de SERIAL para internos desde inventario
               const selCell = tdSel;
               const selEl = selCell.querySelector('select');
-              const tipo = selEl ? selEl.value : (selCell.textContent||'EQUIPOS INTERNOS');
+              const tipo = (selEl ? selEl.value : (selCell.textContent||'propio')).toString().trim().toLowerCase();
               const idxEquipoHeader = headers.findIndex(h=>/^EQUIPO\s*\/\s*ACTIVO|EQUIPO\s*ACTIVO|EQUIPO$/i.test(normalizeHeader(h).toUpperCase()));
               const equipoVal = idxEquipoHeader>=0 ? String(row[idxEquipoHeader]||'').trim() : '';
               const serialInv = invSerialByEquipo.get(equipoVal) || invSerialByEquipo.get(equipoVal.toUpperCase()) || '';
-              if (tipo === 'EQUIPOS INTERNOS' && serialInv){ v = serialInv; console.log('[actividad] SERIAL autofill', { equipo: equipoVal, serial: v }); }
+              if (tipo === 'propio' && serialInv){ v = serialInv; console.log('[actividad] SERIAL autofill', { equipo: equipoVal, serial: v }); }
               td.textContent = v;
             } else if (/^(FIN PARCIAL DEL SERVICIO|FIN PARCIAL|CONTINUACION DEL SERVICIO|CONTINUACIÓN DEL SERVICIO)$/i.test(normalizeHeader(label).toUpperCase())){
               // FIN PARCIAL y CONTINUACION: mostrar múltiples líneas
@@ -770,7 +848,7 @@
           const r = res?.data || [];
           if (!r.length){ console.log('[actividad] Inventario vacío', url); return; }
           const hdr = r[0].map(h=>String(h||''));
-          let idxEq = -1, idxDesc = -1, idxSerial = -1;
+          let idxEq = -1, idxDesc = -1, idxSerial = -1, idxEdo = -1;
           for (let k=0;k<hdr.length;k++){
             const h = hdr[k];
             if (/^EQUIPO\s*\/\s*ACTIVO|EQUIPO\s*ACTIVO|EQUIPO$/i.test(normalizeHeader(h).toUpperCase())) { idxEq = k; break; }
@@ -785,6 +863,10 @@
             // Priorizar SERIAL sobre otras variantes, excluir # ya que es ID de fila
             if (hnorm === 'SERIAL') { idxSerial = k; break; }
           }
+          for (let k=0;k<hdr.length;k++){
+            const h = hdr[k];
+            if (normalizeHeader(h).toUpperCase() === 'EDO') { idxEdo = k; break; }
+          }
           if (idxSerial < 0){
             for (let k=0;k<hdr.length;k++){
               const h = hdr[k];
@@ -796,6 +878,7 @@
           invSerialByEquipo.clear();
           for (let rIdx=1;rIdx<r.length;rIdx++){
             const v = String(r[rIdx][idxEq]||'').trim();
+            // Ya no filtramos por EDO aquí: el datalist mostrará todo el inventario
             if (v) set.add(v);
             if (idxEq>=0 && idxDesc>=0){
               const desc = String(r[rIdx][idxDesc]||'').trim();
@@ -1248,13 +1331,13 @@
       const tdSel = document.createElement('td');
       tdSel.className = 'sel-cell';
       const sel = document.createElement('select');
-      sel.innerHTML = '<option value="EQUIPOS INTERNOS">EQUIPOS INTERNOS</option><option value="EQUIPOS EXTERNOS">EQUIPOS EXTERNOS</option>';
+      sel.innerHTML = '<option value="propio">Propio</option><option value="terceros">Terceros</option>';
       sel.name = 'tipoSeleccion'; sel.id = 'tipoSeleccion';
-      sel.value = 'EQUIPOS INTERNOS';
+      sel.value = 'propio';
       const provInput = document.createElement('input');
       provInput.type = 'text'; provInput.placeholder = 'Proveedor'; provInput.name='proveedor'; provInput.id='proveedor';
       provInput.style.marginLeft='6px'; provInput.style.display='none';
-      sel.addEventListener('change', ()=>{ provInput.style.display = sel.value==='EQUIPOS EXTERNOS' ? '' : 'none'; rebuildEquipoCellForRow(tr); updateSaveEnabled(); });
+      sel.addEventListener('change', ()=>{ provInput.style.display = sel.value==='terceros' ? '' : 'none'; rebuildEquipoCellForRow(tr); updateSaveEnabled(); });
       tdSel.appendChild(sel); tdSel.appendChild(provInput);
       tr.appendChild(tdSel);
 
@@ -1316,9 +1399,15 @@
           input = document.createElement('input'); input.type='text'; input.placeholder='Equipo/Activo'; input.name='equipoActivo'; input.id='equipoActivo';
           // aplicar datalist según tipo
           ensureDatalist('dl-inventory-equipos', inventoryOptions||[]);
-          input.setAttribute('list', sel.value==='EQUIPOS INTERNOS' ? 'dl-inventory-equipos' : '');
+          input.setAttribute('list', sel.value==='propio' ? 'dl-inventory-equipos' : '');
           sel.addEventListener('change', ()=>{
-            if (sel.value==='EQUIPOS INTERNOS') input.setAttribute('list','dl-inventory-equipos'); else input.removeAttribute('list');
+            if (sel.value==='propio') input.setAttribute('list','dl-inventory-equipos'); else input.removeAttribute('list');
+          });
+          // UX: abrir sugerencias al enfocar si hay datalist
+          input.addEventListener('focus', ()=>{
+            if (sel.value==='propio'){
+              try{ if (typeof input.showPicker === 'function') input.showPicker(); }catch{}
+            }
           });
         } else if (/^(CLIENTE|AREA DEL CLIENTE|UBICACION|UBICACIÓN)$/.test(norm)){
           input = document.createElement('input'); input.type='text'; input.placeholder=label; input.name=normalizeHeader(label); input.id=normalizeHeader(label);
@@ -1367,6 +1456,90 @@
         };
         equipoEditor.addEventListener('change', autoFillFromEquipo);
         equipoEditor.addEventListener('input', autoFillFromEquipo);
+
+        // Insertar contenedor flex y permitir overflow visible (sin botón modal)
+        const equipoTd = equipoEditor.closest('td');
+        if (equipoTd){
+          equipoTd.style.overflow = 'visible';
+          const wrap = document.createElement('div');
+          wrap.style.display = 'flex';
+          wrap.style.alignItems = 'center';
+          wrap.style.gap = '6px';
+          // mover input dentro del wrap
+          const inputRef = equipoEditor; 
+          if (inputRef.parentElement === equipoTd){ equipoTd.removeChild(inputRef); }
+          const counter = document.createElement('span');
+          counter.id = 'multi-counter';
+          counter.style.fontSize = '.85em';
+          counter.style.color = '#6b7280';
+          counter.style.marginLeft = '4px';
+          wrap.appendChild(inputRef);
+          wrap.appendChild(counter);
+          equipoTd.appendChild(wrap);
+
+          // Contenedor para listar seleccionados debajo
+          const selectedWrap = document.createElement('div');
+          selectedWrap.id = 'multi-selected-list';
+          selectedWrap.style.marginTop = '6px';
+          selectedWrap.style.display = 'flex';
+          selectedWrap.style.flexDirection = 'column';
+          selectedWrap.style.gap = '4px';
+          // Barra de acciones + input para agregar otro
+          const actionBar = document.createElement('div');
+          actionBar.style.display = 'flex'; actionBar.style.gap='8px'; actionBar.style.alignItems='center'; actionBar.style.marginTop='6px';
+          const addInput = document.createElement('input'); addInput.type='text'; addInput.placeholder='Agregar otro equipo/activo'; addInput.style.flex='1';
+          addInput.addEventListener('blur', ()=>{ const v = String(addInput.value||'').trim(); if (v){ multiSelectEquipos.add(v); addInput.value=''; renderSelectedList(); } });
+          const clearBtn = document.createElement('button'); clearBtn.type='button'; clearBtn.textContent='Vaciar lista'; clearBtn.style.fontSize='.85em';
+          clearBtn.addEventListener('click', ()=>{ multiSelectEquipos.clear(); inputRef.value=''; inputRef.dispatchEvent(new Event('input')); renderSelectedList(); });
+          actionBar.appendChild(addInput);
+          actionBar.appendChild(clearBtn);
+          equipoTd.appendChild(actionBar);
+          equipoTd.appendChild(selectedWrap);
+
+          function renderSelectedList(){
+            selectedWrap.innerHTML = '';
+            const arr = Array.from(multiSelectEquipos.values());
+            counter.textContent = arr.length ? `${arr.length} seleccionados` : '';
+            if (!arr.length) { selectedWrap.style.display='none'; actionBar.style.display='flex'; return; }
+            selectedWrap.style.display='flex';
+            actionBar.style.display='flex';
+            // Garantizar que el valor del input esté dentro del set
+            const headVal = String(inputRef.value||'').trim();
+            if (headVal) multiSelectEquipos.add(headVal);
+            const list = Array.from(multiSelectEquipos.values());
+            list.forEach((val)=>{
+              const row = document.createElement('div');
+              row.style.display='flex'; row.style.alignItems='center'; row.style.gap='8px';
+              const block = document.createElement('div'); block.style.flex='1';
+              const line1 = document.createElement('div'); line1.style.fontSize='.92em'; line1.style.color='#111827'; line1.textContent = val;
+              const upper = String(val||'').toUpperCase();
+              const serial = invSerialByEquipo.get(val) || invSerialByEquipo.get(upper) || '';
+              const desc = invDescByEquipo.get(val) || invDescByEquipo.get(upper) || '';
+              const line2 = document.createElement('div'); line2.style.fontSize='.8em'; line2.style.color='#6b7280'; line2.textContent = `${serial ? serial+' · ' : ''}${desc}`;
+              block.appendChild(line1); block.appendChild(line2);
+              const del = document.createElement('button'); del.type='button'; del.textContent='Eliminar'; del.style.fontSize='.85em';
+              del.addEventListener('click', ()=>{ 
+                multiSelectEquipos.delete(val);
+                if (String(inputRef.value||'').trim() === val){
+                  const nextArr = Array.from(multiSelectEquipos.values());
+                  inputRef.value = nextArr[0] || '';
+                  inputRef.dispatchEvent(new Event('input'));
+                }
+                renderSelectedList(); 
+              });
+              row.appendChild(block); row.appendChild(del); selectedWrap.appendChild(row);
+            });
+          }
+
+          // Si ya había selección previa, mostrarla
+          renderSelectedList();
+
+          // Al salir del input principal, agregarlo a la lista y preparar el siguiente
+          inputRef.addEventListener('blur', ()=>{
+            const v = String(inputRef.value||'').trim();
+            if (v){ multiSelectEquipos.add(v); renderSelectedList(); }
+          });
+        }
       }
 
       // Insertar al inicio de tbody
@@ -1450,18 +1623,18 @@
         const total = d * p;
         const tipo = sel.value;
         
-        // INGRESO ACUMULADO para equipos internos
+        // INGRESO ACUMULADO para equipos propios
         if (ingresoAcum){
-          if (tipo === 'EQUIPOS INTERNOS' && total > 0){
+          if (tipo === 'propio' && total > 0){
             ingresoAcum.textContent = '$' + total.toLocaleString('es-MX', {minimumFractionDigits: 2, maximumFractionDigits: 2});
           } else {
             ingresoAcum.textContent = '';
           }
         }
         
-        // RENTA ACUMULADA para equipos externos
+        // RENTA ACUMULADA para equipos de terceros
         if (rentaAcum){
-          if (tipo === 'EQUIPOS EXTERNOS' && total > 0){
+          if (tipo === 'terceros' && total > 0){
             rentaAcum.textContent = '$' + total.toLocaleString('es-MX', {minimumFractionDigits: 2, maximumFractionDigits: 2});
           } else {
             rentaAcum.textContent = '';
@@ -1497,7 +1670,7 @@
 
       // Guardar desde toolbar
       saveRowBtn.onclick = ()=>{
-        const baseProp = sel.value==='EQUIPOS INTERNOS' ? 'PCT' : (provInput.value||'');
+        const baseProp = sel.value==='propio' ? 'PCT' : (provInput.value||'');
         const eget = (vars)=> getEditorByVariants(editors, vars);
         // Campos editables
         const valEquipo = eget(['EQUIPO / ACTIVO','EQUIPO/ACTIVO','EQUIPO ACTIVO','EQUIPO'])?.value || '';
@@ -1546,109 +1719,65 @@
         const iINGR = idx(['INGRESO ACUMULADO','INGRESO ACUMULDDO']);
         const iREN  = idx(['RENTA ACUMULADA']);
 
-        function makeRow(){ return new Array(headers.length).fill(''); }
-        function fillCommon(r){
+        // Construcción y persistencia de filas (single o múltiple)
+        const selectedEquipos = (multiSelectEquipos && multiSelectEquipos.size>0) ? Array.from(multiSelectEquipos) : (valEquipo ? [valEquipo] : []);
+        if (!selectedEquipos.length){ alert('Selecciona al menos un equipo.'); return; }
+        const loteId = (selectedEquipos.length>1) ? generateLoteId() : (valOS||'');
+        const newRows = [];
+        for (const eq of selectedEquipos){
+          const sr = invSerialByEquipo.get(eq) || invSerialByEquipo.get(String(eq).toUpperCase()) || valSerial;
+          const ds = invDescByEquipo.get(eq) || invDescByEquipo.get(String(eq).toUpperCase()) || valDesc;
+          const r = [...headers].map(()=> '');
           if (iPROPIEDAD>=0) r[iPROPIEDAD] = baseProp;
-          if (iSERIAL>=0) r[iSERIAL] = valSerial;
-          if (iEQUIPO>=0) r[iEQUIPO] = valEquipo;
-          if (iDESC>=0) r[iDESC] = valDesc;
+          if (iSERIAL>=0) r[iSERIAL] = sr;
+          if (iEQUIPO>=0) r[iEQUIPO] = eq;
+          if (iDESC>=0) r[iDESC] = ds;
           if (iCLIENTE>=0) r[iCLIENTE] = valCliente;
           if (iAREA>=0) r[iAREA] = valArea;
           if (iUBIC>=0) r[iUBIC] = valUbic;
           if (iFACT>=0) r[iFACT] = valFactura;
           if (iOC>=0) r[iOC] = valOC;
           if (iESTCOT>=0) r[iESTCOT] = valEstCot;
-          if (iOS>=0) r[iOS] = valOS;
+          if (iOS>=0) r[iOS] = loteId || valOS;
           if (iEMB>=0) r[iEMB] = valEmbarque;
-          if (iPREC>=0) r[iPREC] = valPrecio;
-        }
-
-        // Crear solo UNA fila por registro (sin cortes administrativos)
-        const r = makeRow();
-        fillCommon(r);
-        
-        // Fechas: inicio y terminación completas
-        if (iINI>=0) r[iINI] = formatDMY(dInicio);
-        if (iTERM>=0) r[iTERM] = formatDMY(dTerm);
-        // Fin parcial y Continuación
-        if (iFINP>=0 || iCONT>=0){
-          const fins = [];
-          const conts = [];
-          // Primera fecha fin parcial = inicio + 25 días
-          let cursor = new Date(dInicio);
-          cursor.setDate(cursor.getDate() + 25);
-          cursor.setHours(0,0,0,0);
-          while (cursor < dTerm){
-            fins.push(formatDMY(cursor));
-            // Continuación = día siguiente
-            const cNext = new Date(cursor);
-            cNext.setDate(cNext.getDate() + 1);
-            conts.push(formatDMY(cNext));
-            // Siguiente fin parcial = actual + 30 días
-            cursor.setDate(cursor.getDate() + 30);
+          if (iINI>=0) r[iINI] = sInicio;
+          if (iCONT>=0) r[iCONT] = '';
+          if (iFINP>=0) r[iFINP] = '';
+          if (iTERM>=0) r[iTERM] = sTerm;
+          // Fecha devolución = terminación + 1 día
+          if (iDEV>=0 && dTerm){ const dev = new Date(dTerm); dev.setDate(dev.getDate()+1); r[iDEV] = formatDMY(dev); }
+          // Días en servicio y montos
+          const diasTotales = (dInicio && dTerm) ? daysInclusive(dInicio, dTerm) : '';
+          if (iDIAS>=0) r[iDIAS] = String(diasTotales||'');
+          const precioNum = parseFloat(String(valPrecio||'').replace(/,/g,''));
+          if (!isNaN(precioNum) && diasTotales){
+            const monto = diasTotales * precioNum;
+            if (iINGR>=0) r[iINGR] = String(monto);
+            if (iREN>=0)  r[iREN]  = String(monto);
           }
-          if (iFINP>=0) r[iFINP] = fins.join('\n');
-          if (iCONT>=0) r[iCONT] = conts.join('\n');
+          newRows.push(r);
         }
-        
-        // Fecha de devolución = terminación + 1 día
-        if (iDEV>=0) {
-          const dev = new Date(dTerm);
-          dev.setDate(dev.getDate() + 1);
-          r[iDEV] = formatDMY(dev);
-        }
-        
-        // Días en servicio totales
-        const diasTotales = daysInclusive(dInicio, dTerm);
-        if (iDIAS>=0) r[iDIAS] = String(diasTotales);
-        
-        // Calcular ingreso/renta acumulados = dias totales * precio
-        const precioNum = parseFloat(String(valPrecio||'').replace(/,/g,''));
-        if (!isNaN(diasTotales) && !isNaN(precioNum)){
-          const monto = diasTotales * precioNum;
-          if (iINGR>=0) r[iINGR] = String(monto);
-          if (iREN>=0)  r[iREN]  = String(monto);
-        }
-        
-        const newRows = [r];
-
-        // Insertar nuevas filas al inicio, manteniendo orden cronológico dentro de lo insertado
+        // Insertar, renderizar y persistir
         rows = [...newRows, ...rows];
         view = rows;
         tr.remove();
         buildExternalOptionsBase();
         renderHead();
         renderBody(view);
-        // Persistir en localStorage y Firestore
         try{
           const keyLS = 'actividad:newRows';
           const prev = JSON.parse(localStorage.getItem(keyLS)||'[]');
           const next = Array.isArray(prev) ? [...newRows, ...prev] : [...newRows];
           localStorage.setItem(keyLS, JSON.stringify(next));
-          
-          // Guardar en Firestore también
-          (async () => {
-            for (const row of newRows) {
-              await saveToFirestore(row);
-            }
-          })();
-        }catch(e){
-          console.error('[actividad] Error al persistir:', e);
-        }
-        // Agregar un registro visual al log inferior
+          (async()=>{ for (const row of newRows){ await saveToFirestore(row); }})();
+        }catch(e){ console.error('[actividad] Error al persistir:', e); }
         try{
           const ul = document.getElementById('activity-log-list');
           if (ul){
-            const serial = invSerialByEquipo.get(valEquipo) || invSerialByEquipo.get(String(valEquipo||'').toUpperCase()) || '';
             const li = document.createElement('li');
             li.style.padding = '6px 8px';
-            li.style.borderTop = '1px solid #e5e7eb';
-            const labelCli = valCliente ? ` · Cliente: ${valCliente}` : '';
-            const labelOC = valOC ? ` · OC: ${valOC}` : '';
-            const labelFact = valFactura ? ` · Factura: ${valFactura}` : '';
-            const rango = `${formatDMY(dInicio)} – ${formatDMY(dTerm)}`;
-            li.textContent = `${valEquipo}${serial?` (SERIAL: ${serial})`:''} · ${rango}${labelCli}${labelOC}${labelFact}`;
-            ul.insertBefore(li, ul.firstChild);
+            li.textContent = `Registrados ${newRows.length} item(s)${loteId?` en lote ${loteId}`:''}.`;
+            ul.prepend(li);
           }
         }catch{}
         // limpiar estado toolbar

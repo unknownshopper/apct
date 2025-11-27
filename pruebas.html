@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Crear Prueba - PCT</title>
+    <title>Pruebas PND (pruebas no destructibles) - PCT</title>
     
     <!-- SEO Meta Tags -->
     <meta name="description" content="Sistema de creación y gestión de pruebas PCT.">
@@ -13,7 +13,7 @@
     <!-- Open Graph / Facebook -->
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://pc-t.mx/pruebas.html">
-    <meta property="og:title" content="Crear Prueba - PCT">
+    <meta property="og:title" content="Pruebas PND (pruebas no destructibles) - PCT">
     <meta property="og:description" content="Sistema de creación y gestión de pruebas PCT.">
     <meta property="og:site_name" content="PCT">
     
@@ -24,10 +24,17 @@
       .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
       .form-field { display: flex; flex-direction: column; gap: 6px; }
       .form-field label { font-size: 12px; color: #374151; }
-      .form-field input { border: 1px solid #e5e7eb; border-radius: 8px; padding: 8px 10px; }
+      .form-field input, .form-field select, .form-field textarea { border: 1px solid #e5e7eb; border-radius: 8px; padding: 8px 10px; }
+      .form-field textarea { min-height: 100px; resize: vertical; }
       @media (max-width: 640px){ .form-grid { grid-template-columns: 1fr; } }
       .toolbar { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:.75rem; }
       .toolbar .group { display:flex; gap:8px; align-items:center; }
+      .page-header { margin-bottom: .5rem; }
+      .page-sub { color:#6b7280; font-size:14px; margin:0 0 1rem; }
+      .card { border:1px solid #e5e7eb; border-radius:12px; padding:12px; margin:12px 0; background:#fff; }
+      .section-title { font-size:14px; color:#374151; margin:0 0 8px; font-weight:600; }
+      .two-col { display:grid; grid-template-columns: 1fr 1fr; gap:12px; }
+      @media (max-width: 640px){ .two-col { grid-template-columns: 1fr; } }
     </style>
   </head>
   <body>
@@ -37,24 +44,17 @@
       <nav id="primary-nav">
         <ul>
           <li><a href="index.html">Dashboard</a></li>
-          <li class="nav-dropdown"><details><summary>Pruebas</summary><ul>
-            <li><a href="matestrep.html">MTR Material Test Report</a></li>
-            <li><a href="listmatestrep.html">Lista de pruebas (MTR)</a></li>
-            <li><a class="active" href="pruebas.html">Pruebas</a></li>
-            <li><a href="stockpruebas.html">Stock de pruebas</a></li>
-            <li><a href="listapruebas.html">Lista de pruebas</a></li>
-            <li><a href="utt.html">Pruebas UTT</a></li>
-            <li><a href="listutt.html">Lista UTT</a></li>
-            <li><a href="emi.html">Pruebas EMI</a></li>
-            <li><a href="listemi.html">Lista EMI</a></li>
-          </ul></details></li>
-          <li><a href="tareas.html">Tareas</a></li>
-          <li><a href="inspeccion.html">Inspección</a></li>
-          <li><a href="ingral.html">Inventario</a></li>
           <li class="nav-dropdown"><details><summary>Actividad</summary><ul>
             <li><a href="actividad.html">Registro de actividad</a></li>
             <li><a href="regactividad.html">Historial de registros</a></li>
           </ul></details></li>
+          <li class="nav-dropdown"><details open><summary>Pruebas</summary><ul>
+            <li><a class="active" href="pruebas.html">Pruebas PND (pruebas no destructibles)</a></li>
+            <li><a href="stockpruebas.html">PND x equipo</a></li>
+            <li><a href="listapruebas.html">Registro PND</a></li>
+          </ul></details></li>
+          <li><a href="inspeccion.html">Inspección</a></li>
+          <li><a href="tareas.html">Tareas</a></li>
           <li><a href="reportes.html">Reportes</a></li>
         </ul>
       </nav>
@@ -65,15 +65,46 @@
       </div>
     </header>
     <main class="wide">
-      <h1 style="margin-bottom: 1rem;">Crear Prueba</h1>
+      <div class="page-header">
+        <h1 style="margin-bottom: .25rem;">Pruebas PND (pruebas no destructibles)</h1>
+        <p class="page-sub">Completa los datos de la prueba. Puedes seleccionar un equipo del inventario para autocompletar información relacionada.</p>
+      </div>
       <div class="toolbar">
         <div class="group">
-          <a class="btn-primary" href="listapruebas.html">Ver pruebas</a>
+          <a class="btn-primary" href="listapruebas.html">Ver Registro PND</a>
         </div>
         <div id="status" class="toolbar-count"></div>
       </div>
       <form id="prueba-form">
+        <div class="card">
+          <p class="section-title">Datos de la prueba</p>
+          <div class="two-col">
+            <div class="form-field">
+              <label for="fld-fecha-prueba">Fecha de prueba</label>
+              <input type="date" id="fld-fecha-prueba" name="Fecha de prueba" />
+            </div>
+            <div class="form-field">
+              <label for="fld-resultado">Resultado</label>
+              <select id="fld-resultado" name="Resultado">
+                <option value="">Selecciona...</option>
+                <option value="APROBADO">APROBADO</option>
+                <option value="RECHAZADO">RECHAZADO</option>
+                <option value="OBSERVADO">OBSERVADO</option>
+              </select>
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <p class="section-title">Información desde inventario</p>
         <div id="form-fields" class="form-grid"></div>
+        </div>
+        <div class="card">
+          <p class="section-title">Observaciones</p>
+          <div class="form-field">
+            <label for="fld-observaciones">Observaciones</label>
+            <textarea id="fld-observaciones" name="Observaciones" placeholder="Notas, condiciones de ensayo, evidencias, etc."></textarea>
+          </div>
+        </div>
         <div style="margin-top:1rem; display:flex; gap:8px; justify-content:flex-end;">
           <button type="button" id="btn-cancel">Cancelar</button>
           <button type="button" class="btn-primary" id="btn-save">Guardar</button>
@@ -99,7 +130,9 @@
         let GEN_ROWS = [];
         let GEN_EQUIPO_IDX = -1;
         let GEN_SERIE_IDX = -1;
+        let GEN_EDO_IDX = -1;
         const serieByEquipo = new Map();
+        const edoByEquipo = new Map(); // key (normalizado) -> 'ON'|'OFF'|...
 
         function parseCSV(text){
           const lines = text.replace(/\r\n?/g,'\n').split('\n').filter(l=>l.length);
@@ -241,17 +274,23 @@
               // Construir opciones desde ALL_ROWS y EQUIPO_IDX
               if (EQUIPO_IDX >= 0 && ALL_ROWS.length){
                 const set = new Set();
-                for (const r of ALL_ROWS){ const v = String(r[EQUIPO_IDX]||'').trim(); if (v) set.add(v); }
+                const normKey = (s)=> String(s||'').trim().toUpperCase().replace(/[^A-Z0-9]/g,'');
+                for (const r of ALL_ROWS){
+                  const v = String(r[EQUIPO_IDX]||'').trim(); if (!v) continue;
+                  const k = normKey(v);
+                  const edo = edoByEquipo.get(k) || 'ON';
+                  if (edo === 'ON') set.add(v);
+                }
                 const opts = Array.from(set).sort((a,b)=>a.localeCompare(b));
                 ensureDatalist('dl-inventory-equipos', opts);
                 input.setAttribute('list','dl-inventory-equipos');
                 input.placeholder = 'Equipo/Activo (inventario)';
               }
-              // Auto-popular campos relacionados al cambiar selección
-              const trigger = ()=> autofillFromEquipo(input.value||'');
-              input.addEventListener('input', trigger);
-              input.addEventListener('change', trigger);
             }
+            // Auto-popular campos relacionados al cambiar selección
+            const trigger = ()=> autofillFromEquipo(input.value||'');
+            input.addEventListener('input', trigger);
+            input.addEventListener('change', trigger);
             wrap.appendChild(label); wrap.appendChild(input); host.appendChild(wrap);
           }
           // Si ya hay un valor prellenado en EQUIPO/ACTIVO, disparar autofill
@@ -266,10 +305,17 @@
             const res = await fetch(CSV_URL, { cache: 'no-store' });
             if (!res.ok) throw new Error('No se pudo cargar el CSV');
             const txt = await res.text();
+            // Usar parser general con soporte de comillas
             const rows = parseCSV(txt);
             if (!rows.length) throw new Error('CSV vacío');
-            HEADERS = rows[0].slice();
+            // Filtrar EDO=ON si existe columna
+            const heads = rows[0].slice();
+            const edoIdx = heads.indexOf('EDO');
+            HEADERS = heads;
             ALL_ROWS = rows.slice(1);
+            if (edoIdx !== -1) {
+              ALL_ROWS = ALL_ROWS.filter(r => String(r[edoIdx]||'').trim().toUpperCase() === 'ON');
+            }
             // localizar índice de EQUIPO / ACTIVO (con variantes)
             const norm = (s)=> String(s||'').toUpperCase().replace(/\s*\/\s*/g,'/');
             const variants = new Set(['EQUIPO/ACTIVO','EQUIPO ACTIVO','EQUIPO']);
@@ -311,15 +357,18 @@
             // índices para equipo y serie en inventario general
             GEN_EQUIPO_IDX = headerIndexByVariantsGen(['EQUIPO / ACTIVO','EQUIPO/ACTIVO','EQUIPO ACTIVO','EQUIPO']);
             GEN_SERIE_IDX = headerIndexByVariantsGen(['SERIE','NUMERO DE SERIE','NÚMERO DE SERIE','SERIAL','SERIAL NO','NO. SERIE']);
+            GEN_EDO_IDX    = headerIndexByVariantsGen(['EDO','ESTADO']);
             console.log('[pruebas] Inventario unificado cargado', { url, GEN_EQUIPO_IDX, GEN_SERIE_IDX, headers: GEN_HEADERS });
             try { document.getElementById('status').textContent = `Inventario unificado (equip:${GEN_EQUIPO_IDX}, serie:${GEN_SERIE_IDX})`; } catch {}
             if (GEN_EQUIPO_IDX>=0 && GEN_SERIE_IDX>=0){
               serieByEquipo.clear();
               const norm = (s)=> String(s||'').trim().toUpperCase().replace(/[^A-Z0-9]/g,'');
+              edoByEquipo.clear();
               for (const r of GEN_ROWS){
                 const k = norm(r[GEN_EQUIPO_IDX]);
                 const v = String(r[GEN_SERIE_IDX]||'').trim();
                 if (k && v && !serieByEquipo.has(k)) serieByEquipo.set(k, v);
+                if (GEN_EDO_IDX>=0){ const edo = String(r[GEN_EDO_IDX]||'').trim().toUpperCase(); if (k && edo && !edoByEquipo.has(k)) edoByEquipo.set(k, edo); }
               }
               console.log('[pruebas] Serie map size:', serieByEquipo.size);
               try { document.getElementById('status').textContent += ` | series:${serieByEquipo.size}`; } catch {}

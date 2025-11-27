@@ -132,6 +132,44 @@ async function loadHistory() {
     document.getElementById('ingresoTotal').textContent = '$' + sumaIngreso.toLocaleString('es-MX', { minimumFractionDigits: 2 });
     document.getElementById('rentaTotal').textContent = '$' + sumaRenta.toLocaleString('es-MX', { minimumFractionDigits: 2 });
     
+    // --- Métricas de actividades: activas, vencidas (SLA 30 días) y días promedio en servicio ---
+    try {
+      const idxIni = headerIndices.INICIO;
+      const idxTerm = headerIndices.TERMINACION;
+      const idxDev = headerIndices.DEVOLUCION;
+      const idxDias = headerIndices.DIAS;
+      const now = new Date(); now.setHours(0,0,0,0);
+      const dayMs = 24*3600*1000;
+      const SLAms = 30*dayMs;
+      let activas = 0, vencidas = 0, sumDias = 0;
+      const parseDMYLocal = (s)=>{
+        const m = String(s||'').trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
+        if (!m) return null; let d=+m[1], M=+m[2]-1, y=+m[3]; if (y<100) y+=2000; const dt=new Date(y,M,d); dt.setHours(0,0,0,0); return isNaN(dt.getTime())?null:dt;
+      };
+      rows.forEach(r=>{
+        const iniStr = idxIni>=0 ? r[idxIni] : '';
+        const termStr = idxTerm>=0 ? r[idxTerm] : '';
+        const devStr = idxDev>=0 ? r[idxDev] : '';
+        const di = parseDMYLocal(iniStr);
+        const termOk = !!parseDMYLocal(termStr);
+        const devOk = !!parseDMYLocal(devStr);
+        const abierta = !!di && !termOk && !devOk;
+        if (!di) return;
+        if (abierta){
+          activas++;
+          let dias = 0;
+          if (idxDias>=0){ const n = parseFloat(String(r[idxDias]||'').replace(/,/g,'')); dias = isNaN(n)? 0 : n; }
+          if (!dias){ dias = Math.max(0, Math.floor((now - di)/dayMs)); }
+          sumDias += dias;
+          if ((now.getTime() - di.getTime()) > SLAms) vencidas++;
+        }
+      });
+      const avgDias = activas>0 ? Math.round(sumDias/activas) : 0;
+      const elA = document.getElementById('totalActivas'); if (elA) elA.textContent = activas.toLocaleString('es-MX');
+      const elV = document.getElementById('totalVencidas'); if (elV) elV.textContent = vencidas.toLocaleString('es-MX');
+      const elD = document.getElementById('avgDiasServicio'); if (elD) elD.textContent = avgDias.toLocaleString('es-MX');
+    } catch(e){ console.warn('[regactividad] métricas act/venc/días', e); }
+    
     renderTable(rows);
   } catch (e) {
     console.error('[regactividad] load:', e);
@@ -149,7 +187,7 @@ function renderTable(rows){
     tr.appendChild(tdF); 
     const tdT=document.createElement('td'); 
     const prop=row[headerIndices.PROPIEDAD]||''; 
-    const tipo=prop==='PCT'?'INTERNO':'EXTERNO'; 
+    const tipo=prop==='PCT'?'PROPIO':'TERCEROS'; 
     tdT.innerHTML=`<span class="badge ${prop==='PCT'?'badge-interno':'badge-externo'}">${tipo}</span>`; 
     tr.appendChild(tdT); 
     const makeTd=(val)=>{const td=document.createElement('td'); td.textContent=val||'-'; return td;}; 
@@ -414,7 +452,7 @@ if (logoutBtn) {
 
 document.getElementById('searchInput')?.addEventListener('input', (e)=>{ const term=e.target.value.toLowerCase(); document.querySelectorAll('#historyTableBody tr').forEach(r=>{ r.style.display = r.textContent.toLowerCase().includes(term)?'':'none'; }); });
 
-document.getElementById('exportBtn')?.addEventListener('click', function(){ try{ const key='actividad:newRows'; const stored=localStorage.getItem(key); const rows=stored?JSON.parse(stored):[]; if(rows.length===0){ alert('No hay registros para exportar'); return; } const headersCsv='Tipo,Serial,Equipo/Activo,Descripción,Cliente,Área,Ubicación,Factura,Inicio,Terminación,Días,Precio,Ingreso/Renta\n'; let csv=headersCsv; rows.forEach(row=>{ const prop=row[headerIndices.PROPIEDAD]||''; const tipo=prop==='PCT'?'INTERNO':'EXTERNO'; const ingreso=parseFloat(row[headerIndices.INGRESO]||0); const renta=parseFloat(row[headerIndices.RENTA]||0); const monto=prop==='PCT'?ingreso:renta; const fields=[ tipo, row[headerIndices.SERIAL]||'', row[headerIndices.EQUIPO]||'', row[headerIndices.DESCRIPCION]||'', row[headerIndices.CLIENTE]||'', row[headerIndices.AREA]||'', row[headerIndices.UBICACION]||'', row[headerIndices.FACTURA]||'', row[headerIndices.INICIO]||'', row[headerIndices.TERMINACION]||'', row[headerIndices.DIAS]||'', row[headerIndices.PRECIO]||'', monto||'' ]; csv += fields.map(v=>`"${String(v).replace(/\"/g,'\"\"')}\"`).join(',')+'\n'; }); const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='registros_actividad.csv'; a.click(); }catch(e){ console.error('[regactividad] export csv', e); alert('Error al exportar CSV'); }});
+document.getElementById('exportBtn')?.addEventListener('click', function(){ try{ const key='actividad:newRows'; const stored=localStorage.getItem(key); const rows=stored?JSON.parse(stored):[]; if(rows.length===0){ alert('No hay registros para exportar'); return; } const headersCsv='Tipo,Serial,Equipo/Activo,Descripción,Cliente,Área,Ubicación,Factura,Inicio,Terminación,Días,Precio,Ingreso/Renta\n'; let csv=headersCsv; rows.forEach(row=>{ const prop=row[headerIndices.PROPIEDAD]||''; const tipo=prop==='PCT'?'PROPIO':'TERCEROS'; const ingreso=parseFloat(row[headerIndices.INGRESO]||0); const renta=parseFloat(row[headerIndices.RENTA]||0); const monto=prop==='PCT'?ingreso:renta; const fields=[ tipo, row[headerIndices.SERIAL]||'', row[headerIndices.EQUIPO]||'', row[headerIndices.DESCRIPCION]||'', row[headerIndices.CLIENTE]||'', row[headerIndices.AREA]||'', row[headerIndices.UBICACION]||'', row[headerIndices.FACTURA]||'', row[headerIndices.INICIO]||'', row[headerIndices.TERMINACION]||'', row[headerIndices.DIAS]||'', row[headerIndices.PRECIO]||'', monto||'' ]; csv += fields.map(v=>`"${String(v).replace(/\"/g,'\"\"')}"`).join(',')+'\n'; }); const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='registros_actividad.csv'; a.click(); }catch(e){ console.error('[regactividad] export csv', e); alert('Error al exportar CSV'); }});
 
 document.getElementById('clearAllBtn')?.addEventListener('click', async function() {
   if (!(window.isAdmin && window.isAdmin())) { alert('Solo un administrador puede borrar todos los registros.'); return; }
@@ -524,7 +562,7 @@ function computeTimeline(row){
 
 function buildViewHtml(row){
   const prop = row[headerIndices.PROPIEDAD] || '';
-  const tipo = prop === 'PCT' ? 'EQUIPO INTERNO' : 'EQUIPO EXTERNO';
+  const tipo = prop === 'PCT' ? 'EQUIPO PROPIO' : 'EQUIPO DE TERCEROS';
   const fecha = new Date().toLocaleDateString('es-MX', { year:'numeric', month:'long', day:'numeric' });
   const idxFines = getIdx(['FIN PARCIAL DEL SERVICIO','FIN PARCIAL','FINES PARCIALES','FIN PARCIAL SERVICIO','FIN PARCIAL DE SERVICIO']);
   const idxCont = getIdx(['CONTINUACION DEL SERVICIO','CONTINUACIÓN DEL SERVICIO','CONTINUACION','CONTINUACIÓN','CONTINUACION DE SERVICIO','CONTINUACIÓN DE SERVICIO']);

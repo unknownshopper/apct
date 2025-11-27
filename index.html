@@ -47,27 +47,20 @@
         <nav id="primary-nav">
             <ul>
                 <li><a class="active" href="index.html">Dashboard</a></li>
-                <li class="nav-dropdown"><details><summary>Pruebas</summary><ul>
-                  <li><a href="matestrep.html">MTR Material Test Report</a></li>
-                  <li><a href="listmatestrep.html">Lista de pruebas (MTR)</a></li>
-                  <li><a href="pruebas.html">Pruebas</a></li>
-                  <li><a href="stockpruebas.html">Stock de pruebas</a></li>
-                  <li><a href="listapruebas.html">Lista de pruebas</a></li>
-                  <li><a href="utt.html">Pruebas UTT</a></li>
-                  <li><a href="listutt.html">Lista UTT</a></li>
-                  <li><a href="emi.html">Pruebas EMI</a></li>
-                  <li><a href="listemi.html">Lista EMI</a></li>
-                </ul></details></li>
-                <li><a href="tareas.html">Tareas</a></li>
-                <li class="nav-dropdown"><details><summary>Inspección</summary><ul>
-                  <li><a href="inspeccion.html">Inspección primaria</a></li>
-                  <li><a href="reginspecciones.html">Registro de inspecciones</a></li>
-                </ul></details></li>
-                <li><a href="ingral.html">Inventario</a></li>
                 <li class="nav-dropdown"><details><summary>Actividad</summary><ul>
                   <li><a href="actividad.html">Registro de actividad</a></li>
                   <li><a href="regactividad.html">Historial de registros</a></li>
                 </ul></details></li>
+                <li class="nav-dropdown"><details><summary>Pruebas</summary><ul>
+                  <li><a href="pruebas.html">Pruebas PND (pruebas no destructibles)</a></li>
+                  <li><a href="stockpruebas.html">PND x equipo</a></li>
+                  <li><a href="listapruebas.html">Registro PND</a></li>
+                </ul></details></li>
+                <li class="nav-dropdown"><details><summary>Inspección</summary><ul>
+                  <li><a href="inspeccion.html">Inspección primaria</a></li>
+                  <li><a href="reginspecciones.html">Registro de inspecciones</a></li>
+                </ul></details></li>
+                <li><a href="tareas.html">Tareas</a></li>
                 <li><a href="reportes.html">Reportes</a></li>
             </ul>
         </nav>
@@ -86,20 +79,16 @@
             <div id="kpi-inventario" class="kpi">—</div>
           </div>
           <div class="card">
-            <div class="kpi-label">Inspecciones</div>
-            <div id="kpi-inspecciones" class="kpi">—</div>
+            <div class="kpi-label">Actividades activas</div>
+            <div id="kpi-activas" class="kpi">—</div>
           </div>
           <div class="card">
-            <div class="kpi-label">Últimos 7 días</div>
-            <div id="kpi-ult7" class="kpi">—</div>
+            <div class="kpi-label">En servicio (días)</div>
+            <div id="kpi-dias-serv" class="kpi">—</div>
           </div>
           <div class="card">
-            <div class="kpi-label">Por vencer 30 días</div>
-            <div id="kpi-vencer30" class="kpi">—</div>
-          </div>
-          <div class="card">
-            <div class="kpi-label">Por vencer 60 días</div>
-            <div id="kpi-vencer60" class="kpi">—</div>
+            <div class="kpi-label">Vencidas</div>
+            <div id="kpi-vencidas" class="kpi">—</div>
           </div>
           <div class="card" id="card-storage" style="display:none;">
             <div class="kpi-label">Almacenamiento (estimado)</div>
@@ -158,43 +147,83 @@
         return Math.max(0, lines.length - 1);
       }catch{ return 0; }
     }
-    async function getInspecciones(){
+    async function getActividades(){
       try{
-        // Esperar a que Firebase y Auth estén listos
+        // Esperar Firebase y Auth
         let tries = 0;
         while (tries < 60 && (!window.firebase || !window.auth)) { await new Promise(r=>setTimeout(r,50)); tries++; }
         const db = window.db;
         const auth = window.auth;
-        if (!db || !auth) return { total:0, last7:0, byEquipo:new Map() };
-        // Esperar a usuario autenticado
+        if (!db || !auth) return { activas:0, vencidas:0, avgDias:0 };
+        // Usuario (si se requiere)
         const user = auth.currentUser || await new Promise((resolve)=>{
           const unsub = auth.onAuthStateChanged((u)=>{ unsub(); resolve(u||null); });
         });
-        if (!user) return { total:0, last7:0, byEquipo:new Map() };
-        // Consultar Firestore
-        const snap = await db.collection('inspections').orderBy('fechaTs','desc').limit(5000).get();
+        if (!user) return { activas:0, vencidas:0, avgDias:0 };
+        // Leer actividades (si los docs no tienen campos normalizados, caeremos a fallback)
+        let snap = null; let docs = [];
+        try { snap = await db.collection('activityRecords').orderBy('inicioTs','desc').limit(5000).get(); docs = snap.docs||[]; }
+        catch { try { const s2 = await db.collection('activityRecords').limit(5000).get(); docs = s2.docs||[]; } catch {} }
         const now = Date.now();
-        const seven = 7*24*3600*1000;
-        let total = snap.size;
-        let last7 = 0;
-        const byEq = new Map(); // eq -> { ts, cliente }
-        snap.forEach(doc=>{
+        const SLA = 30*24*3600*1000; // 30 días
+        let activas = 0, vencidas = 0; let sumDias = 0; let counted = 0;
+        docs.forEach(doc=>{
           const d = doc.data()||{};
-          const eq = String(d.equipoActivo||'').trim();
-          const ts = typeof d.fechaTs==='number' ? d.fechaTs : (d.created_at||0);
-          const cliente = String(
-            d.cliente || d.clienteNombre || d.clienteNombreRazonSocial || d.clienteRS || ''
-          ).trim();
-          if (now - ts <= seven) last7++;
-          if (eq) {
-            const cur = byEq.get(eq);
-            if (!cur || ts > cur.ts) byEq.set(eq, { ts, cliente });
+          const inicio = typeof d.inicioTs==='number' ? d.inicioTs : null;
+          const termTs = typeof d.terminacionTs==='number' ? d.terminacionTs : null;
+          const devuelta = typeof d.devolucionTs==='number' && d.devolucionTs>0;
+          const termFutura = termTs!=null && now <= termTs;
+          const abierta = !!inicio && (termFutura || (termTs==null && !devuelta));
+          if (!inicio) return;
+          if (abierta){
+            activas++; counted++;
+            const dias = Math.max(0, Math.floor((now - inicio)/(24*3600*1000)));
+            sumDias += dias;
+            if ((termTs!=null && now > termTs) || (termTs==null && (now - inicio > SLA))) vencidas++;
           }
         });
-        return { total, last7, byEquipo: byEq };
+        // Fallback: si no contamos nada desde Firestore, intentar con localStorage + headers CSV
+        if (counted === 0){
+          try{
+            // Cargar headers del CSV para detectar índices
+            const resp = await fetch('docs/REGISTRO DE ACTIVIDAD PCT 2025.csv', { cache:'no-store' });
+            const txt = await resp.text();
+            const firstLine = (txt.split('\n')[0]||'');
+            const headers = firstLine.split(',').map(s=>s.trim());
+            const norm = s=> String(s||'').trim().toUpperCase().replace(/\s+/g,' ');
+            const idxBy = (arr)=>{ for (const v of arr){ const i = headers.findIndex(h=> norm(h)===norm(v)); if (i>=0) return i; } return -1; };
+            const IDX_INICIO = idxBy(['INICIO DEL SERVICIO']);
+            const IDX_TERM = idxBy(['TERMINACION DEL SERVICIO','TERMINACIÓN DEL SERVICIO']);
+            const IDX_DEV = idxBy(['FECHA DE DEVOLUCION','FECHA DE DEVOLUCIÓN']);
+            const IDX_DIAS = idxBy(['DIAS EN SERVICIO','DÍAS EN SERVICIO']);
+            const parseDMY = (s)=>{ const m=String(s||'').trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/); if(!m)return null; let d=+m[1],M=+m[2]-1,y=+m[3]; if(y<100)y+=2000; const dt=new Date(y,M,d); dt.setHours(0,0,0,0); return isNaN(dt.getTime())?null:dt; };
+            const stored = JSON.parse(localStorage.getItem('actividad:newRows')||'[]');
+            stored.forEach(r=>{
+              const iniStr = IDX_INICIO>=0 ? r[IDX_INICIO] : '';
+              const termStr = IDX_TERM>=0 ? r[IDX_TERM] : '';
+              const devStr = IDX_DEV>=0 ? r[IDX_DEV] : '';
+              const di = parseDMY(iniStr);
+              const dt = parseDMY(termStr);
+              const devOk = !!parseDMY(devStr);
+              const termFutura = !!dt && (Date.now() <= dt.getTime());
+              const abierta = !!di && (termFutura || (!dt && !devOk));
+              if (!di) return;
+              if (abierta){
+                activas++;
+                let dias = 0;
+                if (IDX_DIAS>=0){ const n = parseFloat(String(r[IDX_DIAS]||'').replace(/,/g,'')); dias = isNaN(n)?0:n; }
+                if (!dias){ dias = Math.max(0, Math.floor((now - di.getTime())/(24*3600*1000))); }
+                sumDias += dias;
+                if ((dt && (Date.now() > dt.getTime())) || (!dt && (now - di.getTime() > SLA))) vencidas++;
+              }
+            });
+          }catch(e){ console.warn('Fallback actividades localStorage/CSV falló', e); }
+        }
+        const avgDias = activas>0 ? Math.round(sumDias/activas) : 0;
+        return { activas, vencidas, avgDias };
       }catch(e){
-        console.warn('Dash getInspecciones err/perms', e);
-        return { total:0, last7:0, byEquipo:new Map() };
+        console.warn('Dash getActividades err', e);
+        return { activas:0, vencidas:0, avgDias:0 };
       }
     }
     function classifyDue(byEquipo){
@@ -320,17 +349,14 @@
     }
     async function init(){
       const inv = await countInventario();
-      const insp = await getInspecciones();
-      const due = classifyDue(insp.byEquipo);
+      const acts = await getActividades();
       const elInv = document.getElementById('kpi-inventario'); if (elInv) elInv.textContent = fmt(inv);
-      const elInsp = document.getElementById('kpi-inspecciones'); if (elInsp) elInsp.textContent = fmt(insp.total);
-      const el7 = document.getElementById('kpi-ult7'); if (el7) el7.textContent = fmt(insp.last7);
-      const within30 = due.items.filter(it => it.delta >= 0 && it.delta <= 30).length;
-      const within60 = due.items.filter(it => it.delta >= 31 && it.delta <= 60).length;
-      const elV30 = document.getElementById('kpi-vencer30'); if (elV30) elV30.textContent = fmt(within30);
-      const elV60 = document.getElementById('kpi-vencer60'); if (elV60) elV60.textContent = fmt(within60);
-      renderTimeline(due.items);
-      window.addEventListener('resize', ()=>renderTimeline(due.items));
+      const elAct = document.getElementById('kpi-activas'); if (elAct) elAct.textContent = fmt(acts.activas);
+      const elDias = document.getElementById('kpi-dias-serv'); if (elDias) elDias.textContent = fmt(acts.avgDias);
+      const elVenc = document.getElementById('kpi-vencidas'); if (elVenc) elVenc.textContent = fmt(acts.vencidas);
+      // Timeline opcionalmente puede quedar vacío o reutilizar datos; por ahora limpiar
+      renderTimeline([]);
+      window.addEventListener('resize', ()=>renderTimeline([]));
 
       // Mostrar almacenamiento estimado solo para admin/director
       try{

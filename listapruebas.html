@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Listado de Pruebas - PCT</title>
+    <title>Registro PND - PCT</title>
     
     <!-- SEO Meta Tags -->
     <meta name="description" content="Listado completo de pruebas registradas en el sistema PCT.">
@@ -13,7 +13,7 @@
     <!-- Open Graph / Facebook -->
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://pc-t.mx/listapruebas.html">
-    <meta property="og:title" content="Listado de Pruebas - PCT">
+    <meta property="og:title" content="Registro PND - PCT">
     <meta property="og:description" content="Listado completo de pruebas registradas en el sistema PCT.">
     <meta property="og:site_name" content="PCT">
     
@@ -38,24 +38,17 @@
       <nav id="primary-nav">
         <ul>
           <li><a href="index.html">Dashboard</a></li>
-          <li class="nav-dropdown"><details><summary>Pruebas</summary><ul>
-            <li><a href="matestrep.html">MTR Material Test Report</a></li>
-            <li><a href="listmatestrep.html">Lista de pruebas (MTR)</a></li>
-            <li><a href="pruebas.html">Pruebas</a></li>
-            <li><a href="stockpruebas.html">Stock de pruebas</a></li>
-            <li><a class="active" href="listapruebas.html">Lista de pruebas</a></li>
-            <li><a href="utt.html">Pruebas UTT</a></li>
-            <li><a href="listutt.html">Lista UTT</a></li>
-            <li><a href="emi.html">Pruebas EMI</a></li>
-            <li><a href="listemi.html">Lista EMI</a></li>
-          </ul></details></li>
-          <li><a href="tareas.html">Tareas</a></li>
-          <li><a href="inspeccion.html">Inspección</a></li>
-          <li><a href="ingral.html">Inventario</a></li>
           <li class="nav-dropdown"><details><summary>Actividad</summary><ul>
             <li><a href="actividad.html">Registro de actividad</a></li>
             <li><a href="regactividad.html">Historial de registros</a></li>
           </ul></details></li>
+          <li class="nav-dropdown"><details open><summary>Pruebas</summary><ul>
+            <li><a href="pruebas.html">Pruebas PND (pruebas no destructibles)</a></li>
+            <li><a href="stockpruebas.html">PND x equipo</a></li>
+            <li><a class="active" href="listapruebas.html">Registro PND</a></li>
+          </ul></details></li>
+          <li><a href="inspeccion.html">Inspección</a></li>
+          <li><a href="tareas.html">Tareas</a></li>
           <li><a href="reportes.html">Reportes</a></li>
         </ul>
       </nav>
@@ -67,10 +60,10 @@
     </header>
 
     <main class="wide">
-      <h1 style="margin-bottom: 1rem;">Listado de Pruebas</h1>
+      <h1 style="margin-bottom: 1rem;">Registro PND</h1>
       <div class="toolbar">
         <div class="group">
-          <a class="btn-primary" href="pruebas.html">Crear prueba</a>
+          <a class="btn-primary" href="pruebas.html">Crear Prueba PND</a>
           <input id="search" type="text" placeholder="Buscar..." />
           <button id="btn-clear" type="button">Limpiar</button>
         </div>
