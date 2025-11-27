@@ -346,7 +346,9 @@
         const invData = parsedInv.data;
         const idxEquipo = invData[0]?.findIndex(h=>/^(EQUIPO\s*\/\s*ACTIVO|EQUIPO\s*ACTIVO|EQUIPO)$/i.test(normalizeHeader(h).toUpperCase())) ?? -1;
         const idxDesc = invData[0]?.findIndex(h=>/^DESCRIPCION|DESCRIPCIÓN$/i.test(normalizeHeader(h).toUpperCase())) ?? -1;
-        const idxSerial = invData[0]?.findIndex(h=>/^(SERIAL|#)$/i.test(normalizeHeader(h).toUpperCase())) ?? -1;
+        // Priorizar SERIAL sobre # para evitar tomar la columna del índice
+        let idxSerial = invData[0]?.findIndex(h=>/^SERIAL$/i.test(normalizeHeader(h).toUpperCase())) ?? -1;
+        if (idxSerial < 0) { idxSerial = invData[0]?.findIndex(h=>/^#$/i.test(normalizeHeader(h).toUpperCase())) ?? -1; }
         invDescByEquipo.clear(); invSerialByEquipo.clear(); inventoryOptions = [];
         for (let i=1;i<invData.length;i++){
           const r = invData[i]; const eq = String(r[idxEquipo]||'').trim(); if (!eq) continue; const ds = idxDesc>=0 ? r[idxDesc] : ''; const sr = idxSerial>=0 ? r[idxSerial] : '';
@@ -409,7 +411,42 @@
     eqAdd.addEventListener('blur', ()=>{ const v=String(eqAdd.value||'').trim(); if (v){ multiSelectEquipos.add(v); eqAdd.value=''; renderSelectedList(); updateDocSaveEnabled(); } });
     eqClear.addEventListener('click', ()=>{ multiSelectEquipos.clear(); eqInput.value=''; renderSelectedList(); updateDocSaveEnabled(); });
 
-    function autofillFromEquipo(){ const keyRaw = String(eqInput.value||'').trim(); const upper = keyRaw.toUpperCase(); const descInv = invDescByEquipo.get(keyRaw) || invDescByEquipo.get(upper) || ''; const serialInv = invSerialByEquipo.get(keyRaw) || invSerialByEquipo.get(upper) || ''; outDesc.textContent = descInv || '—'; outSerial.textContent = serialInv || '—'; }
+    function refreshSerialDescFromSelection(){
+      const arr = Array.from(multiSelectEquipos.values());
+      if (arr.length === 0){
+        // Fallback a lo que esté en el input principal
+        const keyRaw = String(eqInput.value||'').trim();
+        const upper = keyRaw.toUpperCase();
+        const descInv = invDescByEquipo.get(keyRaw) || invDescByEquipo.get(upper) || '';
+        const serialInv = invSerialByEquipo.get(keyRaw) || invSerialByEquipo.get(upper) || '';
+        outDesc.textContent = descInv || '—';
+        outSerial.textContent = serialInv || '—';
+        return;
+      }
+      if (arr.length === 1){
+        const keyRaw = String(arr[0]||'');
+        const upper = keyRaw.toUpperCase();
+        const descInv = invDescByEquipo.get(keyRaw) || invDescByEquipo.get(upper) || '';
+        const serialInv = invSerialByEquipo.get(keyRaw) || invSerialByEquipo.get(upper) || '';
+        outDesc.textContent = descInv || '—';
+        outSerial.textContent = serialInv || '—';
+        return;
+      }
+      // Múltiples: listar en multilínea
+      const seriales = arr.map(eq => {
+        const u = String(eq||'').toUpperCase();
+        const s = invSerialByEquipo.get(eq) || invSerialByEquipo.get(u) || '—';
+        return `${eq} — ${s}`;
+      });
+      const descripciones = arr.map(eq => {
+        const u = String(eq||'').toUpperCase();
+        const d = invDescByEquipo.get(eq) || invDescByEquipo.get(u) || '—';
+        return `${eq} — ${d}`;
+      });
+      outSerial.textContent = seriales.join('\n');
+      outDesc.textContent = descripciones.join('\n');
+    }
+    function autofillFromEquipo(){ refreshSerialDescFromSelection(); }
     eqInput.addEventListener('input', ()=>{ autofillFromEquipo(); updateDocSaveEnabled(); });
     eqInput.addEventListener('change', ()=>{ autofillFromEquipo(); updateDocSaveEnabled(); });
 
@@ -427,7 +464,7 @@
 
     function updateDocSaveEnabled(){ const eqOK = !!(eqInput.value||'').trim() || multiSelectEquipos.size>0; const di = parseDMY(inpInicio.value); const dt = parseDMY(inpTerm.value); const provOk = selTipo.value==='propio' || !!(provInput.value||'').trim(); const ok = eqOK && di && dt && dt>=di && provOk; saveRowBtn.disabled = !ok; saveRowBtn.style.opacity = ok ? '1' : '.6'; saveRowBtn.style.pointerEvents = ok ? 'auto' : 'none'; }
 
-    function renderSelectedList(){ const arr = Array.from(multiSelectEquipos.values()); eqList.innerHTML = ''; if (!arr.length){ eqList.style.display='none'; eqCounter.textContent=''; return; } eqList.style.display='flex'; arr.forEach(val=>{ const chip = document.createElement('div'); chip.style.display='inline-flex'; chip.style.gap='6px'; chip.style.alignItems='center'; chip.style.padding='2px 8px'; chip.style.border='1px solid #e5e7eb'; chip.style.borderRadius='999px'; const t=document.createElement('span'); t.textContent=val; const x=document.createElement('button'); x.textContent='×'; x.onclick=()=>{ multiSelectEquipos.delete(val); renderSelectedList(); updateDocSaveEnabled(); }; chip.appendChild(t); chip.appendChild(x); eqList.appendChild(chip); }); eqCounter.textContent = `(${arr.length} seleccionado${arr.length===1?'':'s'})`; }
+    function renderSelectedList(){ const arr = Array.from(multiSelectEquipos.values()); eqList.innerHTML = ''; if (!arr.length){ eqList.style.display='none'; eqCounter.textContent=''; refreshSerialDescFromSelection(); return; } eqList.style.display='flex'; arr.forEach(val=>{ const chip = document.createElement('div'); chip.style.display='inline-flex'; chip.style.gap='6px'; chip.style.alignItems='center'; chip.style.padding='2px 8px'; chip.style.border='1px solid #e5e7eb'; chip.style.borderRadius='999px'; const t=document.createElement('span'); t.textContent=val; const x=document.createElement('button'); x.textContent='×'; x.onclick=()=>{ multiSelectEquipos.delete(val); renderSelectedList(); updateDocSaveEnabled(); }; chip.appendChild(t); chip.appendChild(x); eqList.appendChild(chip); }); eqCounter.textContent = `(${arr.length} seleccionado${arr.length===1?'':'s'})`; refreshSerialDescFromSelection(); }
 
     saveRowBtn.onclick = ()=>{
       updateDocSaveEnabled(); if (saveRowBtn.disabled) return;
