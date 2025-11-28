@@ -14,19 +14,39 @@
    h1 { font-size: 30px; letter-spacing: .3px; margin: 8px 0 14px; }
    p.lead { color: var(--muted); margin: 0 0 22px; }
 
-   .flow { display: grid; grid-template-columns: repeat(24, 1fr); gap: 24px; align-items: start; }
+   .flow { display: grid; grid-template-columns: repeat(24, 1fr); gap: 24px; align-items: start; margin-top: 28px; }
+   /* Disposición circular */
+   .flow--circle { position: relative; display:block; height: 860px; margin-top: 16px; }
+   .flow--circle .ring { position:absolute; top:50%; left:50%; width: 900px; height: 900px; transform: translate(-50%,-50%); border: 2px dashed rgba(58,169,255,.35); border-radius: 50%; opacity: .35; z-index:0; pointer-events:none; animation: spin 60s linear infinite; }
+   .flow--circle .step { position:absolute; width: 340px; z-index:3; }
+   .flow--circle .step--actividad { width: 440px; }
+   .flow--circle .arrow { display:none; }
+   .flow--circle .connectors { position:absolute; top:50%; left:50%; width:900px; height:900px; transform: translate(-50%,-50%); pointer-events:none; z-index:1; animation: spin 60s linear infinite; }
+   .flow--circle .label { position:absolute; color: var(--muted); font-size: 12px; background: rgba(20,26,46,.7); backdrop-filter: blur(2px); border:1px solid rgba(255,255,255,.08); padding:4px 8px; border-radius:999px; }
+   .flow--circle .step { box-shadow: 0 10px 30px rgba(0,0,0,.25); border-color: rgba(255,255,255,.12); }
+   @keyframes spin { from { transform: translate(-50%,-50%) rotate(0deg); } to { transform: translate(-50%,-50%) rotate(360deg); } }
+   /* Posiciones alrededor del círculo */
+   .pos-actividad { top: 50%; left: 2%; transform: translate(0,-50%); }
+   .pos-pruebas   { top: 0%;  left: 50%; transform: translate(-50%,0); }
+   .pos-inspeccion{ top: 28%; left: 82%; transform: translate(-50%,0); }
+   .pos-tareas    { top: 70%; left: 82%; transform: translate(-50%,0); }
+   .pos-reporte   { top: 106%; left: 50%; transform: translate(-50%,-100%); }
+   .cycle-note { position:absolute; left:50%; bottom: 14px; transform: translateX(-50%); color: var(--muted); font-size: 13px; }
    .step { grid-column: span 4; background: radial-gradient(1200px 420px at -10% -20%, rgba(122, 168, 255, .18), transparent 55%),
                            radial-gradient(300px 200px at 110% 130%, rgba(124, 77, 255, .16), transparent 60%),
                            var(--panel);
            border: 1px solid rgba(255, 255, 255, .08);
-           border-radius: 16px; padding: 24px; position: relative; display: flex; flex-direction: column; min-height: 220px; }
-   .step h2 { font-size: 19px; margin: 0 0 12px; display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
+           border-radius: 16px; padding: 18px; position: relative; display: flex; flex-direction: column; min-height: 200px; }
+   .step--actividad { grid-column: span 6; }
+   .step h2 { font-size: 18px; margin: 0 0 8px; display: flex; flex-direction: column; align-items: flex-start; gap: 2px; }
+   .step h2 .icon { display:inline-flex; align-items:center; justify-content:center; width:24px; height:24px; border-radius:8px; background: rgba(255,255,255,.08); border:1px solid rgba(255,255,255,.12); margin-right:8px; }
+   .step .title-row { display:flex; align-items:center; gap:8px; }
    .step h2 small { display: block; }
    .step small { color: var(--muted); font-weight: 500; }
-   .docs { margin: 8px 0 0; padding-left: 18px; color: var(--muted); padding-right:8px; word-break: break-word; font-size: 14px; }
-   .docs li { margin: 8px 0; line-height: 1.6; }
-   .arrow { grid-column: span 1; display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--muted); gap:10px; }
-   .arrow .shaft { width: 100%; height: 2px; background: linear-gradient(90deg, rgba(58, 169, 255, .0), rgba(58, 169, 255, .9)); position: relative; }
+   .docs { margin: 6px 0 0; padding-left: 14px; color: var(--muted); padding-right:8px; word-break: break-word; font-size: 13.5px; }
+   .docs li { margin: 6px 0; line-height: 1.45; }
+   .arrow { grid-column: span 1; display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--muted); gap:10px; margin-top: 22px; }
+   .arrow .shaft { width: 100%; height: 2px; background: repeating-linear-gradient(90deg, rgba(58,169,255,.0) 0 8px, rgba(58,169,255,.9) 8px 16px); position: relative; opacity:.9; }
    .arrow .shaft::after { content: ""; position: absolute; right: -2px; top: 50%; transform: translateY(-50%) rotate(0deg); border-left: 8px solid rgba(58, 169, 255, .9); border-top: 6px solid transparent; border-bottom: 6px solid transparent; }
    .arrow .label { font-size: 13px; color: var(--muted); text-align:center; max-width: 10ch; }
 
@@ -40,11 +60,14 @@
    .legend { display: flex; gap: 12px; flex-wrap: wrap; margin: 16px 0 0; color: var(--muted); font-size: 13px; }
    .pill { display: inline-flex; align-items: center; gap: 8px; padding: 6px 10px; border-radius: 999px; background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.08); }
    .dot { width: 8px; height: 8px; border-radius: 50%; }
-   .chips { display:flex; flex-wrap:wrap; gap:6px; margin-top:10px; }
-   .chip { font-size:12px; color:#cbd5e1; border:1px solid rgba(255,255,255,.12); background: rgba(255,255,255,.05); padding:4px 8px; border-radius:999px; }
+   .chips { display:flex; flex-wrap:wrap; gap:6px; margin-top:6px; }
+   .chip { font-size:12px; color:#cbd5e1; border:1px dashed rgba(255,255,255,.22); background: rgba(255,255,255,.05); padding:4px 8px; border-radius:999px; }
    .chip--dep { color:#bfdbfe; border-color: rgba(59,130,246,.35); background: rgba(59,130,246,.14); }
    .chip--crea { color:#bbf7d0; border-color: rgba(34,197,94,.35); background: rgba(34,197,94,.14); }
    .chip--area { color:#e9d5ff; border-color: rgba(168,85,247,.35); background: rgba(168,85,247,.14); }
+   .chip--edo { color:#fde68a; border-color: rgba(234,179,8,.45); background: rgba(234,179,8,.14); }
+   .chip--osoc { color:#a7f3d0; border-color: rgba(16,185,129,.45); background: rgba(16,185,129,.14); }
+   .step .bubble { position:absolute; top:10px; right:10px; font-size:11px; color:#0b1020; background:#fef3c7; border:1px solid #fde68a; border-radius:999px; padding:2px 8px; font-weight:700; }
    .chip-legend { margin-top: 10px; color: var(--muted); font-size: 12px; display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
    .chip-legend .title { font-weight:600; color:#9ca3af; margin-right:4px; }
 
@@ -61,8 +84,35 @@
    <h1>Flujo de trabajo</h1>
    <p class="lead">Flujo: Actividad (creación) → Pruebas → Inspección → Tareas → Reporte.</p>
 
-   <section class="flow" aria-label="Etapas del flujo">
-    <article class="step step--actividad" aria-labelledby="titulo-actividad">
+   <section class="flow flow--circle" aria-label="Etapas del flujo">
+    <div class="ring" aria-hidden="true"></div>
+    <div class="connectors" aria-hidden="true">
+      <svg viewBox="0 0 900 900" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerUnits="strokeWidth" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="rgba(58,169,255,.9)" />
+          </marker>
+        </defs>
+        <!-- Arcos alrededor del anillo (centro 450,450 radio 420) -->
+        <!-- Actividad -> Pruebas (izquierda a arriba) -->
+        <path d="M 30 450 A 420 420 0 0 1 450 30" stroke="rgba(58,169,255,.9)" stroke-width="2" stroke-dasharray="6 8" marker-end="url(#arrow)" />
+        <!-- Pruebas -> Inspección (arriba a arriba-derecha) -->
+        <path d="M 450 30 A 420 420 0 0 1 810 270" stroke="#ffd166" stroke-width="2" stroke-dasharray="6 8" marker-end="url(#arrow)" />
+        <!-- Inspección -> Tareas (arriba-derecha a abajo-derecha) -->
+        <path d="M 810 270 A 420 420 0 0 1 810 630" stroke="#7c4dff" stroke-width="2" stroke-dasharray="6 8" marker-end="url(#arrow)" />
+        <!-- Tareas -> Dashboard (abajo-derecha a abajo) -->
+        <path d="M 810 630 A 420 420 0 0 1 450 870" stroke="#22d3ee" stroke-width="2" stroke-dasharray="6 8" marker-end="url(#arrow)" />
+        <!-- Dashboard -> Actividad (abajo a izquierda) -->
+        <path d="M 450 870 A 420 420 0 0 1 30 450" stroke="#22c55e" stroke-width="2" stroke-dasharray="6 8" marker-end="url(#arrow)" />
+      </svg>
+      <!-- Etiquetas en puntos del anillo -->
+      <div class="label" style="top: 18%; left: 46%; transform: translate(-50%,-50%);">Genera órdenes de prueba</div>
+      <div class="label" style="top: 26%; right: 12%; transform: translate(50%,-50%);">Checklist y evidencias</div>
+      <div class="label" style="bottom: 22%; right: 12%; transform: translate(50%,50%);">Tareas operativas</div>
+      <div class="label" style="bottom: 10%; left: 50%; transform: translate(-50%,50%);">KPIs y tableros</div>
+    </div>
+    <article class="step step--actividad pos-actividad" aria-labelledby="titulo-actividad">
+     <div class="bubble">1</div>
      <h2 id="titulo-actividad">Actividad<br> <small>(creación)</small></h2>
      <ul class="docs" aria-label="Actividad: entradas, reglas y salidas">
       <li><strong>Entrada</strong>: equipo(s) o lote, cliente, fechas, precio, OS/OC.</li>
@@ -77,6 +127,8 @@
      <div class="chips" aria-label="Dependencias y salidas">
       <span class="chip chip--dep">Depende: inventario.csv</span>
       <span class="chip chip--dep">Depende: unificado.csv</span>
+      <span class="chip chip--osoc">Requiere: OS / OC</span>
+      <span class="chip chip--edo">Solo EDO = ON</span>
       <span class="chip chip--crea">Crea: órdenes de prueba</span>
       <span class="chip chip--crea">Crea: regactividad</span>
       <span class="chip chip--crea">Crea: actividadmin</span>
@@ -86,7 +138,8 @@
     </article>
     <div class="arrow" aria-hidden="true"><div class="shaft"></div><div class="label">Genera órdenes de prueba por equipo (EDO=ON)</div></div>
 
-    <article class="step step--pruebas" aria-labelledby="titulo-pruebas">
+    <article class="step step--pruebas pos-pruebas" aria-labelledby="titulo-pruebas">
+     <div class="bubble">2</div>
      <h2 id="titulo-pruebas">Pruebas <br> <small>(validación)</small></h2>
      <ul class="docs" aria-label="Pruebas: asignación y operación">
       <li><strong>Entrada</strong>: órdenes generadas por Actividad (solo EDO=ON).</li>
@@ -104,7 +157,8 @@
     </article>
     <div class="arrow" aria-hidden="true"><div class="shaft"></div><div class="label">Checklist, hallazgos y evidencias</div></div>
 
-    <article class="step step--inspeccion" aria-labelledby="titulo-inspeccion">
+    <article class="step step--inspeccion pos-inspeccion" aria-labelledby="titulo-inspeccion">
+     <div class="bubble">3</div>
      <h2 id="titulo-inspeccion">Inspección<br> <small>(control)</small></h2>
      <ul class="docs" aria-label="Documentos de inspección">
       <li>Selección de equipo solo si EDO=ON</li>
@@ -119,7 +173,8 @@
     </article>
     <div class="arrow" aria-hidden="true"><div class="shaft"></div><div class="label">Tareas operativas</div></div>
 
-    <article class="step step--tareas" aria-labelledby="titulo-tareas">
+    <article class="step step--tareas pos-tareas" aria-labelledby="titulo-tareas">
+     <div class="bubble">4</div>
      <h2 id="titulo-tareas">Tareas<br> <small>(servicio)</small></h2>
      <ul class="docs" aria-label="Documentos de tareas">
       <li>Propio / Terceros (nuevo flujo)</li>
@@ -134,7 +189,8 @@
     </article>
     <div class="arrow" aria-hidden="true"><div class="shaft"></div><div class="label">KPIs y tableros</div></div>
 
-    <article class="step step--reporte" aria-labelledby="titulo-reporte">
+    <article class="step step--reporte pos-reporte" aria-labelledby="titulo-reporte">
+     <div class="bubble">5</div>
      <h2 id="titulo-reporte">Dashboard<br> <small>(salida)</small></h2>
      <ul class="docs" aria-label="Documentos de reporte">
       <li>KPIs Actividades: Activas, Vencidas</li>
@@ -147,6 +203,7 @@
       <span class="chip chip--area">Áreas: Dirección / Operación</span>
      </div>
     </article>
+    <div class="cycle-note">↺ Reinicia ciclo: Dashboard → Actividad</div>
    </section>
 
    <div class="legend" aria-label="Leyenda de colores">
@@ -161,6 +218,8 @@
     <span class="chip chip--dep">Dependencias</span>
     <span class="chip chip--crea">Documentos creados</span>
     <span class="chip chip--area">Áreas</span>
+    <span class="chip chip--osoc">OS/OC requeridos</span>
+    <span class="chip chip--edo">EDO=ON</span>
    </div>
   </main>
  </body>
