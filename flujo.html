@@ -72,11 +72,24 @@
    .chip-legend { margin-top: 10px; color: var(--muted); font-size: 12px; display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
    .chip-legend .title { font-weight:600; color:#9ca3af; margin-right:4px; }
 
+   /* Layout móvil: tarjetas apiladas con flechas verticales, sin animación circular */
    @media (max-width: 980px) {
-     .flow { grid-template-columns: 1fr; }
-     .step, .arrow { grid-column: auto; }
-     .arrow .shaft { width: 2px; height: 48px; background: linear-gradient(180deg, rgba(58,169,255,.0), rgba(58,169,255,.9)); }
-     .arrow .shaft::after { right: 50%; top: unset; bottom: -2px; transform: translateX(50%) rotate(90deg); }
+    .flow { grid-template-columns: 1fr; }
+    .flow--circle { height: auto; margin-top: 12px; }
+    .flow--circle .ring,
+    .flow--circle .connectors,
+    .cycle-note { display: none; }
+    .flow--circle .step { position: static; width: 100%; max-width: 100%; margin-bottom: 14px; }
+    .flow--circle .step--actividad,
+    .flow--circle .step--pruebas { width: 100%; }
+    .pos-actividad,
+    .pos-pruebas,
+    .pos-inspeccion,
+    .pos-tareas,
+    .pos-reporte { top:auto; left:auto; transform:none; }
+    .flow--circle .arrow { display:flex; margin: 4px 0 12px; }
+    .arrow .shaft { width: 2px; height: 48px; background: linear-gradient(180deg, rgba(58,169,255,.0), rgba(58,169,255,.9)); }
+    .arrow .shaft::after { right: 50%; top: unset; bottom: -2px; transform: translateX(50%) rotate(90deg); }
    }
   </style>
  </head>
