@@ -4,6 +4,9 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Actividad - Administración (Ingresos)</title>
+  <script>
+    (function(){ var v=Date.now(); document.write('<link rel="stylesheet" href="styles.css?v='+v+'">'); })();
+  </script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
@@ -31,9 +34,30 @@
 </head>
 <body data-page="actividadmin">
   <header>
-    <div class="title">Administración de Actividad • Ingresos/Rentas</div>
-    <div class="right-links" style="margin-left:auto; display:flex; gap:12px;">
-      <a href="actividad.html">Vista Operativa</a>
+    <div class="logo"><img src="img/logopctch.png" alt="Logo" /></div>
+    <button class="menu-toggle" aria-label="Abrir menú" aria-controls="primary-nav" aria-expanded="false">☰</button>
+    <nav id="primary-nav">
+      <ul>
+        <li><a href="index.html">Dashboard</a></li>
+        <li class="nav-dropdown"><details open><summary>Actividad</summary><ul>
+          <li><a href="actividad.html">Registro de actividad</a></li>
+          <li><a href="regactividad.html">Historial de registros</a></li>
+          <li><a class="active" href="actividadmin.html">Administración (ingresos/rentas)</a></li>
+        </ul></details></li>
+        <li class="nav-dropdown"><details><summary>Pruebas</summary><ul>
+          <li><a href="pruebas.html">Pruebas PND (pruebas no destructibles)</a></li>
+          <li><a href="stockpruebas.html">PND x equipo</a></li>
+          <li><a href="listapruebas.html">Registro PND</a></li>
+        </ul></details></li>
+        <li><a href="inspeccion.html">Inspección</a></li>
+        <li><a href="tareas.html">Tareas</a></li>
+        <li><a href="reportes.html">Reportes</a></li>
+      </ul>
+    </nav>
+    <div class="user-box" style="margin-left:auto; display:flex; align-items:center; gap:8px;">
+      <span id="user-email"></span>
+      <a id="login-link" href="login.html">Login</a>
+      <button id="logout-btn" type="button" style="display:none">Salir</button>
     </div>
   </header>
 
@@ -42,6 +66,7 @@
       <input id="qmin" type="text" placeholder="Buscar..." aria-label="Buscar" />
       <span id="countmin" class="muted">0 registros</span>
     </div>
+    <div class="right-links"><a href="actividad.html">Vista Operativa</a></div>
   </section>
 
   <section id="kpi-min" class="kpis">
@@ -63,6 +88,28 @@
   <script src="firebase-config.js"></script>
   <script src="firebase-init.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+  <script src="script.js"></script>
+  <script>
+    (function(){
+      try{
+        firebase.auth().onAuthStateChanged(function(u){
+          const userSpan = document.getElementById('user-email');
+          const loginLink = document.getElementById('login-link');
+          const logoutBtn = document.getElementById('logout-btn');
+          if (u){
+            userSpan.textContent = u.email || '';
+            if (logoutBtn) logoutBtn.style.display = '';
+            if (loginLink) loginLink.style.display = 'none';
+          } else {
+            try { window.location.href = 'login.html'; } catch {}
+          }
+        });
+      }catch(e){ console.warn('[actividadmin] auth unavailable', e); }
+      document.getElementById('logout-btn')?.addEventListener('click', async ()=>{
+        try{ await firebase.auth().signOut(); window.location.href = 'login.html'; }catch(e){ alert('No se pudo cerrar sesión'); }
+      });
+    })();
+  </script>
   <script src="actividadmin.js" defer></script>
 </body>
 </html>

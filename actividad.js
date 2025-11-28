@@ -16,6 +16,9 @@
   const table = document.getElementById('actTable');
   const activityKpis = document.getElementById('activity-kpis');
   const activityCards = document.getElementById('activity-cards');
+  const clientFilterEl = document.getElementById('clientFilter');
+  // Estado de colapso por cliente (para grupos)
+  const collapsedClients = new Set();
 
   let rows = [];
   let headers = [];
@@ -24,6 +27,7 @@
   let sortDir = 'asc';
   let visibleCols = null;
   let propiedadIdx = -1;
+  let clienteIdx = -1;
   let diasServicioVisibleIdx = -1;
   let equipoVisibleIdx = -1;
   let descripcionVisibleIdx = -1;
@@ -46,6 +50,49 @@
     const abc = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
     const rnd = Array.from({length:3},()=>abc[Math.floor(Math.random()*abc.length)]).join('');
     return `L-${ts}-${rnd}`;
+  }
+
+  // --- Test Orders (PND) generation helpers ---
+  const TEST_ORDERS = 'testOrders';
+  const INV_CSV_URL = 'docs/inventario.csv';
+  const GEN_INV_URL = 'docs/INVENTARIO GENERAL PCT 2025 UNIFICADO.csv';
+  const edoByEquipoKey = new Map(); // EQUIPO normalizado -> 'ON'|'OFF'
+  const pruebasByEquipo = new Map(); // EQUIPO normalizado -> ['LT','VT','PT','MT','UTT',...]
+  function normKey(s){ return String(s||'').trim().toUpperCase().replace(/[^A-Z0-9]/g,''); }
+  function parseCSVGeneric(text){ try{ if (window.Papa){ const res = Papa.parse(text, { delimiter:',', quoteChar:'"', escapeChar:'"', skipEmptyLines:true }); return Array.isArray(res?.data)? res.data : []; } }catch(_){};
+    const lines = String(text||'').replace(/\r\n?/g,'\n').split('\n');
+    return lines.filter(Boolean).map(line=>{ const out=[]; const re=/(?:^|,)(?:"([^"]*(?:""[^"]*)*)"|([^",]*))/g; let m; while((m=re.exec(line))!==null){ out.push(m[1]!==undefined? m[1].replace(/""/g,'"') : (m[2]||'')); } return out; }); }
+  async function loadInventariosParaOrdenes(){ try{
+      const [txtA, txtB] = await Promise.all([
+        fetch(INV_CSV_URL, { cache:'no-store' }).then(r=>r.text()),
+        fetch(GEN_INV_URL, { cache:'no-store' }).then(r=>r.text()).catch(()=>null)
+      ]);
+      const rowsA = parseCSVGeneric(txtA); if (!rowsA.length) return;
+      const headersA = rowsA[0]; const dataA = rowsA.slice(1);
+      const idxEquipoA = headersA.findIndex(h=>/^(EQUIPO\s*\/\s*ACTIVO|EQUIPO\s*ACTIVO|EQUIPO)$/i.test(String(h)));
+      const idxEdoA = headersA.findIndex(h=>/^(EDO|ESTADO)$/i.test(String(h)));
+      const idxPruebaA = headersA.findIndex(h=>/PRUEBA/i.test(String(h)) || /VT\s*\/\s*PT\s*\/\s*MT/i.test(String(h)));
+      for (const r of dataA){ const eq=String(r[idxEquipoA]||'').trim(); if(!eq) continue; const key=normKey(eq);
+        if (idxEdoA>=0){ const v=String(r[idxEdoA]||'').trim().toUpperCase(); if (v && !edoByEquipoKey.has(key)) edoByEquipoKey.set(key, v); }
+        if (idxPruebaA>=0){ const s=String(r[idxPruebaA]||'').toUpperCase(); if (s){ const arr=s.split(/[,+/;]|\r?\n/).map(x=>x.trim()).filter(Boolean);
+            const canon=new Set(arr.map(x=>{ const t=x.replace(/\./g,''); if(/\bVT\b|VISUAL/.test(t))return 'VT'; if(/\bPT\b|PENETRANT/.test(t))return 'PT'; if(/\bMT\b|MAGNETIC/.test(t))return 'MT'; if(/\bUTT\b|ULTRASON/.test(t))return 'UTT'; if(/\bLT\b|LIQUID/.test(t))return 'LT'; return t; }));
+            if (!pruebasByEquipo.has(key)) pruebasByEquipo.set(key, Array.from(canon)); }} }
+      if (txtB){ const rowsB=parseCSVGeneric(txtB); if (rowsB.length){ const headersB=rowsB[0]; const dataB=rowsB.slice(1); const idxEquipoB=headersB.findIndex(h=>/^(EQUIPO\s*\/\s*ACTIVO|EQUIPO\s*ACTIVO|EQUIPO)$/i.test(String(h))); const idxEdoB=headersB.findIndex(h=>/^(EDO|ESTADO)$/i.test(String(h))); for(const r of dataB){ const eq=String(r[idxEquipoB]||'').trim(); if(!eq) continue; const key=normKey(eq); if (!edoByEquipoKey.has(key) && idxEdoB>=0){ const v=String(r[idxEdoB]||'').trim().toUpperCase(); if (v) edoByEquipoKey.set(key, v); } } } }
+    }catch(e){ console.warn('[actividad] loadInventariosParaOrdenes error', e); }}
+  function inferPruebasParaEquipo(eq){ const arr = pruebasByEquipo.get(normKey(eq)) || []; return arr.length? arr : ['VT']; }
+  function requireOSorOC(os, oc){ return !!(String(os||'').trim() || String(oc||'').trim()); }
+  function makeLoteId(payload){ try{ const raw = JSON.stringify(payload); return btoa(unescape(encodeURIComponent(raw))).slice(0,22); }catch{ return String(Date.now()); } }
+  async function createTestOrders({ os, oc, cliente, equipos, actividadRef }){
+    if (!firebaseReady || !window.db) return null;
+    await loadInventariosParaOrdenes();
+    const userEmail = window.auth?.currentUser?.email || 'unknown';
+    const col = window.db.collection(TEST_ORDERS);
+    const loteId = makeLoteId({ os, oc, cliente, equipos, ts: Date.now(), userEmail });
+    for (const eq of equipos){ const key=normKey(eq); const edo = edoByEquipoKey.get(key) || 'ON'; if (edo!=='ON') continue; const pruebasRequeridas = inferPruebasParaEquipo(eq); const serial = invSerialByEquipo?.get?.(eq) || invSerialByEquipo?.get?.(String(eq).toUpperCase()) || '';
+      try{ await col.add({ os:String(os||''), oc:String(oc||''), cliente:String(cliente||''), equipo:String(eq||''), serial, pruebasRequeridas, actividadRef: actividadRef||'', loteId, edo, status:'pending', createdAt: firebase.firestore.FieldValue.serverTimestamp(), createdBy:userEmail, updatedAt:null }); }
+      catch(e){ console.warn('[actividad] createTestOrders add error', e); }
+    }
+    return loteId;
   }
 
   const COLLECTION_NAME = 'activityRecords';
@@ -236,14 +283,47 @@
 
   function renderBody(data){
     const frag = document.createDocumentFragment();
+    const totalCols = 2 + (visibleCols ? visibleCols.labels.length : headers.length); // selección + cols + acciones
+    const selClient = (clientFilterEl?.value||'').trim();
+    // Construir orden de clientes según aparición
+    let orderOfClients = [];
+    if (clienteIdx>=0){
+      const seen = new Set();
+      for (let i=0;i<data.length;i++){ const c=String(data[i][clienteIdx]||'').trim(); if (!seen.has(c)){ seen.add(c); orderOfClients.push(c); } }
+    }
+    // Inicial: si no hay filtro y no hemos fijado estados, colapsar todos
+    if (!selClient && collapsedClients.size===0){ orderOfClients.forEach(c=>collapsedClients.add(c)); }
+    let currentGroup = null;
     for (let i=0;i<data.length;i++){
-      const tr = document.createElement('tr');
       const row = data[i];
+      const cli = clienteIdx>=0 ? String(row[clienteIdx]||'').trim() : '';
+      if (!selClient && clienteIdx>=0 && cli !== currentGroup){
+        currentGroup = cli;
+        const trGroup = document.createElement('tr');
+        const tdg = document.createElement('td');
+        tdg.colSpan = totalCols;
+        tdg.style.background = '#f8fafc';
+        tdg.style.borderTop = '2px solid #e5e7eb';
+        tdg.style.fontWeight = '700';
+        tdg.style.color = '#374151';
+        tdg.style.padding = '6px 10px';
+        const isCollapsed = collapsedClients.has(cli);
+        const caret = document.createElement('span');
+        caret.textContent = isCollapsed ? '►' : '▼';
+        caret.style.marginRight = '8px';
+        const title = document.createElement('span'); title.textContent = cli || '— Sin cliente —';
+        tdg.appendChild(caret); tdg.appendChild(title);
+        tdg.style.cursor = 'pointer';
+        tdg.addEventListener('click', ()=>{ if (isCollapsed) collapsedClients.delete(cli); else collapsedClients.add(cli); renderBody(view); });
+        trGroup.appendChild(tdg);
+        frag.appendChild(trGroup);
+      }
+      const tr = document.createElement('tr');
+      if (!selClient && clienteIdx>=0){ tr.dataset.client = cli; if (collapsedClients.has(cli)) tr.style.display = 'none'; }
       const tdSel = document.createElement('td');
       let pre = 'propio';
       if (propiedadIdx >= 0){ const prop = String(row[propiedadIdx]||'').trim().toUpperCase(); if (prop === 'PCT') pre = 'propio'; else if (prop) pre = 'terceros'; }
-      if (i === 0 || i === 3){ const select = document.createElement('select'); select.innerHTML = `\n            <option value="propio">Propio<\/option>\n            <option value="terceros">Terceros<\/option>\n          `; select.value = pre; tdSel.appendChild(select); }
-      else { const tag = document.createElement('span'); tag.className = 'sel-tag readonly'; tag.textContent = (pre === 'propio') ? 'Propio' : 'Terceros'; tdSel.appendChild(tag); }
+      const tag = document.createElement('span'); tag.className = 'sel-tag readonly'; tag.textContent = (pre === 'propio') ? 'Propio' : 'Terceros'; tdSel.appendChild(tag);
       // Acciones se renderizan en columna final; aquí solo va SELECCIÓN
       tr.appendChild(tdSel);
       const order = visibleCols ? visibleCols.order : headers.map((_,k)=>k);
@@ -287,12 +367,35 @@
     updateActivityKpis();
   }
 
-  function applyFilter(){ const term = (q.value||'').trim().toLowerCase(); if (!term){ view = rows; } else { view = rows.filter(r => r.some(c => String(c||'').toLowerCase().includes(term))); } if (sortCol>=0) applySort(); renderBody(view); }
+  function applyFilter(){
+    const term = (q.value||'').trim().toLowerCase();
+    const selClient = (clientFilterEl?.value||'').trim();
+    view = rows.filter(r => {
+      const matchTerm = !term || r.some(c => String(c||'').toLowerCase().includes(term));
+      const matchClient = !selClient || (clienteIdx>=0 && String(r[clienteIdx]||'').trim() === selClient);
+      return matchTerm && matchClient;
+    });
+    if (sortCol>=0) applySort();
+    renderBody(view);
+  }
+
+  function populateClientFilter(){
+    try{
+      if (!clientFilterEl) return;
+      const counts = new Map();
+      if (clienteIdx>=0){
+        rows.forEach(r=>{ const v=String(r[clienteIdx]||'').trim(); if (!v) return; counts.set(v, (counts.get(v)||0)+1); });
+      }
+      const opts = [''].concat(Array.from(counts.keys()).sort((a,b)=>a.localeCompare(b)));
+      clientFilterEl.innerHTML = '';
+      opts.forEach(v=>{ const o=document.createElement('option'); o.value=v; o.textContent = v? `${v} (${counts.get(v)||0})` : 'Todos los clientes'; clientFilterEl.appendChild(o); });
+    }catch(e){ console.warn('[actividad] populateClientFilter', e); }
+  }
   function toggleSort(col){ if (sortCol === col){ sortDir = (sortDir==='asc'?'desc':'asc'); } else { sortCol = col; sortDir = 'asc'; } applySort(); renderHead(); renderBody(view); }
   function applySort(){ const dir = sortDir === 'asc' ? 1 : -1; const order = visibleCols ? visibleCols.order : headers.map((_,k)=>k); const idx = order[sortCol] ?? sortCol; view = [...view].sort((a,b)=>{ const av = a[idx] ?? ''; const bv = b[idx] ?? ''; const an = parseFloat(String(av).replace(/,/g,'')); const bn = parseFloat(String(bv).replace(/,/g,'')); const bothNum = !isNaN(an) && !isNaN(bn); if (bothNum) return (an>bn?1:an<bn?-1:0)*dir; return String(av).localeCompare(String(bv), 'es', { sensitivity:'base' }) * dir; }); }
 
   function buildVisibleColumns(){
-    const wanted = [ 'SERIAL','#', 'EQUIPO / ACTIVO','EQUIPO/ACTIVO','EQUIPO ACTIVO', 'DESCRIPCION','DESCRIPCIÓN', 'CLIENTE','AREA DEL CLIENTE','UBICACIÓN', 'FECHA EMBARQUE', 'INICIO DEL SERVICIO','CONTINUACION DEL SERVICIO','FIN PARCIAL DEL SERVICIO','TERMINACION DEL SERVICIO','FECHA DE DEVOLUCION', 'DIAS EN SERVICIO', 'PRECIO', 'COT / ESTIMACION', 'FACTURA', 'O. S.', 'ORDEN DE COMPRA','ORDEN COMPRA','NO. ORDEN DE COMPRA','NO ORDEN DE COMPRA','NÚMERO DE ORDEN','NUMERO DE ORDEN','OC','ORDEN DE COMRA', 'INGRESO ACUMULADO','INGRESO ACUMULDDO','RENTA ACUMULADA' ];
+    const wanted = [ 'SERIAL','#', 'EQUIPO / ACTIVO','EQUIPO/ACTIVO','EQUIPO ACTIVO', 'DESCRIPCION','DESCRIPCIÓN', 'CLIENTE','AREA DEL CLIENTE','UBICACIÓN', 'FECHA EMBARQUE', 'INICIO DEL SERVICIO', 'TERMINACION DEL SERVICIO', 'DIAS EN SERVICIO', 'PRECIO', 'COT / ESTIMACION', 'FACTURA', 'O. S.', 'ORDEN DE COMPRA','ORDEN COMPRA','NO. ORDEN DE COMPRA','NO ORDEN DE COMPRA','NÚMERO DE ORDEN','NUMERO DE ORDEN','OC','ORDEN DE COMRA' ];
     const normHeaders = headers.map(h=>normalizeHeader(h).toUpperCase());
     const order = []; const labels = []; const seen = new Set();
     wanted.forEach(name=>{ const idx = normHeaders.indexOf(normalizeHeader(name).toUpperCase()); if (idx>=0 && !seen.has(idx)){ order.push(idx); labels.push(headers[idx]); seen.add(idx); } });
@@ -306,7 +409,7 @@
       const lnorm = normLabel(labels[k]);
       if (lnorm === '#') labels[k] = 'SERIAL';
       if (ocVariants.has(lnorm)) labels[k] = 'ORDEN DE COMPRA';
-      if (lnorm === ingresoTypo) labels[k] = 'INGRESO ACUMULADO';
+      if (lnorm === ingresoTypo) { /* oculto: sin mapeo a visible */ }
       if (estCotVariants.has(lnorm)) labels[k] = 'EST-COT';
       if (osVariants.has(lnorm)) labels[k] = 'ORDEN DE SERVICIO';
     }
@@ -371,6 +474,9 @@
       if (headerRowIndex < 0){ headers = data[0]||[]; rows = data.slice(1); }
       else { headers = data[headerRowIndex]||[]; rows = data.slice(headerRowIndex+1); }
 
+      // índice de cliente
+      clienteIdx = headerIndex(['CLIENTE']);
+
       // Cargar inventario para autocompletar internos
       try{
         const respInv = await fetch(INVENT_SRC);
@@ -429,15 +535,10 @@
     const inpPrecio = document.getElementById('doc-precio');
     const outSerial = document.getElementById('doc-serial');
     const outDesc = document.getElementById('doc-desc');
-    const outDevol = document.getElementById('doc-devol');
-    const outFinP = document.getElementById('doc-finp');
-    const outCont = document.getElementById('doc-cont');
-    const outIngreso = document.getElementById('doc-ingreso');
-    const outRenta = document.getElementById('doc-renta');
 
     ensureDatalist('dl-inventory-equipos', inventoryOptions||[]);
     function refreshEquipoDatalist(){ if (selTipo && eqInput){ if (selTipo.value==='propio') eqInput.setAttribute('list','dl-inventory-equipos'); else eqInput.removeAttribute('list'); } }
-    if (selTipo){ selTipo.addEventListener('change', ()=>{ if (provInput) provInput.style.display = selTipo.value==='terceros' ? '' : 'none'; refreshEquipoDatalist(); recomputeIngresoRenta(); updateDocSaveEnabled(); }); }
+    if (selTipo){ selTipo.addEventListener('change', ()=>{ if (provInput) provInput.style.display = selTipo.value==='terceros' ? '' : 'none'; refreshEquipoDatalist(); updateDocSaveEnabled(); }); }
     refreshEquipoDatalist();
 
     eqInput.addEventListener('blur', ()=>{ const v=String(eqInput.value||'').trim(); if (v){ multiSelectEquipos.add(v); renderSelectedList(); updateDocSaveEnabled(); } });
@@ -527,11 +628,18 @@
 
     function renderSelectedList(){ const arr = Array.from(multiSelectEquipos.values()); eqList.innerHTML = ''; if (!arr.length){ eqList.style.display='none'; eqCounter.textContent=''; refreshSerialDescFromSelection(); return; } eqList.style.display='flex'; arr.forEach(val=>{ const chip = document.createElement('div'); chip.style.display='inline-flex'; chip.style.gap='6px'; chip.style.alignItems='center'; chip.style.padding='2px 8px'; chip.style.border='1px solid #e5e7eb'; chip.style.borderRadius='999px'; const t=document.createElement('span'); t.textContent=val; const x=document.createElement('button'); x.textContent='×'; x.onclick=()=>{ multiSelectEquipos.delete(val); renderSelectedList(); updateDocSaveEnabled(); }; chip.appendChild(t); chip.appendChild(x); eqList.appendChild(chip); }); eqCounter.textContent = `(${arr.length} seleccionado${arr.length===1?'':'s'})`; refreshSerialDescFromSelection(); }
 
-    saveRowBtn.onclick = ()=>{
+    saveRowBtn.onclick = async ()=>{
       updateDocSaveEnabled(); if (saveRowBtn.disabled) return;
       const baseProp = selTipo.value==='propio' ? 'PCT' : (provInput.value||'');
       const selected = (multiSelectEquipos && multiSelectEquipos.size>0) ? Array.from(multiSelectEquipos) : ((eqInput.value||'').trim()? [eqInput.value.trim()] : []);
       if (!selected.length){ alert('Selecciona al menos un equipo.'); return; }
+      // Requerir OS u OC para trazabilidad e inbox
+      const osVal = (inpOS.value||'').trim();
+      const ocVal = (inpOC.value||'').trim();
+      if (!requireOSorOC(osVal, ocVal)){
+        alert('Captura ORDEN DE SERVICIO y/o ORDEN DE COMPRA para generar órdenes de prueba.');
+        return;
+      }
       const loteId = (selected.length>1) ? generateLoteId() : (inpOS.value||'');
       const i = (vars)=> headerIndex(vars);
       const iPROPIEDAD=i(['PROPIEDAD']); const iSERIAL=i(['SERIAL','#']); const iEQUIPO=i(['EQUIPO / ACTIVO','EQUIPO/ACTIVO','EQUIPO ACTIVO','EQUIPO']);
@@ -588,14 +696,38 @@
         if (iPREC>=0) r[iPREC] = String(precioNum||'');
         newRows.push(r);
       }
-      rows = [...newRows, ...rows]; view = rows; buildExternalOptionsBase(); renderHead(); renderBody(view);
-      try{ const keyLS = 'actividad:newRows'; const prev = JSON.parse(localStorage.getItem(keyLS)||'[]'); const next = Array.isArray(prev) ? [...newRows, ...prev] : [...newRows]; localStorage.setItem(keyLS, JSON.stringify(next)); (async()=>{ for (const row of newRows){ await saveToFirestore(row); }})(); }catch(e){ console.error('[actividad] Error al persistir (doc):', e); }
+      rows = [...newRows, ...rows]; view = rows; buildExternalOptionsBase(); renderHead(); populateClientFilter(); renderBody(view);
+      // Persistir y luego generar órdenes de prueba
+      try{
+        const keyLS = 'actividad:newRows';
+        const prev = JSON.parse(localStorage.getItem(keyLS)||'[]');
+        const next = Array.isArray(prev) ? [...newRows, ...prev] : [...newRows];
+        localStorage.setItem(keyLS, JSON.stringify(next));
+        // Guardar en Firestore y obtener un id de actividad (tomamos el primero como referencia)
+        let actividadRef = null;
+        for (let idx=0; idx<newRows.length; idx++){
+          const id = await saveToFirestore(newRows[idx]);
+          if (!actividadRef && id) actividadRef = id;
+        }
+        // Generar órdenes por equipo (solo EDO=ON)
+        try{
+          const clienteVal = (inpCliente.value||'').trim();
+          const lote = await createTestOrders({ os: osVal, oc: ocVal, cliente: clienteVal, equipos: selected, actividadRef });
+          if (lote) {
+            const msg = `Órdenes de prueba generadas para ${selected.length} equipo(s) (solo EDO=ON). Lote: ${lote}`;
+            console.log('[actividad] '+msg);
+            try{ alert(msg); }catch{}
+          }
+        }catch(e){ console.warn('[actividad] No se pudieron generar órdenes de prueba', e); }
+      }catch(e){ console.error('[actividad] Error al persistir (doc):', e); }
       try{ const ul = document.getElementById('activity-log-list'); if (ul){ const li = document.createElement('li'); li.style.padding='6px 8px'; li.textContent = `Registrados ${newRows.length} item(s)${loteId?` en lote ${loteId}`:''}.`; ul.prepend(li); } }catch{}
       section.style.display = 'none';
       multiSelectEquipos.clear(); eqInput.value=''; eqAdd.value=''; eqList.innerHTML=''; eqList.style.display='none'; eqCounter.textContent='';
-      outSerial.textContent='—'; outDesc.textContent='—'; outDevol.textContent='—'; outFinP.textContent=''; outCont.textContent=''; outIngreso.textContent='—'; outRenta.textContent='—';
+      outSerial.textContent='—'; outDesc.textContent='—';
       inpCliente.value=''; inpArea.value=''; inpUbic.value=''; inpOS.value=''; inpOC.value=''; inpFactura.value=''; inpEstCot.value=''; inpEmbarque.value=''; inpInicio.value=''; inpTerm.value=''; inpDias.value=''; inpPrecio.value='';
       setToolbarEditing(false);
+      // Actualizar opciones de cliente tras guardar
+      populateClientFilter();
     };
 
     cancelRowBtn.onclick = ()=>{ section.style.display='none'; setToolbarEditing(false); };
@@ -603,15 +735,14 @@
     function renderSelectedList(){ const arr = Array.from(multiSelectEquipos.values()); eqList.innerHTML = ''; if (!arr.length){ eqList.style.display='none'; eqCounter.textContent=''; return; } eqList.style.display='flex'; arr.forEach(val=>{ const chip = document.createElement('div'); chip.style.display='inline-flex'; chip.style.gap='6px'; chip.style.alignItems='center'; chip.style.padding='2px 8px'; chip.style.border='1px solid #e5e7eb'; chip.style.borderRadius='999px'; const t=document.createElement('span'); t.textContent=val; const x=document.createElement('button'); x.textContent='×'; x.onclick=()=>{ multiSelectEquipos.delete(val); renderSelectedList(); updateDocSaveEnabled(); }; chip.appendChild(t); chip.appendChild(x); eqList.appendChild(chip); }); eqCounter.textContent = `(${arr.length} seleccionado${arr.length===1?'':'s'})`; }
 
     function recomputeDiasWrap(){ recomputeDias(); }
-    function recomputeDevolucionWrap(){ recomputeDevolucion(); }
-    function recomputeFinParcWrap(){ recomputeFinParcialesContinuacion(); }
-    recomputeDias(); recomputeDevolucion(); recomputeFinParcialesContinuacion(); recomputeIngresoRenta(); updateDocSaveEnabled();
+    recomputeDias(); updateDocSaveEnabled();
   }
 
   window.openDocEditor = openDocEditor;
   newRowBtn.addEventListener('click', openDocEditor);
   q.addEventListener('input', applyFilter);
   clearQ.addEventListener('click', ()=>{ q.value=''; applyFilter(); q.focus(); });
+  clientFilterEl?.addEventListener('change', ()=>{ collapsedClients.clear(); applyFilter(); });
 
   if (document.readyState === 'complete') { setTimeout(load, 0); } else { window.addEventListener('load', load); }
 })();

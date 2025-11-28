@@ -106,31 +106,24 @@ async function loadHistory() {
     }
     
     if (rows.length === 0) {
-      document.getElementById('historyTableBody').innerHTML = '<tr><td colspan="12" style="text-align:center; padding:40px;">No hay registros guardados</td></tr>';
+      document.getElementById('historyTableBody').innerHTML = '<tr><td colspan="11" style="text-align:center; padding:40px;">No hay registros guardados</td></tr>';
       document.getElementById('totalRegistros').textContent = '0';
       document.getElementById('totalInternos').textContent = '0';
       document.getElementById('totalExternos').textContent = '0';
-      document.getElementById('ingresoTotal').textContent = '$0.00';
-      document.getElementById('rentaTotal').textContent = '$0.00';
       return;
     }
     
-    let totalInternos = 0, totalExternos = 0, sumaIngreso = 0, sumaRenta = 0;
+    let totalInternos = 0, totalExternos = 0;
     rows.forEach(r => {
       const tipo = r[headerIndices.PROPIEDAD] || '';
       if (tipo === 'PCT') totalInternos++;
       else if (tipo) totalExternos++;
-      const ingreso = parseFloat(String(r[headerIndices.INGRESO] || '0').replace(/[^0-9.-]/g, '')) || 0;
-      const renta = parseFloat(String(r[headerIndices.RENTA] || '0').replace(/[^0-9.-]/g, '')) || 0;
-      sumaIngreso += ingreso;
-      sumaRenta += renta;
     });
     
     document.getElementById('totalRegistros').textContent = rows.length;
     document.getElementById('totalInternos').textContent = totalInternos;
     document.getElementById('totalExternos').textContent = totalExternos;
-    document.getElementById('ingresoTotal').textContent = '$' + sumaIngreso.toLocaleString('es-MX', { minimumFractionDigits: 2 });
-    document.getElementById('rentaTotal').textContent = '$' + sumaRenta.toLocaleString('es-MX', { minimumFractionDigits: 2 });
+    // Ingresos/Rentas movidos a actividadmin (admin)
     
     // --- Métricas de actividades: activas, vencidas (SLA 30 días) y días promedio en servicio ---
     try {
@@ -204,14 +197,6 @@ function renderTable(rows){
     tdPrec.textContent='$'+prec.toLocaleString('es-MX',{minimumFractionDigits:2}); 
     tdPrec.style.textAlign='right'; 
     tr.appendChild(tdPrec); 
-    const tdMon=document.createElement('td'); 
-    const ing=parseFloat(row[headerIndices.INGRESO]||0); 
-    const ren=parseFloat(row[headerIndices.RENTA]||0); 
-    const monto=prop==='PCT'?ing:ren; 
-    tdMon.textContent='$'+monto.toLocaleString('es-MX',{minimumFractionDigits:2}); 
-    tdMon.style.textAlign='right'; 
-    tdMon.style.fontWeight='600'; 
-    tr.appendChild(tdMon); 
     const tdEst=document.createElement('td'); 
     const sTerm=row[headerIndices.TERMINACION]; 
     let est='Desconocido'; 
@@ -452,7 +437,7 @@ if (logoutBtn) {
 
 document.getElementById('searchInput')?.addEventListener('input', (e)=>{ const term=e.target.value.toLowerCase(); document.querySelectorAll('#historyTableBody tr').forEach(r=>{ r.style.display = r.textContent.toLowerCase().includes(term)?'':'none'; }); });
 
-document.getElementById('exportBtn')?.addEventListener('click', function(){ try{ const key='actividad:newRows'; const stored=localStorage.getItem(key); const rows=stored?JSON.parse(stored):[]; if(rows.length===0){ alert('No hay registros para exportar'); return; } const headersCsv='Tipo,Serial,Equipo/Activo,Descripción,Cliente,Área,Ubicación,Factura,Inicio,Terminación,Días,Precio,Ingreso/Renta\n'; let csv=headersCsv; rows.forEach(row=>{ const prop=row[headerIndices.PROPIEDAD]||''; const tipo=prop==='PCT'?'PROPIO':'TERCEROS'; const ingreso=parseFloat(row[headerIndices.INGRESO]||0); const renta=parseFloat(row[headerIndices.RENTA]||0); const monto=prop==='PCT'?ingreso:renta; const fields=[ tipo, row[headerIndices.SERIAL]||'', row[headerIndices.EQUIPO]||'', row[headerIndices.DESCRIPCION]||'', row[headerIndices.CLIENTE]||'', row[headerIndices.AREA]||'', row[headerIndices.UBICACION]||'', row[headerIndices.FACTURA]||'', row[headerIndices.INICIO]||'', row[headerIndices.TERMINACION]||'', row[headerIndices.DIAS]||'', row[headerIndices.PRECIO]||'', monto||'' ]; csv += fields.map(v=>`"${String(v).replace(/\"/g,'\"\"')}"`).join(',')+'\n'; }); const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='registros_actividad.csv'; a.click(); }catch(e){ console.error('[regactividad] export csv', e); alert('Error al exportar CSV'); }});
+document.getElementById('exportBtn')?.addEventListener('click', function(){ try{ const key='actividad:newRows'; const stored=localStorage.getItem(key); const rows=stored?JSON.parse(stored):[]; if(rows.length===0){ alert('No hay registros para exportar'); return; } const headersCsv='Tipo,Serial,Equipo/Activo,Descripción,Cliente,Área,Ubicación,Factura,Inicio,Terminación,Días,Precio\n'; let csv=headersCsv; rows.forEach(row=>{ const prop=row[headerIndices.PROPIEDAD]||''; const tipo=prop==='PCT'?'PROPIO':'TERCEROS'; const fields=[ tipo, row[headerIndices.SERIAL]||'', row[headerIndices.EQUIPO]||'', row[headerIndices.DESCRIPCION]||'', row[headerIndices.CLIENTE]||'', row[headerIndices.AREA]||'', row[headerIndices.UBICACION]||'', row[headerIndices.FACTURA]||'', row[headerIndices.INICIO]||'', row[headerIndices.TERMINACION]||'', row[headerIndices.DIAS]||'', row[headerIndices.PRECIO]||'' ]; csv += fields.map(v=>`"${String(v).replace(/\"/g,'\"\"')}"`).join(',')+'\n'; }); const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='registros_actividad.csv'; a.click(); }catch(e){ console.error('[regactividad] export csv', e); alert('Error al exportar CSV'); }});
 
 document.getElementById('clearAllBtn')?.addEventListener('click', async function() {
   if (!(window.isAdmin && window.isAdmin())) { alert('Solo un administrador puede borrar todos los registros.'); return; }

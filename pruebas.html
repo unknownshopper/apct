@@ -75,6 +75,21 @@
         </div>
         <div id="status" class="toolbar-count"></div>
       </div>
+      <div class="card" id="orders-inbox">
+        <p class="section-title">Órdenes de prueba pendientes</p>
+        <div class="two-col" style="margin-bottom:8px; grid-template-columns: repeat(5, 1fr);">
+          <input id="ord-f-os" placeholder="Filtrar OS">
+          <input id="ord-f-oc" placeholder="Filtrar OC">
+          <input id="ord-f-cli" placeholder="Filtrar Cliente">
+          <input id="ord-f-eq" placeholder="Filtrar Equipo">
+          <select id="ord-f-status">
+            <option value="pending" selected>pending</option>
+            <option value="in_progress">in_progress</option>
+            <option value="done">done</option>
+          </select>
+        </div>
+        <div id="orders-list" style="max-height:260px; overflow:auto;"></div>
+      </div>
       <form id="prueba-form">
         <div class="card">
           <p class="section-title">Datos de la prueba</p>
@@ -380,6 +395,58 @@
           try { return firebase?.auth?.().currentUser || null; } catch { return null; }
         }
 
+        let CURRENT_ORDER = null;
+        async function fetchOrders(){
+          try{
+            const status = (document.getElementById('ord-f-status')?.value)||'pending';
+            let q = window.db.collection('testOrders').where('status','==', status).orderBy('createdAt','desc');
+            const snap = await q.limit(300).get();
+            return snap.docs.map(d=>({ id:d.id, ...d.data() }));
+          }catch(e){ console.warn('[pruebas] fetchOrders', e); return []; }
+        }
+        function renderOrders(list){
+          const host = document.getElementById('orders-list'); if (!host) return; host.innerHTML='';
+          const f = {
+            os: (document.getElementById('ord-f-os')?.value||'').toLowerCase(),
+            oc: (document.getElementById('ord-f-oc')?.value||'').toLowerCase(),
+            cli:(document.getElementById('ord-f-cli')?.value||'').toLowerCase(),
+            eq: (document.getElementById('ord-f-eq')?.value||'').toLowerCase()
+          };
+          const match = (o)=> (!f.os || String(o.os||'').toLowerCase().includes(f.os))
+            && (!f.oc || String(o.oc||'').toLowerCase().includes(f.oc))
+            && (!f.cli|| String(o.cliente||'').toLowerCase().includes(f.cli))
+            && (!f.eq || String(o.equipo||'').toLowerCase().includes(f.eq));
+          const rows = list.filter(match);
+          rows.forEach(o=>{
+            const div = document.createElement('div');
+            div.style.display='flex'; div.style.justifyContent='space-between'; div.style.alignItems='center';
+            div.style.border='1px solid #e5e7eb'; div.style.borderRadius='8px'; div.style.padding='8px 10px'; div.style.margin='6px 0';
+            div.innerHTML = `<div>
+              <div><strong>${o.equipo||'-'}</strong> • ${(o.pruebasRequeridas||[]).join(', ')||'-'}</div>
+              <div style="color:#6b7280; font-size:12px;">OS:${o.os||'-'} • OC:${o.oc||'-'} • Cliente:${o.cliente||'-'} • Edo:${o.edo||'-'}</div>
+            </div>
+            <div><button class="btn-primary" data-id="${o.id}">Iniciar</button></div>`;
+            div.querySelector('button')?.addEventListener('click', ()=> startOrder(o));
+            host.appendChild(div);
+          });
+          if (!rows.length){ host.innerHTML = '<div style="color:#6b7280; font-size:12px;">Sin órdenes para los filtros actuales</div>'; }
+        }
+        async function refreshOrders(){ const list = await fetchOrders(); renderOrders(list); }
+        async function startOrder(o){
+          CURRENT_ORDER = o;
+          const equipoHeader = HEADERS.find(h=>/EQUIPO\s*\/\s*ACTIVO|EQUIPO\s*ACTIVO|EQUIPO/i.test(h.replace(/\s*\/\s*/g,'/')));
+          if (equipoHeader){ const inp = getInputByHeader(equipoHeader); if (inp){ inp.value = o.equipo || ''; autofillFromEquipo(o.equipo||''); } }
+          const hashInput = getInputByHeader('#'); if (hashInput && o.serial) hashInput.value = o.serial;
+          document.getElementById('status').textContent = `Orden en progreso: ${o.equipo||''} (${o.os||o.oc||''})`;
+          try{ await window.db.collection('testOrders').doc(o.id).update({ status:'in_progress', updatedAt: firebase.firestore.FieldValue.serverTimestamp() }); }
+          catch(e){ console.warn('[pruebas] startOrder update', e); }
+        }
+        async function completeOrderIfAny(){
+          if (!CURRENT_ORDER) return;
+          try{ await window.db.collection('testOrders').doc(CURRENT_ORDER.id).update({ status:'done', updatedAt: firebase.firestore.FieldValue.serverTimestamp() }); CURRENT_ORDER=null; await refreshOrders(); }
+          catch(e){ console.warn('[pruebas] completeOrderIfAny', e); }
+        }
+
         async function savePrueba(){
           const btn = document.getElementById('btn-save'); btn.disabled = true;
           const status = document.getElementById('status'); status.textContent = 'Guardando...';
@@ -396,6 +463,7 @@
               createdBy: user?.email || ''
             };
             await window.db.collection('pruebas').add(payload);
+            await completeOrderIfAny();
             status.textContent = 'Guardado';
             alert('Prueba creada');
             form.reset();
@@ -439,6 +507,11 @@
           } catch {}
 
           document.getElementById('btn-save').addEventListener('click', savePrueba);
+          // Filtros inbox
+          ['ord-f-os','ord-f-oc','ord-f-cli','ord-f-eq','ord-f-status'].forEach(id=>{
+            const el = document.getElementById(id); if (el) el.addEventListener('input', ()=>{ refreshOrders(); });
+          });
+          refreshOrders();
           document.getElementById('btn-cancel').addEventListener('click', ()=>{ window.location.href = 'listapruebas.html'; });
         }
 
