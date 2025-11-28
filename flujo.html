@@ -18,17 +18,18 @@
    /* Disposición circular */
    .flow--circle { position: relative; display:block; height: 860px; margin-top: 16px; }
    .flow--circle .ring { position:absolute; top:50%; left:50%; width: 900px; height: 900px; transform: translate(-50%,-50%); border: 2px dashed rgba(58,169,255,.35); border-radius: 50%; opacity: .35; z-index:0; pointer-events:none; animation: spin 60s linear infinite; }
-   .flow--circle .step { position:absolute; width: 340px; z-index:3; }
-   .flow--circle .step--actividad { width: 440px; }
+   .flow--circle .step { position:absolute; width: 380px; z-index:3; }
+   .flow--circle .step--actividad { width: 500px; }
+   .flow--circle .step--pruebas { width: 500px; }
    .flow--circle .arrow { display:none; }
    .flow--circle .connectors { position:absolute; top:50%; left:50%; width:900px; height:900px; transform: translate(-50%,-50%); pointer-events:none; z-index:1; animation: spin 60s linear infinite; }
    .flow--circle .label { position:absolute; color: var(--muted); font-size: 12px; background: rgba(20,26,46,.7); backdrop-filter: blur(2px); border:1px solid rgba(255,255,255,.08); padding:4px 8px; border-radius:999px; }
    .flow--circle .step { box-shadow: 0 10px 30px rgba(0,0,0,.25); border-color: rgba(255,255,255,.12); }
    @keyframes spin { from { transform: translate(-50%,-50%) rotate(0deg); } to { transform: translate(-50%,-50%) rotate(360deg); } }
    /* Posiciones alrededor del círculo */
-   .pos-actividad { top: 50%; left: 2%; transform: translate(0,-50%); }
-   .pos-pruebas   { top: 0%;  left: 50%; transform: translate(-50%,0); }
-   .pos-inspeccion{ top: 28%; left: 82%; transform: translate(-50%,0); }
+   .pos-actividad { top: 50%; left: 0%; transform: translate(0,-50%); }
+   .pos-pruebas   { top: -4%;  left: 54%; transform: translate(-50%,0); }
+   .pos-inspeccion{ top: 28%; left: 85%; transform: translate(-50%,0); }
    .pos-tareas    { top: 70%; left: 82%; transform: translate(-50%,0); }
    .pos-reporte   { top: 106%; left: 50%; transform: translate(-50%,-100%); }
    .cycle-note { position:absolute; left:50%; bottom: 14px; transform: translateX(-50%); color: var(--muted); font-size: 13px; }
