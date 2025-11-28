@@ -185,19 +185,52 @@
   function updateActivityKpis(){
     if (!tbody.children.length){ activityKpis.style.display='none'; activityCards.innerHTML=''; return; }
     let total = 0, internos = 0, externos = 0;
+    let sumaDias = 0, cuentaDias = 0;
+    const clientesActivos = new Set();
+    const idxCliente = headerIndex(['CLIENTE']);
     const rowsEl = tbody.querySelectorAll('tr');
     rowsEl.forEach(tr=>{
       const cells = tr.children; if (!cells || cells.length === 0) return; const sel = cells[0].querySelector('select');
       let tipo = 'propio'; if (sel) tipo = sel.value; else tipo = (cells[0].textContent||'propio').trim().toLowerCase();
       let dias = 0; if (diasServicioVisibleIdx >= 0){ const td = cells[1 + diasServicioVisibleIdx]; if (td){ const s = String(td.textContent||'').replace(/,/g,'').trim(); const n = parseFloat(s); if (!isNaN(n)) dias = n; } }
-      if (dias > 0){ total++; if (tipo === 'propio') internos++; else externos++; }
+      if (dias > 0){
+        total++; if (tipo === 'propio') internos++; else externos++;
+        sumaDias += dias; cuentaDias++;
+        if (idxCliente >= 0){
+          try{
+            const rowIndex = Array.from(tbody.children).indexOf(tr);
+            const dataRow = view[rowIndex] || [];
+            const cli = String(dataRow[idxCliente]||'').trim();
+            if (cli) clientesActivos.add(cli);
+          }catch{}
+        }
+      }
     });
+    const promedioDias = cuentaDias ? Math.round((sumaDias/cuentaDias)*10)/10 : 0;
     activityCards.innerHTML = '';
-    [
-      { label: 'Equipos totales en servicio', val: total },
-      { label: 'Equipos internos en servicio', val: internos },
-      { label: 'Equipos externos en servicio', val: externos }
-    ].forEach(k=>{ const card = document.createElement('div'); card.className='card'; const l = document.createElement('div'); l.className='kpi-label'; l.textContent = k.label; const v = document.createElement('div'); v.className='kpi'; v.textContent = fmt(k.val); card.appendChild(l); card.appendChild(v); activityCards.appendChild(card); });
+    // 1) Clientes activos
+    {
+      const card = document.createElement('div'); card.className='card';
+      const l = document.createElement('div'); l.className='kpi-label'; l.textContent = 'Clientes activos';
+      const v = document.createElement('div'); v.className='kpi'; v.textContent = fmt(clientesActivos.size);
+      card.appendChild(l); card.appendChild(v); activityCards.appendChild(card);
+    }
+    // 2) Equipos en servicio (total + breakdown)
+    {
+      const card = document.createElement('div'); card.className='card';
+      const l = document.createElement('div'); l.className='kpi-label'; l.textContent = 'Equipos en servicio';
+      const v = document.createElement('div'); v.className='kpi'; v.textContent = fmt(total);
+      const sub = document.createElement('div'); sub.style.color = '#6b7280'; sub.style.marginTop = '4px'; sub.style.fontSize = '.9em';
+      sub.textContent = `Propios: ${fmt(internos)}  •  Terceros: ${fmt(externos)}`;
+      card.appendChild(l); card.appendChild(v); card.appendChild(sub); activityCards.appendChild(card);
+    }
+    // 3) Promedio de días en servicio (activos)
+    {
+      const card = document.createElement('div'); card.className='card';
+      const l = document.createElement('div'); l.className='kpi-label'; l.textContent = 'Promedio días en servicio (activos)';
+      const v = document.createElement('div'); v.className='kpi'; v.textContent = String(promedioDias);
+      card.appendChild(l); card.appendChild(v); activityCards.appendChild(card);
+    }
     activityKpis.style.display = '';
   }
 
@@ -453,16 +486,44 @@
     function attachDateMask(input){ if (!input) return; input.addEventListener('input', (e)=>{ let value = e.target.value.replace(/\D/g,''); if (value.length>6) value = value.slice(0,6); let f=''; if (value.length>=1) f += value.slice(0,2); if (value.length>=3) f += '/' + value.slice(2,4); if (value.length>=5) f += '/' + value.slice(4,6); e.target.value = f; }); }
     [inpEmbarque, inpInicio, inpTerm].forEach(attachDateMask);
 
-    function recomputeDias(){ const di = parseDMY(inpInicio.value); const dt = parseDMY(inpTerm.value); if (!di || !dt){ inpDias.value=''; return; } const today = new Date(); today.setHours(0,0,0,0); if (today < di){ const neg = -Math.ceil((di - today)/(1000*60*60*24)); inpDias.value = String(neg); } else { const upto = today <= dt ? today : dt; const diff = Math.ceil((upto - di)/(1000*60*60*24)) + 1; inpDias.value = String(diff); } }
+    function recomputeDias(){
+      const di = parseDMY(inpInicio.value);
+      const dt = parseDMY(inpTerm.value);
+      if (!di){ inpDias.value=''; return; }
+      const today = new Date(); today.setHours(0,0,0,0);
+      if (today < di){ const neg = -Math.ceil((di - today)/(1000*60*60*24)); inpDias.value = String(neg); return; }
+      const upto = dt && dt > di ? (today <= dt ? today : dt) : today;
+      const diff = Math.ceil((upto - di)/(1000*60*60*24)) + 1;
+      inpDias.value = String(diff);
+    }
     function recomputeDevolucion(){ const dt = parseDMY(inpTerm.value); if (!dt){ outDevol.textContent='—'; return; } const d = new Date(dt); d.setDate(d.getDate()+1); outDevol.textContent = formatDMY(d); }
-    function recomputeFinParcialesContinuacion(){ const di = parseDMY(inpInicio.value); const dt = parseDMY(inpTerm.value); if (!di || !dt || dt<=di){ outFinP.textContent=''; outCont.textContent=''; return; } const fins=[]; const conts=[]; let cursor=new Date(di); cursor.setDate(cursor.getDate()+25); cursor.setHours(0,0,0,0); while (cursor < dt){ fins.push(formatDMY(cursor)); const cont=new Date(cursor); cont.setDate(cont.getDate()+1); conts.push(formatDMY(cont)); cursor.setDate(cursor.getDate()+30); } outFinP.textContent=fins.join('\n'); outCont.textContent=conts.join('\n'); }
+    function recomputeFinParcialesContinuacion(){
+      const di = parseDMY(inpInicio.value);
+      const dt = parseDMY(inpTerm.value);
+      if (!di){ outFinP.textContent=''; outCont.textContent=''; return; }
+      const today = new Date(); today.setHours(0,0,0,0);
+      const endEff = (dt && dt>di) ? dt : today;
+      if (endEff <= di){ outFinP.textContent=''; outCont.textContent=''; return; }
+      const fins=[]; const conts=[];
+      // Primer corte del 25 a partir del inicio
+      let c = cutoff25(di);
+      while (c < endEff){
+        fins.push(formatDMY(c));
+        const cont = continuation27From(c);
+        conts.push(formatDMY(cont));
+        // siguiente 25 del mes siguiente
+        c = cutoff25(new Date(c.getFullYear(), c.getMonth()+1, 25));
+      }
+      outFinP.textContent=fins.join('\n');
+      outCont.textContent=conts.join('\n');
+    }
     function recomputeIngresoRenta(){ const d = parseFloat(inpDias.value)||0; const p = parseFloat(inpPrecio.value)||0; const total = d*p; const tipo = selTipo.value; outIngreso.textContent = (tipo==='propio' && total>0) ? ('$'+ total.toLocaleString('es-MX',{minimumFractionDigits:2, maximumFractionDigits:2})) : '—'; outRenta.textContent = (tipo==='terceros' && total>0) ? ('$'+ total.toLocaleString('es-MX',{minimumFractionDigits:2, maximumFractionDigits:2})) : '—'; }
 
     [inpInicio, inpTerm].forEach(el=>{ if(el){ el.addEventListener('change', ()=>{ recomputeDias(); recomputeDevolucion(); recomputeFinParcialesContinuacion(); updateDocSaveEnabled(); }); el.addEventListener('blur', recomputeFinParcialesContinuacion); }});
     if (inpDias) inpDias.addEventListener('input', ()=>{ recomputeIngresoRenta(); updateDocSaveEnabled(); });
     if (inpPrecio) inpPrecio.addEventListener('input', ()=>{ recomputeIngresoRenta(); updateDocSaveEnabled(); });
 
-    function updateDocSaveEnabled(){ const eqOK = !!(eqInput.value||'').trim() || multiSelectEquipos.size>0; const di = parseDMY(inpInicio.value); const dt = parseDMY(inpTerm.value); const provOk = selTipo.value==='propio' || !!(provInput.value||'').trim(); const ok = eqOK && di && dt && dt>=di && provOk; saveRowBtn.disabled = !ok; saveRowBtn.style.opacity = ok ? '1' : '.6'; saveRowBtn.style.pointerEvents = ok ? 'auto' : 'none'; }
+    function updateDocSaveEnabled(){ const eqOK = !!(eqInput.value||'').trim() || multiSelectEquipos.size>0; const di = parseDMY(inpInicio.value); const dt = parseDMY(inpTerm.value); const provOk = selTipo.value==='propio' || !!(provInput.value||'').trim(); const ok = eqOK && !!di && (!dt || dt>=di) && provOk; saveRowBtn.disabled = !ok; saveRowBtn.style.opacity = ok ? '1' : '.6'; saveRowBtn.style.pointerEvents = ok ? 'auto' : 'none'; }
 
     function renderSelectedList(){ const arr = Array.from(multiSelectEquipos.values()); eqList.innerHTML = ''; if (!arr.length){ eqList.style.display='none'; eqCounter.textContent=''; refreshSerialDescFromSelection(); return; } eqList.style.display='flex'; arr.forEach(val=>{ const chip = document.createElement('div'); chip.style.display='inline-flex'; chip.style.gap='6px'; chip.style.alignItems='center'; chip.style.padding='2px 8px'; chip.style.border='1px solid #e5e7eb'; chip.style.borderRadius='999px'; const t=document.createElement('span'); t.textContent=val; const x=document.createElement('button'); x.textContent='×'; x.onclick=()=>{ multiSelectEquipos.delete(val); renderSelectedList(); updateDocSaveEnabled(); }; chip.appendChild(t); chip.appendChild(x); eqList.appendChild(chip); }); eqCounter.textContent = `(${arr.length} seleccionado${arr.length===1?'':'s'})`; refreshSerialDescFromSelection(); }
 
@@ -481,7 +542,9 @@
       const iFINP=i(['FIN PARCIAL DEL SERVICIO']); const iTERM=i(['TERMINACION DEL SERVICIO','TERMINACIÓN DEL SERVICIO']); const iDEV=i(['FECHA DE DEVOLUCION','FECHA DE DEVOLUCIÓN']);
       const iDIAS=i(['DIAS EN SERVICIO','DÍAS EN SERVICIO']); const iPREC=i(['PRECIO']); const iINGR=i(['INGRESO ACUMULADO','INGRESO ACUMULDDO']); const iREN=i(['RENTA ACUMULADA']);
       const dInicio = parseDMY(inpInicio.value); const dTerm = parseDMY(inpTerm.value);
-      const diasTotales = (dInicio && dTerm) ? daysInclusive(dInicio, dTerm) : '';
+      const today = new Date(); today.setHours(0,0,0,0);
+      const endEff = (dTerm && dTerm>dInicio) ? dTerm : today;
+      const diasTotales = dInicio ? daysInclusive(dInicio, endEff) : '';
       const precioNum = parseFloat(String(inpPrecio.value||'').replace(/,/g,''));
       const newRows = [];
       for (const eq of selected){
@@ -501,8 +564,23 @@
         if (iOS>=0) r[iOS] = loteId || (inpOS.value||'');
         if (iEMB>=0) r[iEMB] = inpEmbarque.value||'';
         if (iINI>=0) r[iINI] = inpInicio.value||'';
-        if (iCONT>=0) r[iCONT] = '';
-        if (iFINP>=0) r[iFINP] = '';
+        // fin parcial / continuación calculados mensualmente (25/27) hasta endEff
+        if (iFINP>=0 || iCONT>=0){
+          if (dInicio){
+            const fins=[]; const conts=[];
+            let c = cutoff25(dInicio);
+            while (c < endEff){
+              fins.push(formatDMY(c));
+              const cont = continuation27From(c); conts.push(formatDMY(cont));
+              c = cutoff25(new Date(c.getFullYear(), c.getMonth()+1, 25));
+            }
+            if (iFINP>=0) r[iFINP] = fins.join('\n');
+            if (iCONT>=0) r[iCONT] = conts.join('\n');
+          } else {
+            if (iFINP>=0) r[iFINP] = '';
+            if (iCONT>=0) r[iCONT] = '';
+          }
+        }
         if (iTERM>=0) r[iTERM] = inpTerm.value||'';
         if (iDEV>=0 && dTerm){ const dev = new Date(dTerm); dev.setDate(dev.getDate()+1); r[iDEV] = formatDMY(dev); }
         if (iDIAS>=0) r[iDIAS] = String(diasTotales||'');

@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Actividad - Administración (Ingresos)</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+  <link rel="icon" type="image/x-icon" href="img/logo.ico">
+  <style>
+    :root { --border:#e5e7eb; --muted:#6b7280; --text:#111827; --bg:#ffffff; }
+    body { margin:0; font-family:Inter, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji"; color:var(--text); background:var(--bg); }
+    header { display:flex; align-items:center; gap:12px; padding:10px 14px; border-bottom:1px solid var(--border); }
+    header .title { font-weight:700; font-size:18px; }
+    .toolbar { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:12px 14px; }
+    .toolbar .left { display:flex; gap:8px; align-items:center; }
+    input#qmin { min-width:240px; padding:6px 10px; border:1px solid var(--border); border-radius:8px; }
+    .kpis { display:grid; grid-template-columns: repeat(3, minmax(220px, 1fr)); gap:12px; padding:0 14px 6px; }
+    .kpis .card { border:1px solid var(--border); border-radius:10px; padding:12px; background:#fff; }
+    .kpis .kpi-label { color:var(--muted); font-weight:600; }
+    .kpis .kpi { font-size:28px; font-weight:700; margin-top:4px; }
+    .table-wrap { padding:0 14px 24px; }
+    table { width:100%; border-collapse:separate; border-spacing:0; border:1px solid var(--border); border-radius:10px; overflow:hidden; background:#fff; }
+    thead th { text-align:left; font-weight:600; color:#374151; background:#f8fafc; border-bottom:1px solid var(--border); padding:8px 10px; }
+    tbody td { border-top:1px solid var(--border); padding:8px 10px; vertical-align:top; }
+    .badge { display:inline-block; padding:2px 8px; border-radius:999px; border:1px solid var(--border); color:#374151; font-size:.85em; }
+    .muted { color:var(--muted); }
+    .right-links a { color:#2563eb; text-decoration:none; }
+  </style>
+</head>
+<body data-page="actividadmin">
+  <header>
+    <div class="title">Administración de Actividad • Ingresos/Rentas</div>
+    <div class="right-links" style="margin-left:auto; display:flex; gap:12px;">
+      <a href="actividad.html">Vista Operativa</a>
+    </div>
+  </header>
+
+  <section class="toolbar">
+    <div class="left">
+      <input id="qmin" type="text" placeholder="Buscar..." aria-label="Buscar" />
+      <span id="countmin" class="muted">0 registros</span>
+    </div>
+  </section>
+
+  <section id="kpi-min" class="kpis">
+    <div class="card"><div class="kpi-label">Ingresos acumulados (visibles)</div><div id="kpi-ingresos" class="kpi">0</div></div>
+    <div class="card"><div class="kpi-label">Rentas acumuladas (visibles)</div><div id="kpi-rentas" class="kpi">0</div></div>
+    <div class="card"><div class="kpi-label">Ticket promedio (visibles)</div><div id="kpi-ticket" class="kpi">0</div></div>
+  </section>
+
+  <section class="table-wrap">
+    <table id="tblMin">
+      <thead id="theadMin"></thead>
+      <tbody id="tbodyMin"></tbody>
+    </table>
+  </section>
+
+  <script src="https://www.gstatic.com/firebasejs/9.6.11/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.6.11/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.6.11/firebase-firestore-compat.js"></script>
+  <script src="firebase-config.js"></script>
+  <script src="firebase-init.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+  <script src="actividadmin.js" defer></script>
+</body>
+</html>

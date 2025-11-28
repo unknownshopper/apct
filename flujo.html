@@ -10,26 +10,28 @@
    * { box-sizing: border-box; }
    html, body { height: 100%; }
    body { margin: 0; background: linear-gradient(180deg, #0b1020, #0b1226); color: var(--text); font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji"; }
-   .wrap { max-width: 1100px; margin: 0 auto; padding: 24px; }
-   h1 { font-size: 28px; letter-spacing: .3px; margin: 8px 0 16px; }
-   p.lead { color: var(--muted); margin: 0 0 24px; }
+   .wrap { max-width: 1600px; margin: 0 auto; padding: 28px; }
+   h1 { font-size: 30px; letter-spacing: .3px; margin: 8px 0 14px; }
+   p.lead { color: var(--muted); margin: 0 0 22px; }
 
-   .flow { display: grid; grid-template-columns: repeat(14, 1fr); gap: 16px; align-items: stretch; }
-   .step { grid-column: span 2; background: radial-gradient(1200px 420px at -10% -20%, rgba(122, 168, 255, .18), transparent 55%),
+   .flow { display: grid; grid-template-columns: repeat(24, 1fr); gap: 24px; align-items: start; }
+   .step { grid-column: span 4; background: radial-gradient(1200px 420px at -10% -20%, rgba(122, 168, 255, .18), transparent 55%),
                            radial-gradient(300px 200px at 110% 130%, rgba(124, 77, 255, .16), transparent 60%),
                            var(--panel);
            border: 1px solid rgba(255, 255, 255, .08);
-           border-radius: 14px; padding: 16px; position: relative; display: flex; flex-direction: column; min-height: 170px; }
-   .step h2 { font-size: 16px; margin: 0 0 8px; display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
+           border-radius: 16px; padding: 24px; position: relative; display: flex; flex-direction: column; min-height: 220px; }
+   .step h2 { font-size: 19px; margin: 0 0 12px; display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
    .step h2 small { display: block; }
    .step small { color: var(--muted); font-weight: 500; }
-   .docs { margin: 8px 0 0; padding-left: 18px; color: var(--muted); }
-   .docs li { margin: 4px 0; }
-   .arrow { grid-column: span 1; display: grid; place-items: center; color: var(--muted); }
+   .docs { margin: 8px 0 0; padding-left: 18px; color: var(--muted); padding-right:8px; word-break: break-word; font-size: 14px; }
+   .docs li { margin: 8px 0; line-height: 1.6; }
+   .arrow { grid-column: span 1; display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--muted); gap:10px; }
    .arrow .shaft { width: 100%; height: 2px; background: linear-gradient(90deg, rgba(58, 169, 255, .0), rgba(58, 169, 255, .9)); position: relative; }
    .arrow .shaft::after { content: ""; position: absolute; right: -2px; top: 50%; transform: translateY(-50%) rotate(0deg); border-left: 8px solid rgba(58, 169, 255, .9); border-top: 6px solid transparent; border-bottom: 6px solid transparent; }
+   .arrow .label { font-size: 13px; color: var(--muted); text-align:center; max-width: 10ch; }
 
    .step--inventario h2 { color: var(--accent); }
+   .step--actividad h2 { color: var(--accent); }
    .step--pruebas h2 { color: #ffd166; }
    .step--inspeccion h2 { color: var(--accent-2); }
    .step--tareas h2 { color: #22d3ee; }
@@ -38,6 +40,8 @@
    .legend { display: flex; gap: 12px; flex-wrap: wrap; margin: 16px 0 0; color: var(--muted); font-size: 13px; }
    .pill { display: inline-flex; align-items: center; gap: 8px; padding: 6px 10px; border-radius: 999px; background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.08); }
    .dot { width: 8px; height: 8px; border-radius: 50%; }
+   .chips { display:flex; flex-wrap:wrap; gap:6px; margin-top:10px; }
+   .chip { font-size:12px; color:#cbd5e1; border:1px solid rgba(255,255,255,.12); background: rgba(255,255,255,.05); padding:4px 8px; border-radius:999px; }
 
    @media (max-width: 980px) {
      .flow { grid-template-columns: 1fr; }
@@ -50,28 +54,50 @@
  <body>
   <main class="wrap" aria-label="Flujo de trabajo">
    <h1>Flujo de trabajo</h1>
-   <p class="lead">Borrador inicial del funnel: Inventario → Pruebas → Inspección → Tareas → Reporte.</p>
+   <p class="lead">Flujo: Actividad (creación) → Pruebas → Inspección → Tareas → Reporte.</p>
 
    <section class="flow" aria-label="Etapas del flujo">
-    <article class="step step--inventario" aria-labelledby="titulo-inventario">
-     <h2 id="titulo-inventario">Inventario<br> <small>(entrada)</small></h2>
-     <ul class="docs" aria-label="Documentos de inventario">
-      <li>Fuente: INVENTARIO GENERAL PCT 2025 UNIFICADO.csv</li>
-      <li>Generación de SERIAL para celdas vacías</li>
-      <li>EDO ON/OFF (OFF bloquea uso en módulos)</li>
+    <article class="step step--actividad" aria-labelledby="titulo-actividad">
+     <h2 id="titulo-actividad">Actividad<br> <small>(creación)</small></h2>
+     <ul class="docs" aria-label="Actividad: entradas, reglas y salidas">
+      <li><strong>Entrada</strong>: equipo(s) o lote, cliente, fechas, precio, OS/OC.</li>
+      <li><strong>Datos base</strong>: inventario.csv + unificado → serial, descripción, diámetro, figura.</li>
+      <li><strong>Reglas</strong>:
+        <br>• Solo equipos con EDO=ON (EDO lo cambia un admin en inventario.html).
+        <br>• Lote: N equipos ⇒ N órdenes de prueba.
+        <br>• Pruebas por equipo mapeadas desde inventario.csv y catálogo de stockpruebas.html (LT, VT/PT/MT, UTT, etc.).
+      </li>
+      <li><strong>Salida</strong>: actividad creada + cola de órdenes de prueba por equipo; visible en regactividad (operación) y actividadmin (administración).</li>
      </ul>
+     <div class="chips" aria-label="Dependencias y salidas">
+      <span class="chip">Depende: inventario.csv</span>
+      <span class="chip">Depende: unificado.csv</span>
+      <span class="chip">Crea: órdenes de prueba</span>
+      <span class="chip">Crea: regactividad</span>
+      <span class="chip">Crea: actividadmin</span>
+      <span class="chip">Áreas: Operación</span>
+      <span class="chip">Áreas: Administración</span>
+     </div>
     </article>
-    <div class="arrow" aria-hidden="true"><div class="shaft"></div></div>
+    <div class="arrow" aria-hidden="true"><div class="shaft"></div><div class="label">Genera órdenes de prueba por equipo (EDO=ON)</div></div>
 
     <article class="step step--pruebas" aria-labelledby="titulo-pruebas">
      <h2 id="titulo-pruebas">Pruebas <br> <small>(validación)</small></h2>
-     <ul class="docs" aria-label="Documentos de pruebas">
-      <li>Datalist desde inventario unificado (EDO=ON)</li>
-      <li>Resultados y observaciones</li>
-      <li>Registro PND</li>
+     <ul class="docs" aria-label="Pruebas: asignación y operación">
+      <li><strong>Entrada</strong>: órdenes generadas por Actividad (solo EDO=ON).</li>
+      <li><strong>Asignación</strong>: por equipo se instancian las pruebas requeridas (LT, VT/PT/MT, UTT, etc.) según inventario.csv/stockpruebas.html.</li>
+      <li><strong>Operación</strong>: captura de resultados y observaciones; registro PND.</li>
+      <li><strong>Salida</strong>: estado de pruebas por equipo para etapas siguientes.</li>
      </ul>
+     <div class="chips" aria-label="Dependencias y salidas">
+      <span class="chip">Depende: órdenes de prueba</span>
+      <span class="chip">Depende: inventario.csv</span>
+      <span class="chip">Depende: stockpruebas.html</span>
+      <span class="chip">Crea: Registro PND</span>
+      <span class="chip">Áreas: PND / Calidad</span>
+     </div>
     </article>
-    <div class="arrow" aria-hidden="true"><div class="shaft"></div></div>
+    <div class="arrow" aria-hidden="true"><div class="shaft"></div><div class="label">Checklist, hallazgos y evidencias</div></div>
 
     <article class="step step--inspeccion" aria-labelledby="titulo-inspeccion">
      <h2 id="titulo-inspeccion">Inspección<br> <small>(control)</small></h2>
@@ -80,18 +106,28 @@
       <li>Checklists, hallazgos y fotos</li>
       <li>Registro de inspecciones</li>
      </ul>
+     <div class="chips" aria-label="Dependencias y salidas">
+      <span class="chip">Depende: estado de pruebas</span>
+      <span class="chip">Crea: reginspecciones</span>
+      <span class="chip">Áreas: Inspección / Calidad</span>
+     </div>
     </article>
-    <div class="arrow" aria-hidden="true"><div class="shaft"></div></div>
+    <div class="arrow" aria-hidden="true"><div class="shaft"></div><div class="label">Tareas operativas</div></div>
 
     <article class="step step--tareas" aria-labelledby="titulo-tareas">
-     <h2 id="titulo-tareas">Actividad<br> <small>(servicio)</small></h2>
+     <h2 id="titulo-tareas">Tareas<br> <small>(servicio)</small></h2>
      <ul class="docs" aria-label="Documentos de tareas">
       <li>Propio / Terceros (nuevo flujo)</li>
       <li>Firestore: activityRecords</li>
       <li>Bloquea equipos con EDO=OFF</li>
      </ul>
+     <div class="chips" aria-label="Dependencias y salidas">
+      <span class="chip">Depende: Actividad</span>
+      <span class="chip">Crea: tareas</span>
+      <span class="chip">Áreas: Operación</span>
+     </div>
     </article>
-    <div class="arrow" aria-hidden="true"><div class="shaft"></div></div>
+    <div class="arrow" aria-hidden="true"><div class="shaft"></div><div class="label">KPIs y tableros</div></div>
 
     <article class="step step--reporte" aria-labelledby="titulo-reporte">
      <h2 id="titulo-reporte">Dashboard<br> <small>(salida)</small></h2>
@@ -100,11 +136,16 @@
       <li>Promedio días en servicio</li>
       <li>Inventario total</li>
      </ul>
+     <div class="chips" aria-label="Dependencias y salidas">
+      <span class="chip">Depende: activityRecords</span>
+      <span class="chip">Depende: PND / Inspecciones</span>
+      <span class="chip">Áreas: Dirección / Operación</span>
+     </div>
     </article>
    </section>
 
    <div class="legend" aria-label="Leyenda de colores">
-    <span class="pill"><span class="dot" style="background: var(--accent);"></span> Inventario</span>
+    <span class="pill"><span class="dot" style="background: var(--accent);"></span> Actividad</span>
     <span class="pill"><span class="dot" style="background: #ffd166;"></span> Pruebas</span>
     <span class="pill"><span class="dot" style="background: var(--accent-2);"></span> Inspección</span>
     <span class="pill"><span class="dot" style="background: #22d3ee;"></span> Tareas</span>
