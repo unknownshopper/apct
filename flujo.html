@@ -42,6 +42,11 @@
    .dot { width: 8px; height: 8px; border-radius: 50%; }
    .chips { display:flex; flex-wrap:wrap; gap:6px; margin-top:10px; }
    .chip { font-size:12px; color:#cbd5e1; border:1px solid rgba(255,255,255,.12); background: rgba(255,255,255,.05); padding:4px 8px; border-radius:999px; }
+   .chip--dep { color:#bfdbfe; border-color: rgba(59,130,246,.35); background: rgba(59,130,246,.14); }
+   .chip--crea { color:#bbf7d0; border-color: rgba(34,197,94,.35); background: rgba(34,197,94,.14); }
+   .chip--area { color:#e9d5ff; border-color: rgba(168,85,247,.35); background: rgba(168,85,247,.14); }
+   .chip-legend { margin-top: 10px; color: var(--muted); font-size: 12px; display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+   .chip-legend .title { font-weight:600; color:#9ca3af; margin-right:4px; }
 
    @media (max-width: 980px) {
      .flow { grid-template-columns: 1fr; }
@@ -70,13 +75,13 @@
       <li><strong>Salida</strong>: actividad creada + cola de órdenes de prueba por equipo; visible en regactividad (operación) y actividadmin (administración).</li>
      </ul>
      <div class="chips" aria-label="Dependencias y salidas">
-      <span class="chip">Depende: inventario.csv</span>
-      <span class="chip">Depende: unificado.csv</span>
-      <span class="chip">Crea: órdenes de prueba</span>
-      <span class="chip">Crea: regactividad</span>
-      <span class="chip">Crea: actividadmin</span>
-      <span class="chip">Áreas: Operación</span>
-      <span class="chip">Áreas: Administración</span>
+      <span class="chip chip--dep">Depende: inventario.csv</span>
+      <span class="chip chip--dep">Depende: unificado.csv</span>
+      <span class="chip chip--crea">Crea: órdenes de prueba</span>
+      <span class="chip chip--crea">Crea: regactividad</span>
+      <span class="chip chip--crea">Crea: actividadmin</span>
+      <span class="chip chip--area">Áreas: Operación</span>
+      <span class="chip chip--area">Áreas: Administración</span>
      </div>
     </article>
     <div class="arrow" aria-hidden="true"><div class="shaft"></div><div class="label">Genera órdenes de prueba por equipo (EDO=ON)</div></div>
@@ -90,11 +95,11 @@
       <li><strong>Salida</strong>: estado de pruebas por equipo para etapas siguientes.</li>
      </ul>
      <div class="chips" aria-label="Dependencias y salidas">
-      <span class="chip">Depende: órdenes de prueba</span>
-      <span class="chip">Depende: inventario.csv</span>
-      <span class="chip">Depende: stockpruebas.html</span>
-      <span class="chip">Crea: Registro PND</span>
-      <span class="chip">Áreas: PND / Calidad</span>
+      <span class="chip chip--dep">Depende: órdenes de prueba</span>
+      <span class="chip chip--dep">Depende: inventario.csv</span>
+      <span class="chip chip--dep">Depende: stockpruebas.html</span>
+      <span class="chip chip--crea">Crea: Registro PND</span>
+      <span class="chip chip--area">Áreas: PND / Calidad</span>
      </div>
     </article>
     <div class="arrow" aria-hidden="true"><div class="shaft"></div><div class="label">Checklist, hallazgos y evidencias</div></div>
@@ -107,9 +112,9 @@
       <li>Registro de inspecciones</li>
      </ul>
      <div class="chips" aria-label="Dependencias y salidas">
-      <span class="chip">Depende: estado de pruebas</span>
-      <span class="chip">Crea: reginspecciones</span>
-      <span class="chip">Áreas: Inspección / Calidad</span>
+      <span class="chip chip--dep">Depende: estado de pruebas</span>
+      <span class="chip chip--crea">Crea: reginspecciones</span>
+      <span class="chip chip--area">Áreas: Inspección / Calidad</span>
      </div>
     </article>
     <div class="arrow" aria-hidden="true"><div class="shaft"></div><div class="label">Tareas operativas</div></div>
@@ -122,9 +127,9 @@
       <li>Bloquea equipos con EDO=OFF</li>
      </ul>
      <div class="chips" aria-label="Dependencias y salidas">
-      <span class="chip">Depende: Actividad</span>
-      <span class="chip">Crea: tareas</span>
-      <span class="chip">Áreas: Operación</span>
+      <span class="chip chip--dep">Depende: Actividad</span>
+      <span class="chip chip--crea">Crea: tareas</span>
+      <span class="chip chip--area">Áreas: Operación</span>
      </div>
     </article>
     <div class="arrow" aria-hidden="true"><div class="shaft"></div><div class="label">KPIs y tableros</div></div>
@@ -137,9 +142,9 @@
       <li>Inventario total</li>
      </ul>
      <div class="chips" aria-label="Dependencias y salidas">
-      <span class="chip">Depende: activityRecords</span>
-      <span class="chip">Depende: PND / Inspecciones</span>
-      <span class="chip">Áreas: Dirección / Operación</span>
+      <span class="chip chip--dep">Depende: activityRecords</span>
+      <span class="chip chip--dep">Depende: PND / Inspecciones</span>
+      <span class="chip chip--area">Áreas: Dirección / Operación</span>
      </div>
     </article>
    </section>
@@ -150,6 +155,12 @@
     <span class="pill"><span class="dot" style="background: var(--accent-2);"></span> Inspección</span>
     <span class="pill"><span class="dot" style="background: #22d3ee;"></span> Tareas</span>
     <span class="pill"><span class="dot" style="background: var(--ok);"></span> Reporte</span>
+   </div>
+   <div class="chip-legend" aria-label="Glosario de chips">
+    <span class="title">Glosario (chips):</span>
+    <span class="chip chip--dep">Dependencias</span>
+    <span class="chip chip--crea">Documentos creados</span>
+    <span class="chip chip--area">Áreas</span>
    </div>
   </main>
  </body>
