@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <title>Inventario PND unificado (invpnd.csv)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="stylesheet" href="styles.css" />
+  <style>
+    main { max-width: 1200px; margin: 1rem auto; padding: 1rem; background:#fff; border-radius:8px; border:1px solid #e5e7eb; }
+    h1 { margin-bottom:.25rem; }
+    .subtitle { margin:0 0 1rem; font-size:14px; color:#4b5563; }
+    .toolbar { display:flex; flex-wrap:wrap; gap:.5rem; align-items:center; margin-bottom:1rem; }
+    .toolbar label { font-size:12px; color:#374151; }
+    .toolbar input[type="text"] { border:1px solid #d1d5db; border-radius:4px; padding:4px 6px; font-size:12px; }
+    .status { font-size:12px; color:#4b5563; margin-bottom:.5rem; }
+    .table-wrap { max-height:70vh; overflow:auto; border:1px solid #e5e7eb; border-radius:6px; }
+    table { width:100%; border-collapse:collapse; font-size:12px; }
+    th, td { border:1px solid #e5e7eb; padding:4px 6px; text-align:left; }
+    th { background:#f3f4f6; position:sticky; top:0; z-index:1; }
+    button { cursor:pointer; }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="logo"><img src="img/logopctch.png" alt="Logo" /></div>
+    <button class="menu-toggle" aria-label="Abrir menú" aria-controls="primary-nav" aria-expanded="false">☰</button>
+    <nav id="primary-nav">
+      <ul>
+        <li><a href="index.html">Dashboard</a></li>
+        <li class="nav-dropdown"><details><summary>Actividad</summary><ul>
+          <li><a href="actividad.html">Registro de actividad</a></li>
+          <li><a href="regactividad.html">Historial de registros</a></li>
+        </ul></details></li>
+        <li class="nav-dropdown"><details open><summary>Pruebas</summary><ul>
+          <li><a href="pruebas.html">PND (pruebas no destructivas)</a></li>
+          <li><a href="stockpruebas.html">PND x equipo</a></li>
+          <li><a href="listapruebas.html">Registro PND</a></li>
+          <li><a class="active" href="invpnd.html">Inventario PND (invpnd.csv)</a></li>
+        </ul></details></li>
+        <li><a href="inspeccion.html">Inspección</a></li>
+        <li><a href="tareas.html">Tareas</a></li>
+        <li><a href="reportes.html">Reportes</a></li>
+      </ul>
+    </nav>
+    <div class="user-box">
+      <span id="user-email"></span>
+      <a id="login-link" href="login.html">Login</a>
+      <button id="logout-btn" type="button" style="display:none">Salir</button>
+    </div>
+  </header>
+
+  <main class="wide">
+    <h1>Inventario PND unificado</h1>
+    <p class="subtitle">Vista de solo lectura sobre <code>docs/invpnd.csv</code>. Desde aquí puedes revisar todas las columnas (seriales, descripciones, etc.).</p>
+    <p class="status" id="status">Cargando invpnd.csv...</p>
+    <div class="toolbar">
+      <button id="btn-reload">Recargar</button>
+      <button id="btn-download" disabled>Descargar invpnd.csv</button>
+      <label>Equipo/Activo: <input type="text" id="f-equipo" placeholder="PCT-BP-01" /></label>
+      <label>Serial: <input type="text" id="f-serial" placeholder="PCT-..." /></label>
+      <label>Filtro global: <input type="text" id="f-global" placeholder="Buscar en cualquier columna" /></label>
+    </div>
+    <div class="table-wrap">
+      <table id="tbl-invpnd">
+        <thead></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </main>
+
+  <footer>
+    <a href="https://unknownshoppers.com" target="_blank" rel="noopener noreferrer">
+      Powered by <img src="img/logotus.jpg" alt="Unknown Shoppers" style="height:18px; vertical-align:middle">
+    </a>
+  </footer>
+
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+  <script>
+    (function(){
+      const CSV_URL = 'docs/invpnd.csv';
+      const statusEl = document.getElementById('status');
+      const tblHead = document.querySelector('#tbl-invpnd thead');
+      const tblBody = document.querySelector('#tbl-invpnd tbody');
+      const fEquipo = document.getElementById('f-equipo');
+      const fSerial = document.getElementById('f-serial');
+      const fGlobal = document.getElementById('f-global');
+      let headers = [];
+      let rows = [];
+
+      function parseCSV(text){
+        try{
+          if (window.Papa){
+            const res = Papa.parse(text, { delimiter: ',', quoteChar: '"', escapeChar: '"', skipEmptyLines: true });
+            return Array.isArray(res && res.data) ? res.data : [];
+          }
+        }catch(e){ console.error('[invpnd-view] Papa error', e); }
+        return text.replace(/\r\n?/g,'\n').split('\n').filter(Boolean).map(l=>l.split(','));
+      }
+
+      async function loadCSV(){
+        const res = await fetch(CSV_URL, { cache:'no-store' });
+        if (!res.ok) throw new Error('No se pudo cargar ' + CSV_URL + ' (' + res.status + ')');
+        const txt = await res.text();
+        const all = parseCSV(txt);
+        if (!all.length) throw new Error('invpnd.csv está vacío');
+        headers = all[0];
+        rows = all.slice(1);
+      }
+
+      function renderTable(){
+        tblHead.innerHTML = '';
+        tblBody.innerHTML = '';
+        if (!headers.length) return;
+
+        const trh = document.createElement('tr');
+        headers.forEach(h=>{
+          const th = document.createElement('th'); th.textContent = h; trh.appendChild(th);
+        });
+        tblHead.appendChild(trh);
+
+        const fe = String(fEquipo.value||'').trim().toUpperCase();
+        const fs = String(fSerial.value||'').trim().toUpperCase();
+        const fg = String(fGlobal.value||'').trim().toUpperCase();
+
+        const idxEquipo = headers.findIndex(h => String(h||'').toUpperCase().includes('EQUIPO'));
+        const idxSerial = headers.findIndex(h => String(h||'').toUpperCase()==='SERIAL');
+
+        const frag = document.createDocumentFragment();
+        for (const r of rows){
+          const equipo = idxEquipo >= 0 ? String(r[idxEquipo]||'').toUpperCase() : '';
+          const serial = idxSerial >= 0 ? String(r[idxSerial]||'').toUpperCase() : '';
+
+          if (fe && !equipo.includes(fe)) continue;
+          if (fs && !serial.includes(fs)) continue;
+
+          if (fg){
+            const match = r.some(v => String(v||'').toUpperCase().includes(fg));
+            if (!match) continue;
+          }
+
+          const tr = document.createElement('tr');
+          r.forEach(v=>{
+            const td = document.createElement('td'); td.textContent = v == null ? '' : v; tr.appendChild(td);
+          });
+          frag.appendChild(tr);
+        }
+        tblBody.appendChild(frag);
+      }
+
+      function toCSV(){
+        const escapeCell = v => {
+          const s = String(v==null ? '' : v);
+          if (/[",\n]/.test(s)) return '"' + s.replace(/"/g,'""') + '"';
+          return s;
+        };
+        const all = [headers, ...rows];
+        return all.map(row => row.map(escapeCell).join(',')).join('\n');
+      }
+
+      function downloadCSV(){
+        const csv = toCSV();
+        const blob = new Blob([csv], { type:'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'invpnd.csv';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      }
+
+      async function reload(){
+        try{
+          statusEl.textContent = 'Cargando invpnd.csv...';
+          document.getElementById('btn-download').disabled = true;
+          await loadCSV();
+          renderTable();
+          statusEl.textContent = `Filas: ${rows.length} | Columnas: ${headers.length}`;
+          document.getElementById('btn-download').disabled = rows.length === 0;
+        }catch(e){
+          console.error(e);
+          statusEl.textContent = 'Error: ' + e.message;
+        }
+      }
+
+      document.getElementById('btn-reload').addEventListener('click', reload);
+      document.getElementById('btn-download').addEventListener('click', downloadCSV);
+      fEquipo.addEventListener('input', renderTable);
+      fSerial.addEventListener('input', renderTable);
+      fGlobal.addEventListener('input', renderTable);
+
+      reload();
+    })();
+  </script>
+</body>
+</html>

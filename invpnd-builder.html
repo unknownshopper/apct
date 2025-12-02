@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <title>Generador invpnd.csv</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="stylesheet" href="styles.css" />
+  <style>
+    main { max-width: 1200px; margin: 1rem auto; padding: 1rem; background:#fff; border-radius:8px; border:1px solid #e5e7eb; }
+    .toolbar { display:flex; flex-wrap:wrap; gap:.5rem; align-items:center; margin-bottom:1rem; }
+    table { width:100%; border-collapse:collapse; font-size:12px; }
+    th, td { border:1px solid #e5e7eb; padding:4px 6px; text-align:left; }
+    th { background:#f3f4f6; position:sticky; top:0; z-index:1; }
+    .table-wrap { max-height:60vh; overflow:auto; border:1px solid #e5e7eb; border-radius:6px; }
+    .status { font-size:12px; color:#4b5563; }
+    input[type="text"] { border:1px solid #d1d5db; border-radius:4px; padding:4px 6px; font-size:12px; }
+    button { cursor:pointer; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Generador de inventario PND unificado (invpnd.csv)</h1>
+    <p class="status" id="status">Cargando archivos CSV...</p>
+    <div class="toolbar">
+      <button id="btn-reload">Volver a cargar</button>
+      <button id="btn-download" disabled>Descargar invpnd.csv</button>
+      <label>Filtrar por Equipo/Activo: <input type="text" id="f-equipo" placeholder="PCT-..." /></label>
+      <label>Filtrar por Serial: <input type="text" id="f-serial" placeholder="SERIAL..." /></label>
+    </div>
+    <div class="table-wrap">
+      <table id="tbl">
+        <thead></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+  <script>
+    (function(){
+      const INV_CSV = 'docs/inventario.csv';
+      const GEN_INV_CSV = 'docs/INVENTARIO GENERAL PCT 2025 UNIFICADO.csv';
+      const statusEl = document.getElementById('status');
+      const tblHead = document.querySelector('#tbl thead');
+      const tblBody = document.querySelector('#tbl tbody');
+      const filtroEquipo = document.getElementById('f-equipo');
+      const filtroSerial = document.getElementById('f-serial');
+      let outRows = [];
+      let headerOut = [];
+
+      function normKeyEquipo(s){
+        return String(s||'').trim().toUpperCase();
+      }
+
+      function parseCSV(text){
+        try{
+          if (window.Papa){
+            const res = Papa.parse(text, { delimiter: ',', quoteChar: '"', escapeChar: '"', skipEmptyLines: true });
+            return Array.isArray(res && res.data) ? res.data : [];
+          }
+        }catch(e){ console.error('[invpnd] Papa error', e); }
+        // Fallback simple
+        return text.replace(/\r\n?/g,'\n').split('\n').filter(Boolean).map(l=>l.split(','));
+      }
+
+      async function loadText(url){
+        const res = await fetch(url, { cache:'no-store' });
+        if (!res.ok) throw new Error('No se pudo cargar ' + url + ' (' + res.status + ')');
+        return await res.text();
+      }
+
+      function buildOutRows(invRows, genRows){
+        if (!invRows.length || !genRows.length){
+          throw new Error('CSV sin datos suficientes');
+        }
+        const invHead = invRows[0];
+        const invData = invRows.slice(1);
+        const genHead = genRows[0];
+        const genData = genRows.slice(1);
+
+        function idx(head, nameVariants){
+          const norm = s => String(s||'').trim().toUpperCase();
+          const H = head.map(h=>norm(h));
+          for (const v of nameVariants){
+            const i = H.indexOf(norm(v));
+            if (i !== -1) return i;
+          }
+          return -1;
+        }
+
+        const iInvEstado  = idx(invHead, ['ESTADO']);
+        const iInvEquipo  = idx(invHead, ['EQUIPO / ACTIVO','EQUIPO/ACTIVO','EQUIPO ACTIVO','EQUIPO']);
+        const iInvProd    = idx(invHead, ['PRODUCTO']);
+        const iInvDesc    = idx(invHead, ['DESCRIPCION','DESCRIPCIÓN']);
+        const iInvPrueba  = idx(invHead, ['PRUEBA / CALIBRACION','PRUEBA/CALIBRACION','PRUEBA / CALIBRACIÓN','PRUEBA/CALIBRACIÓN']);
+        const iInvTipo    = idx(invHead, ['TIPO EQUIPO']);
+        const iInvArea    = idx(invHead, ['ÁREA A INSPECIONAR','AREA A INSPECIONAR']);
+        const iInvFecha   = idx(invHead, ['FECHA REALIZACIÓN']);
+        const iInvRep     = idx(invHead, ['NO. DE REPORTE / CERTIFICADO']);
+        const iInvEjec    = idx(invHead, ['EJECUCCION']);
+        const iInvEmisor  = idx(invHead, ['EMISOR']);
+        const iInvTec     = idx(invHead, ['TECNICO','TÉCNICO']);
+        const iInvProx    = idx(invHead, ['PROXIMA PRUEBA','PRÓXIMA PRUEBA']);
+        const iInvCont    = idx(invHead, ['CONTADOR']);
+
+        const iGenEquipo  = idx(genHead, ['EQUIPO / ACTIVO','EQUIPO/ACTIVO','EQUIPO ACTIVO','EQUIPO']);
+        const iGenSerie   = idx(genHead, ['SERIAL','SERIE','NUMERO DE SERIE','NÚMERO DE SERIE']);
+        const iGenEdo     = idx(genHead, ['EDO','ESTADO']);
+        const iGenProp    = idx(genHead, ['PROPIEDAD']);
+
+        const mapGen = new Map();
+        for (const r of genData){
+          const eq = normKeyEquipo(r[iGenEquipo]);
+          if (!eq) continue;
+          if (!mapGen.has(eq)) mapGen.set(eq, r);
+        }
+
+        headerOut = [
+          '#',
+          'ESTADO',
+          'EQUIPO / ACTIVO',
+          'SERIAL',
+          'EDO_GENERAL',
+          'PROPIEDAD',
+          'PRODUCTO',
+          'DESCRIPCION',
+          'PRUEBA / CALIBRACION',
+          'TIPO EQUIPO',
+          'ÁREA A INSPECIONAR',
+          'FECHA REALIZACIÓN',
+          'NO. DE REPORTE / CERTIFICADO',
+          'EJECUCCION',
+          'EMISOR',
+          'TECNICO',
+          'PROXIMA PRUEBA',
+          'CONTADOR'
+        ];
+
+        const out = [];
+        let counter = 0;
+        for (const r of invData){
+          const equipo = iInvEquipo >= 0 ? r[iInvEquipo] : '';
+          if (!equipo) continue;
+          counter++;
+          const gen = mapGen.get(normKeyEquipo(equipo));
+          const rowOut = [
+            counter,
+            iInvEstado >= 0 ? r[iInvEstado] : '',
+            equipo,
+            gen && iGenSerie >= 0 ? gen[iGenSerie] : '',
+            gen && iGenEdo   >= 0 ? gen[iGenEdo]   : '',
+            gen && iGenProp  >= 0 ? gen[iGenProp]  : '',
+            iInvProd   >= 0 ? r[iInvProd]   : '',
+            iInvDesc   >= 0 ? r[iInvDesc]   : '',
+            iInvPrueba >= 0 ? r[iInvPrueba] : '',
+            iInvTipo   >= 0 ? r[iInvTipo]   : '',
+            iInvArea   >= 0 ? r[iInvArea]   : '',
+            iInvFecha  >= 0 ? r[iInvFecha]  : '',
+            iInvRep    >= 0 ? r[iInvRep]    : '',
+            iInvEjec   >= 0 ? r[iInvEjec]   : '',
+            iInvEmisor >= 0 ? r[iInvEmisor] : '',
+            iInvTec    >= 0 ? r[iInvTec]    : '',
+            iInvProx   >= 0 ? r[iInvProx]   : '',
+            iInvCont   >= 0 ? r[iInvCont]   : ''
+          ];
+          out.push(rowOut);
+        }
+
+        outRows = out;
+      }
+
+      function renderTable(){
+        tblHead.innerHTML = '';
+        tblBody.innerHTML = '';
+        if (!headerOut.length){ return; }
+        const trh = document.createElement('tr');
+        headerOut.forEach(h=>{
+          const th = document.createElement('th'); th.textContent = h; trh.appendChild(th);
+        });
+        tblHead.appendChild(trh);
+
+        const fe = String(filtroEquipo.value||'').trim().toUpperCase();
+        const fs = String(filtroSerial.value||'').trim().toUpperCase();
+
+        const frag = document.createDocumentFragment();
+        for (const r of outRows){
+          const equipo = String(r[2]||'').toUpperCase();
+          const serial = String(r[3]||'').toUpperCase();
+          if (fe && !equipo.includes(fe)) continue;
+          if (fs && !serial.includes(fs)) continue;
+          const tr = document.createElement('tr');
+          r.forEach(v=>{
+            const td = document.createElement('td'); td.textContent = v == null ? '' : v; tr.appendChild(td);
+          });
+          frag.appendChild(tr);
+        }
+        tblBody.appendChild(frag);
+      }
+
+      function toCSV(rows){
+        const escapeCell = v => {
+          const s = String(v==null ? '' : v);
+          if (/[",\n]/.test(s)) return '"' + s.replace(/"/g,'""') + '"';
+          return s;
+        };
+        const all = [headerOut, ...rows];
+        return all.map(row => row.map(escapeCell).join(',')).join('\n');
+      }
+
+      function downloadCSV(){
+        const csv = toCSV(outRows);
+        const blob = new Blob([csv], { type:'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'invpnd.csv';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      }
+
+      async function reload(){
+        try{
+          statusEl.textContent = 'Cargando inventario.csv e inventario unificado...';
+          document.getElementById('btn-download').disabled = true;
+          const [txtInv, txtGen] = await Promise.all([
+            loadText(INV_CSV),
+            loadText(GEN_INV_CSV)
+          ]);
+          const invRows = parseCSV(txtInv);
+          const genRows = parseCSV(txtGen);
+          buildOutRows(invRows, genRows);
+          renderTable();
+          statusEl.textContent = `Listo. Filas unificadas: ${outRows.length}`;
+          document.getElementById('btn-download').disabled = outRows.length === 0;
+        }catch(e){
+          console.error(e);
+          statusEl.textContent = 'Error: ' + e.message;
+        }
+      }
+
+      document.getElementById('btn-reload').addEventListener('click', reload);
+      document.getElementById('btn-download').addEventListener('click', downloadCSV);
+      filtroEquipo.addEventListener('input', renderTable);
+      filtroSerial.addEventListener('input', renderTable);
+
+      reload();
+    })();
+  </script>
+</body>
+</html>

@@ -2,7 +2,7 @@
 (function(){
   const SRC_BASE = 'docs/REGISTRO DE ACTIVIDAD PCT 2025.csv';
   const SRC = SRC_BASE + '?t=' + Date.now();
-  const INVENT_SRC = 'docs/INVENTARIO GENERAL PCT 2025 UNIFICADO.csv';
+  const INVENT_SRC = 'docs/invpnd.csv';
   const thead = document.getElementById('thead');
   const tbody = document.getElementById('tbody');
   const summary = document.getElementById('summary');
@@ -34,6 +34,8 @@
   let serialVisibleIdx = -1;
   let invDescByEquipo = new Map();
   let invSerialByEquipo = new Map();
+  let invEstadoByEquipo = new Map();
+  let invPropByEquipo = new Map();
   let inventoryOptions = [];
   let inventorySet = new Set();
   let externalOptionsByProvider = new Map();
@@ -54,41 +56,126 @@
 
   // --- Test Orders (PND) generation helpers ---
   const TEST_ORDERS = 'testOrders';
-  const INV_CSV_URL = 'docs/inventario.csv';
-  const GEN_INV_URL = 'docs/INVENTARIO GENERAL PCT 2025 UNIFICADO.csv';
+  const INV_PND_URL = 'docs/invpnd.csv';
   const edoByEquipoKey = new Map(); // EQUIPO normalizado -> 'ON'|'OFF'
   const pruebasByEquipo = new Map(); // EQUIPO normalizado -> ['LT','VT','PT','MT','UTT',...]
+  const pruebasHistByEquipoKey = new Map(); // EQUIPO normalizado -> ['VT','PT',...]
+  let historialLoaded = false;
   function normKey(s){ return String(s||'').trim().toUpperCase().replace(/[^A-Z0-9]/g,''); }
-  function parseCSVGeneric(text){ try{ if (window.Papa){ const res = Papa.parse(text, { delimiter:',', quoteChar:'"', escapeChar:'"', skipEmptyLines:true }); return Array.isArray(res?.data)? res.data : []; } }catch(_){};
+  function parseCSVGeneric(text){ try{ if (window.Papa){ const res = Papa.parse(text, { delimiter:',', quoteChar:'"', escapeChar:'"', skipEmptyLines:true }); return Array.isArray(res?.data)? res.data : []; } }catch(_){/* ignore */}
     const lines = String(text||'').replace(/\r\n?/g,'\n').split('\n');
     return lines.filter(Boolean).map(line=>{ const out=[]; const re=/(?:^|,)(?:"([^"]*(?:""[^"]*)*)"|([^",]*))/g; let m; while((m=re.exec(line))!==null){ out.push(m[1]!==undefined? m[1].replace(/""/g,'"') : (m[2]||'')); } return out; }); }
-  async function loadInventariosParaOrdenes(){ try{
-      const [txtA, txtB] = await Promise.all([
-        fetch(INV_CSV_URL, { cache:'no-store' }).then(r=>r.text()),
-        fetch(GEN_INV_URL, { cache:'no-store' }).then(r=>r.text()).catch(()=>null)
-      ]);
-      const rowsA = parseCSVGeneric(txtA); if (!rowsA.length) return;
-      const headersA = rowsA[0]; const dataA = rowsA.slice(1);
-      const idxEquipoA = headersA.findIndex(h=>/^(EQUIPO\s*\/\s*ACTIVO|EQUIPO\s*ACTIVO|EQUIPO)$/i.test(String(h)));
-      const idxEdoA = headersA.findIndex(h=>/^(EDO|ESTADO)$/i.test(String(h)));
-      const idxPruebaA = headersA.findIndex(h=>/PRUEBA/i.test(String(h)) || /VT\s*\/\s*PT\s*\/\s*MT/i.test(String(h)));
-      for (const r of dataA){ const eq=String(r[idxEquipoA]||'').trim(); if(!eq) continue; const key=normKey(eq);
-        if (idxEdoA>=0){ const v=String(r[idxEdoA]||'').trim().toUpperCase(); if (v && !edoByEquipoKey.has(key)) edoByEquipoKey.set(key, v); }
-        if (idxPruebaA>=0){ const s=String(r[idxPruebaA]||'').toUpperCase(); if (s){ const arr=s.split(/[,+/;]|\r?\n/).map(x=>x.trim()).filter(Boolean);
-            const canon=new Set(arr.map(x=>{ const t=x.replace(/\./g,''); if(/\bVT\b|VISUAL/.test(t))return 'VT'; if(/\bPT\b|PENETRANT/.test(t))return 'PT'; if(/\bMT\b|MAGNETIC/.test(t))return 'MT'; if(/\bUTT\b|ULTRASON/.test(t))return 'UTT'; if(/\bLT\b|LIQUID/.test(t))return 'LT'; return t; }));
-            if (!pruebasByEquipo.has(key)) pruebasByEquipo.set(key, Array.from(canon)); }} }
-      if (txtB){ const rowsB=parseCSVGeneric(txtB); if (rowsB.length){ const headersB=rowsB[0]; const dataB=rowsB.slice(1); const idxEquipoB=headersB.findIndex(h=>/^(EQUIPO\s*\/\s*ACTIVO|EQUIPO\s*ACTIVO|EQUIPO)$/i.test(String(h))); const idxEdoB=headersB.findIndex(h=>/^(EDO|ESTADO)$/i.test(String(h))); for(const r of dataB){ const eq=String(r[idxEquipoB]||'').trim(); if(!eq) continue; const key=normKey(eq); if (!edoByEquipoKey.has(key) && idxEdoB>=0){ const v=String(r[idxEdoB]||'').trim().toUpperCase(); if (v) edoByEquipoKey.set(key, v); } } } }
-    }catch(e){ console.warn('[actividad] loadInventariosParaOrdenes error', e); }}
+
+  function canonPruebasLista(arr){
+    const canon = new Set();
+    (arr||[]).forEach(raw=>{
+      const t = String(raw||'').toUpperCase().replace(/\./g,'');
+      if(/\bVT\b|VISUAL/.test(t)) { canon.add('VT'); return; }
+      if(/\bPT\b|PENETRANT/.test(t)) { canon.add('PT'); return; }
+      if(/\bMT\b|MAGNETIC/.test(t)) { canon.add('MT'); return; }
+      if(/\bUTT\b|ULTRASON/.test(t)) { canon.add('UTT'); return; }
+      if(/\bLT\b|LIQUID/.test(t)) { canon.add('LT'); return; }
+      const clean = t.trim();
+      if (clean) canon.add(clean);
+    });
+    return Array.from(canon);
+  }
+
+  async function loadPruebasHistorial(){
+    if (historialLoaded) return;
+    if (!firebaseReady || !window.db) return;
+    try{
+      const snap = await window.db.collection('pruebas').orderBy('createdAt','desc').limit(2000).get();
+      pruebasHistByEquipoKey.clear();
+      snap.docs.forEach(doc=>{
+        const d = doc.data()||{};
+        const headersP = Array.isArray(d.headers)? d.headers : [];
+        const dataP = d.data || {};
+        if (!headersP.length) return;
+        const normH = headersP.map(h=>String(h||'').toUpperCase().replace(/\s*\/\s*/g,'/'));
+        const idxEquipo = normH.findIndex(h=>h==='EQUIPO/ACTIVO' || h==='EQUIPO ACTIVO' || h==='EQUIPO');
+        if (idxEquipo<0) return;
+        const equipoHeader = headersP[idxEquipo];
+        const equipoVal = String(dataP[equipoHeader]||'').trim();
+        if (!equipoVal) return;
+        const key = normKey(equipoVal);
+        const pruebaIdx = normH.findIndex(h=> h.includes('PRUEBA') || h.includes('TÉCNICA') || h.includes('TECNICA'));
+        if (pruebaIdx<0) return;
+        const pruebaHeader = headersP[pruebaIdx];
+        const raw = String(dataP[pruebaHeader]||'').toUpperCase();
+        if (!raw) return;
+        const parts = raw.split(/[,+/;]|\r?\n/).map(x=>x.trim()).filter(Boolean);
+        const canon = canonPruebasLista(parts);
+        if (!canon.length) return;
+        const prev = pruebasHistByEquipoKey.get(key) || [];
+        const merged = canonPruebasLista(prev.concat(canon));
+        pruebasHistByEquipoKey.set(key, merged);
+      });
+      historialLoaded = true;
+      console.log('[actividad] Historial de pruebas cargado para', pruebasHistByEquipoKey.size, 'equipos');
+    }catch(e){ console.warn('[actividad] loadPruebasHistorial error', e); }
+  }
+
+  function inferPruebasDesdeHistorial(eq){
+    const arr = pruebasHistByEquipoKey.get(normKey(eq)) || [];
+    return arr.length ? arr : null;
+  }
+
+  async function loadInventariosParaOrdenes(){
+    try{
+      const txt = await fetch(INV_PND_URL, { cache:'no-store' }).then(r=>r.text());
+      const rows = parseCSVGeneric(txt);
+      if (!rows.length) return;
+      const headersInv = rows[0];
+      const dataInv = rows.slice(1);
+      const idxEquipo = headersInv.findIndex(h=>/^(EQUIPO\s*\/\s*ACTIVO|EQUIPO\s*ACTIVO|EQUIPO)$/i.test(String(h)));
+      const idxEdo = (()=>{
+        const norm = (s)=>String(s||'').trim().toUpperCase();
+        const H = headersInv.map(h=>norm(h));
+        let i = H.indexOf('EDO_GENERAL'); if (i>=0) return i;
+        i = H.indexOf('EDO'); if (i>=0) return i;
+        i = H.indexOf('ESTADO'); return i;
+      })();
+      const idxPrueba = headersInv.findIndex(h=>/PRUEBA/i.test(String(h)) || /VT\s*\/\s*PT\s*\/\s*MT/i.test(String(h)));
+
+      for (const r of dataInv){
+        const eq = String(r[idxEquipo]||'').trim();
+        if (!eq) continue;
+        const key = normKey(eq);
+        if (idxEdo>=0){
+          const v = String(r[idxEdo]||'').trim().toUpperCase();
+          if (v && !edoByEquipoKey.has(key)) edoByEquipoKey.set(key, v);
+        }
+        if (idxPrueba>=0){
+          const s = String(r[idxPrueba]||'').toUpperCase();
+          if (s){
+            const arr = s.split(/[,+/;]|\r?\n/).map(x=>x.trim()).filter(Boolean);
+            const canon = new Set(arr.map(x=>{
+              const t=x.replace(/\./g,'');
+              if(/\bVT\b|VISUAL/.test(t))return 'VT';
+              if(/\bPT\b|PENETRANT/.test(t))return 'PT';
+              if(/\bMT\b|MAGNETIC/.test(t))return 'MT';
+              if(/\bUTT\b|ULTRASON/.test(t))return 'UTT';
+              if(/\bLT\b|LIQUID/.test(t))return 'LT';
+              return t;
+            }));
+            if (!pruebasByEquipo.has(key)) pruebasByEquipo.set(key, Array.from(canon));
+          }
+        }
+      }
+    }catch(e){ console.warn('[actividad] loadInventariosParaOrdenes error', e); }
+  }
   function inferPruebasParaEquipo(eq){ const arr = pruebasByEquipo.get(normKey(eq)) || []; return arr.length? arr : ['VT']; }
   function requireOSorOC(os, oc){ return !!(String(os||'').trim() || String(oc||'').trim()); }
   function makeLoteId(payload){ try{ const raw = JSON.stringify(payload); return btoa(unescape(encodeURIComponent(raw))).slice(0,22); }catch{ return String(Date.now()); } }
   async function createTestOrders({ os, oc, cliente, equipos, actividadRef }){
     if (!firebaseReady || !window.db) return null;
+    await loadPruebasHistorial();
     await loadInventariosParaOrdenes();
     const userEmail = window.auth?.currentUser?.email || 'unknown';
     const col = window.db.collection(TEST_ORDERS);
     const loteId = makeLoteId({ os, oc, cliente, equipos, ts: Date.now(), userEmail });
-    for (const eq of equipos){ const key=normKey(eq); const edo = edoByEquipoKey.get(key) || 'ON'; if (edo!=='ON') continue; const pruebasRequeridas = inferPruebasParaEquipo(eq); const serial = invSerialByEquipo?.get?.(eq) || invSerialByEquipo?.get?.(String(eq).toUpperCase()) || '';
+    for (const eq of equipos){ const key=normKey(eq); const edo = edoByEquipoKey.get(key) || 'ON'; if (edo!=='ON') continue; const hist = inferPruebasDesdeHistorial(eq); const pruebasRequeridas = (hist && hist.length) ? hist : inferPruebasParaEquipo(eq); const serial = invSerialByEquipo?.get?.(eq) || invSerialByEquipo?.get?.(String(eq).toUpperCase()) || '';
       try{ await col.add({ os:String(os||''), oc:String(oc||''), cliente:String(cliente||''), equipo:String(eq||''), serial, pruebasRequeridas, actividadRef: actividadRef||'', loteId, edo, status:'pending', createdAt: firebase.firestore.FieldValue.serverTimestamp(), createdBy:userEmail, updatedAt:null }); }
       catch(e){ console.warn('[actividad] createTestOrders add error', e); }
     }
@@ -128,6 +215,76 @@
     if (!firebaseReady || !window.db || !firestoreId) return;
     try { await window.db.collection(COLLECTION_NAME).doc(firestoreId).delete(); console.log('[actividad] Registro eliminado de Firestore:', firestoreId); }
     catch (e) { console.error('[actividad] Error al eliminar de Firestore:', e); }
+  }
+
+  // Sincronización masiva: generar órdenes de prueba desde toda la tabla de actividad
+  async function syncActivitiesToTestOrders(){
+    await waitForFirebase();
+    if (!firebaseReady || !window.db) {
+      console.warn('[actividad] Firebase no disponible, no se puede sincronizar actividades a testOrders');
+      return;
+    }
+    try{
+      // Asegurar inventarios y pruebas históricas cargados (para EDO y técnicas)
+      try{ await loadPruebasHistorial(); }catch(e){ console.warn('[actividad] syncActivitiesToTestOrders -> loadPruebasHistorial', e); }
+      try{ await loadInventariosParaOrdenes(); }catch(e){ console.warn('[actividad] syncActivitiesToTestOrders -> loadInventariosParaOrdenes', e); }
+
+      const i = (vars)=> headerIndex(vars);
+      const iEQUIPO = i(['EQUIPO / ACTIVO','EQUIPO/ACTIVO','EQUIPO ACTIVO','EQUIPO']);
+      const iCLIENTE = i(['CLIENTE']);
+      const iOS = i(['ORDEN DE SERVICIO','O. S.','O.S.']);
+      const iOC = i(['ORDEN DE COMPRA','ORDEN COMPRA','NO. ORDEN DE COMPRA','NO ORDEN DE COMPRA','NÚMERO DE ORDEN','NUMERO DE ORDEN','OC']);
+
+      if (iEQUIPO<0){
+        console.warn('[actividad] syncActivitiesToTestOrders: no se encontró columna de EQUIPO');
+        return;
+      }
+
+      // Agrupar por lote lógico OS/OC + cliente (si OS/OC vienen vacíos, igual se agrupan solo por cliente)
+      const lotes = new Map();
+      for (const row of rows){
+        if (!row) continue;
+        const equipo = String(row[iEQUIPO]||'').trim();
+        if (!equipo) continue;
+        const os = iOS>=0 ? String(row[iOS]||'').trim() : '';
+        const oc = iOC>=0 ? String(row[iOC]||'').trim() : '';
+        const cliente = iCLIENTE>=0 ? String(row[iCLIENTE]||'').trim() : '';
+
+        const loteKey = `${os}|${oc}|${cliente}`;
+        if (!lotes.has(loteKey)){
+          lotes.set(loteKey, { os, oc, cliente, equipos: new Set() });
+        }
+        lotes.get(loteKey).equipos.add(equipo);
+      }
+
+      if (!lotes.size){
+        console.log('[actividad] syncActivitiesToTestOrders: no se encontraron filas elegibles para generar órdenes');
+        return;
+      }
+
+      let totalOrdenes = 0;
+      for (const [, lote] of lotes.entries()){
+        const equiposArr = Array.from(lote.equipos.values());
+        if (!equiposArr.length) continue;
+        try{
+          const loteId = await createTestOrders({
+            os: lote.os,
+            oc: lote.oc,
+            cliente: lote.cliente,
+            equipos: equiposArr,
+            actividadRef: null
+          });
+          if (loteId){
+            totalOrdenes += equiposArr.length;
+            console.log('[actividad] syncActivitiesToTestOrders -> lote generado', loteId, 'equipos:', equiposArr.length);
+          }
+        }catch(e){ console.warn('[actividad] syncActivitiesToTestOrders -> createTestOrders error', e); }
+      }
+
+      alert(`Sincronización completada. Órdenes generadas para aproximadamente ${totalOrdenes} equipo(s). Revisa listapruebas.html -> Próximas pruebas.`);
+    }catch(e){
+      console.error('[actividad] syncActivitiesToTestOrders error general', e);
+    }
   }
 
   function fmt(n){ return n.toLocaleString('es-MX'); }
@@ -457,7 +614,88 @@
 
   function setToolbarEditing(editing){ if (editing){ saveRowBtn.style.display=''; cancelRowBtn.style.display=''; newRowBtn.style.display='none'; } else { saveRowBtn.style.display='none'; cancelRowBtn.style.display='none'; newRowBtn.style.display=''; saveRowBtn.disabled=false; saveRowBtn.style.opacity='1'; saveRowBtn.style.pointerEvents='auto'; } }
 
-  function makeRowEditable(tr, row, i){ /* original editing logic preserved but omitted for brevity in this migration file */ }
+  function makeRowEditable(tr, row, i){
+    const alreadyEditing = tbody.querySelector('tr[data-editing="true"]');
+    if (alreadyEditing && alreadyEditing !== tr){ alert('Ya hay un registro en edición. Guarda o cancela antes de editar otro.'); return; }
+    if (tr.dataset.editing === 'true') return;
+    tr.dataset.editing = 'true';
+    const cells = Array.from(tr.children);
+    if (cells.length < 3) return;
+    const totalDataCells = cells.length - 2;
+    for (let visualIdx = 0; visualIdx < totalDataCells; visualIdx++){
+      const td = cells[1 + visualIdx];
+      const currentVal = td.textContent || '';
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.value = String(currentVal).trim();
+      input.style.width = '100%';
+      input.style.boxSizing = 'border-box';
+      td.innerHTML = '';
+      td.appendChild(input);
+    }
+    const tdActions = cells[cells.length - 1];
+    tdActions.innerHTML = '';
+    const saveBtn = document.createElement('button');
+    saveBtn.className = 'edit-row-btn';
+    saveBtn.innerHTML = '💾';
+    saveBtn.title = 'Guardar cambios';
+    const cancelBtn = document.createElement('button');
+    cancelBtn.className = 'delete-row-btn';
+    cancelBtn.innerHTML = '✖';
+    cancelBtn.title = 'Cancelar edición';
+    tdActions.appendChild(saveBtn);
+    tdActions.appendChild(cancelBtn);
+
+    cancelBtn.addEventListener('click', ()=>{
+      delete tr.dataset.editing;
+      renderBody(view);
+    });
+
+    saveBtn.addEventListener('click', ()=>{
+      try{
+        const order = visibleCols ? visibleCols.order : headers.map((_,k)=>k);
+        const idxCliente = headerIndex(['CLIENTE']);
+        const idxOS = headerIndex(['ORDEN DE SERVICIO','O. S.','O.S.']);
+        const idxOC = headerIndex(['ORDEN DE COMPRA','ORDEN COMPRA','NO. ORDEN DE COMPRA','NO ORDEN DE COMPRA','NÚMERO DE ORDEN','NUMERO DE ORDEN','OC']);
+        const oldCliente = idxCliente>=0 ? String(row[idxCliente]||'') : '';
+        let newCliente = oldCliente;
+        for (let visualIdx = 0; visualIdx < totalDataCells; visualIdx++){
+          const td = cells[1 + visualIdx];
+          const input = td.querySelector('input');
+          if (!input) continue;
+          const idx = order[visualIdx] ?? visualIdx;
+          if (idx == null || idx < 0) continue;
+          const val = input.value;
+          row[idx] = val;
+          if (idxCliente>=0 && idx === idxCliente){ newCliente = String(val||''); }
+        }
+        rows[i] = row;
+        view[i] = row;
+
+        const loteOS = idxOS>=0 ? String(row[idxOS]||'').trim() : '';
+        const loteOC = idxOC>=0 ? String(row[idxOC]||'').trim() : '';
+
+        if (idxCliente>=0 && oldCliente && newCliente && newCliente !== oldCliente && (loteOS || loteOC)){
+          for (let k=0; k<rows.length; k++){
+            const r = rows[k];
+            if (!r) continue;
+            const rOS = idxOS>=0 ? String(r[idxOS]||'').trim() : '';
+            const rOC = idxOC>=0 ? String(r[idxOC]||'').trim() : '';
+            if ((loteOS && rOS === loteOS) || (loteOC && rOC === loteOC)){
+              r[idxCliente] = newCliente;
+            }
+          }
+        }
+        try{
+          const keyLS = 'actividad:newRows';
+          const cleanRows = rows.map(r => { if (r && r._firestoreId){ const { _firestoreId, ...rest } = r; return rest; } return r; });
+          localStorage.setItem(keyLS, JSON.stringify(cleanRows));
+        }catch(e){ console.error('[actividad] Error al actualizar localStorage en edición:', e); }
+      }catch(e){ console.error('[actividad] Error al guardar edición:', e); }
+      delete tr.dataset.editing;
+      applyFilter();
+    });
+  }
 
   async function load(){
     await waitForFirebase();
@@ -488,11 +726,27 @@
         // Priorizar SERIAL sobre # para evitar tomar la columna del índice
         let idxSerial = invData[0]?.findIndex(h=>/^SERIAL$/i.test(normalizeHeader(h).toUpperCase())) ?? -1;
         if (idxSerial < 0) { idxSerial = invData[0]?.findIndex(h=>/^#$/i.test(normalizeHeader(h).toUpperCase())) ?? -1; }
-        invDescByEquipo.clear(); invSerialByEquipo.clear(); inventoryOptions = [];
+        const normH = invData[0]?.map(h=>normalizeHeader(h).toUpperCase()) || [];
+        const idxEdo = (()=>{
+          let i = normH.indexOf('EDO_GENERAL'); if (i>=0) return i;
+          i = normH.indexOf('EDO'); if (i>=0) return i;
+          i = normH.indexOf('ESTADO'); return i;
+        })();
+        const idxProp = normH.indexOf('PROPIEDAD');
+
+        invDescByEquipo.clear(); invSerialByEquipo.clear(); invEstadoByEquipo.clear(); invPropByEquipo.clear(); inventoryOptions = [];
         for (let i=1;i<invData.length;i++){
-          const r = invData[i]; const eq = String(r[idxEquipo]||'').trim(); if (!eq) continue; const ds = idxDesc>=0 ? r[idxDesc] : ''; const sr = idxSerial>=0 ? r[idxSerial] : '';
-          invDescByEquipo.set(eq, ds); invDescByEquipo.set(eq.toUpperCase(), ds);
-          invSerialByEquipo.set(eq, sr); invSerialByEquipo.set(eq.toUpperCase(), sr);
+          const r = invData[i]; const eq = String(r[idxEquipo]||'').trim(); if (!eq) continue;
+          const keyU = eq.toUpperCase();
+          const ds = idxDesc>=0 ? r[idxDesc] : '';
+          const sr = idxSerial>=0 ? r[idxSerial] : '';
+          const edo = idxEdo>=0 ? r[idxEdo] : '';
+          const prop = idxProp>=0 ? r[idxProp] : '';
+
+          invDescByEquipo.set(eq, ds); invDescByEquipo.set(keyU, ds);
+          invSerialByEquipo.set(eq, sr); invSerialByEquipo.set(keyU, sr);
+          invEstadoByEquipo.set(eq, edo); invEstadoByEquipo.set(keyU, edo);
+          invPropByEquipo.set(eq, prop); invPropByEquipo.set(keyU, prop);
           inventoryOptions.push(eq);
           inventorySet.add(eq.toUpperCase());
         }
@@ -521,65 +775,6 @@
     const eqClear = document.getElementById('doc-equipo-clear');
     const eqCounter = document.getElementById('doc-equipo-counter');
     const eqList = document.getElementById('doc-multi-list');
-    const inpCliente = document.getElementById('doc-cliente');
-    const inpArea = document.getElementById('doc-area');
-    const inpUbic = document.getElementById('doc-ubic');
-    const inpOS = document.getElementById('doc-os');
-    const inpOC = document.getElementById('doc-oc');
-    const inpFactura = document.getElementById('doc-factura');
-    const inpEstCot = document.getElementById('doc-estcot');
-    const inpEmbarque = document.getElementById('doc-embarque');
-    const inpInicio = document.getElementById('doc-inicio');
-    const inpTerm = document.getElementById('doc-term');
-    const inpDias = document.getElementById('doc-dias');
-    const inpPrecio = document.getElementById('doc-precio');
-    const outSerial = document.getElementById('doc-serial');
-    const outDesc = document.getElementById('doc-desc');
-
-    ensureDatalist('dl-inventory-equipos', inventoryOptions||[]);
-    function refreshEquipoDatalist(){ if (selTipo && eqInput){ if (selTipo.value==='propio') eqInput.setAttribute('list','dl-inventory-equipos'); else eqInput.removeAttribute('list'); } }
-    if (selTipo){ selTipo.addEventListener('change', ()=>{ if (provInput) provInput.style.display = selTipo.value==='terceros' ? '' : 'none'; refreshEquipoDatalist(); updateDocSaveEnabled(); }); }
-    refreshEquipoDatalist();
-
-    eqInput.addEventListener('blur', ()=>{ const v=String(eqInput.value||'').trim(); if (v){ multiSelectEquipos.add(v); renderSelectedList(); updateDocSaveEnabled(); } });
-    eqAdd.addEventListener('blur', ()=>{ const v=String(eqAdd.value||'').trim(); if (v){ multiSelectEquipos.add(v); eqAdd.value=''; renderSelectedList(); updateDocSaveEnabled(); } });
-    eqClear.addEventListener('click', ()=>{ multiSelectEquipos.clear(); eqInput.value=''; renderSelectedList(); updateDocSaveEnabled(); });
-
-    function refreshSerialDescFromSelection(){
-      const arr = Array.from(multiSelectEquipos.values());
-      if (arr.length === 0){
-        // Fallback a lo que esté en el input principal
-        const keyRaw = String(eqInput.value||'').trim();
-        const upper = keyRaw.toUpperCase();
-        const descInv = invDescByEquipo.get(keyRaw) || invDescByEquipo.get(upper) || '';
-        const serialInv = invSerialByEquipo.get(keyRaw) || invSerialByEquipo.get(upper) || '';
-        outDesc.textContent = descInv || '—';
-        outSerial.textContent = serialInv || '—';
-        return;
-      }
-      if (arr.length === 1){
-        const keyRaw = String(arr[0]||'');
-        const upper = keyRaw.toUpperCase();
-        const descInv = invDescByEquipo.get(keyRaw) || invDescByEquipo.get(upper) || '';
-        const serialInv = invSerialByEquipo.get(keyRaw) || invSerialByEquipo.get(upper) || '';
-        outDesc.textContent = descInv || '—';
-        outSerial.textContent = serialInv || '—';
-        return;
-      }
-      // Múltiples: listar en multilínea
-      const seriales = arr.map(eq => {
-        const u = String(eq||'').toUpperCase();
-        const s = invSerialByEquipo.get(eq) || invSerialByEquipo.get(u) || '—';
-        return `${eq} — ${s}`;
-      });
-      const descripciones = arr.map(eq => {
-        const u = String(eq||'').toUpperCase();
-        const d = invDescByEquipo.get(eq) || invDescByEquipo.get(u) || '—';
-        return `${eq} — ${d}`;
-      });
-      outSerial.textContent = seriales.join('\n');
-      outDesc.textContent = descripciones.join('\n');
-    }
     function autofillFromEquipo(){ refreshSerialDescFromSelection(); }
     eqInput.addEventListener('input', ()=>{ autofillFromEquipo(); updateDocSaveEnabled(); });
     eqInput.addEventListener('change', ()=>{ autofillFromEquipo(); updateDocSaveEnabled(); });
@@ -589,34 +784,16 @@
 
     function recomputeDias(){
       const di = parseDMY(inpInicio.value);
-      const dt = parseDMY(inpTerm.value);
       if (!di){ inpDias.value=''; return; }
-      const today = new Date(); today.setHours(0,0,0,0);
-      if (today < di){ const neg = -Math.ceil((di - today)/(1000*60*60*24)); inpDias.value = String(neg); return; }
-      const upto = dt && dt > di ? (today <= dt ? today : dt) : today;
-      const diff = Math.ceil((upto - di)/(1000*60*60*24)) + 1;
-      inpDias.value = String(diff);
+      // Nuevo criterio: al registrar actividad solo se contabiliza 1 día (ingreso diario)
+      inpDias.value = '1';
     }
-    function recomputeDevolucion(){ const dt = parseDMY(inpTerm.value); if (!dt){ outDevol.textContent='—'; return; } const d = new Date(dt); d.setDate(d.getDate()+1); outDevol.textContent = formatDMY(d); }
+    function recomputeDevolucion(){ if (!inpTerm){ outDevol.textContent='—'; return; } const dt = parseDMY(inpTerm.value); if (!dt){ outDevol.textContent='—'; return; } const d = new Date(dt); d.setDate(d.getDate()+1); outDevol.textContent = formatDMY(d); }
     function recomputeFinParcialesContinuacion(){
-      const di = parseDMY(inpInicio.value);
-      const dt = parseDMY(inpTerm.value);
-      if (!di){ outFinP.textContent=''; outCont.textContent=''; return; }
-      const today = new Date(); today.setHours(0,0,0,0);
-      const endEff = (dt && dt>di) ? dt : today;
-      if (endEff <= di){ outFinP.textContent=''; outCont.textContent=''; return; }
-      const fins=[]; const conts=[];
-      // Primer corte del 25 a partir del inicio
-      let c = cutoff25(di);
-      while (c < endEff){
-        fins.push(formatDMY(c));
-        const cont = continuation27From(c);
-        conts.push(formatDMY(cont));
-        // siguiente 25 del mes siguiente
-        c = cutoff25(new Date(c.getFullYear(), c.getMonth()+1, 25));
-      }
-      outFinP.textContent=fins.join('\n');
-      outCont.textContent=conts.join('\n');
+      // Al crear el registro ya no se generan fin parcial ni continuaciones;
+      // se dejan en blanco para que se administren posteriormente.
+      outFinP.textContent='';
+      outCont.textContent='';
     }
     function recomputeIngresoRenta(){ const d = parseFloat(inpDias.value)||0; const p = parseFloat(inpPrecio.value)||0; const total = d*p; const tipo = selTipo.value; outIngreso.textContent = (tipo==='propio' && total>0) ? ('$'+ total.toLocaleString('es-MX',{minimumFractionDigits:2, maximumFractionDigits:2})) : '—'; outRenta.textContent = (tipo==='terceros' && total>0) ? ('$'+ total.toLocaleString('es-MX',{minimumFractionDigits:2, maximumFractionDigits:2})) : '—'; }
 
@@ -624,7 +801,7 @@
     if (inpDias) inpDias.addEventListener('input', ()=>{ recomputeIngresoRenta(); updateDocSaveEnabled(); });
     if (inpPrecio) inpPrecio.addEventListener('input', ()=>{ recomputeIngresoRenta(); updateDocSaveEnabled(); });
 
-    function updateDocSaveEnabled(){ const eqOK = !!(eqInput.value||'').trim() || multiSelectEquipos.size>0; const di = parseDMY(inpInicio.value); const dt = parseDMY(inpTerm.value); const provOk = selTipo.value==='propio' || !!(provInput.value||'').trim(); const ok = eqOK && !!di && (!dt || dt>=di) && provOk; saveRowBtn.disabled = !ok; saveRowBtn.style.opacity = ok ? '1' : '.6'; saveRowBtn.style.pointerEvents = ok ? 'auto' : 'none'; }
+    function updateDocSaveEnabled(){ const eqOK = !!(eqInput.value||'').trim() || multiSelectEquipos.size>0; const di = parseDMY(inpInicio.value); const dt = inpTerm ? parseDMY(inpTerm.value) : null; const provOk = selTipo.value==='propio' || !!(provInput.value||'').trim(); const ok = eqOK && !!di && (!dt || dt>=di) && provOk; saveRowBtn.disabled = !ok; saveRowBtn.style.opacity = ok ? '1' : '.6'; saveRowBtn.style.pointerEvents = ok ? 'auto' : 'none'; }
 
     function renderSelectedList(){ const arr = Array.from(multiSelectEquipos.values()); eqList.innerHTML = ''; if (!arr.length){ eqList.style.display='none'; eqCounter.textContent=''; refreshSerialDescFromSelection(); return; } eqList.style.display='flex'; arr.forEach(val=>{ const chip = document.createElement('div'); chip.style.display='inline-flex'; chip.style.gap='6px'; chip.style.alignItems='center'; chip.style.padding='2px 8px'; chip.style.border='1px solid #e5e7eb'; chip.style.borderRadius='999px'; const t=document.createElement('span'); t.textContent=val; const x=document.createElement('button'); x.textContent='×'; x.onclick=()=>{ multiSelectEquipos.delete(val); renderSelectedList(); updateDocSaveEnabled(); }; chip.appendChild(t); chip.appendChild(x); eqList.appendChild(chip); }); eqCounter.textContent = `(${arr.length} seleccionado${arr.length===1?'':'s'})`; refreshSerialDescFromSelection(); }
 
@@ -644,56 +821,52 @@
       const i = (vars)=> headerIndex(vars);
       const iPROPIEDAD=i(['PROPIEDAD']); const iSERIAL=i(['SERIAL','#']); const iEQUIPO=i(['EQUIPO / ACTIVO','EQUIPO/ACTIVO','EQUIPO ACTIVO','EQUIPO']);
       const iDESC=i(['DESCRIPCION','DESCRIPCIÓN']); const iCLIENTE=i(['CLIENTE']); const iAREA=i(['AREA DEL CLIENTE','ÁREA DEL CLIENTE']);
+      const iEDO=i(['EDO_GENERAL','EDO','ESTADO']);
+      const iCERT=i(['NO. DE REPORTE/CERTIFICADO','NO. DE REPORTE / CERTIFICADO','NO DE REPORTE/CERTIFICADO','NO REPORTE/CERTIFICADO']);
       const iUBIC=i(['UBICACION','UBICACIÓN']); const iFACT=i(['FACTURA']); const iOC=i(['ORDEN DE COMPRA','ORDEN COMPRA','NO. ORDEN DE COMPRA','NO ORDEN DE COMPRA','NÚMERO DE ORDEN','NUMERO DE ORDEN','OC']);
       const iESTCOT=i(['EST-COT','COT / ESTIMACION','COT/ESTIMACION','COT ESTIMACION']); const iOS=i(['ORDEN DE SERVICIO','O. S.','O.S.']);
       const iEMB=i(['FECHA EMBARQUE','FECHA DE EMBARQUE']); const iINI=i(['INICIO DEL SERVICIO']); const iCONT=i(['CONTINUACION DEL SERVICIO','CONTINUACIÓN DEL SERVICIO']);
       const iFINP=i(['FIN PARCIAL DEL SERVICIO']); const iTERM=i(['TERMINACION DEL SERVICIO','TERMINACIÓN DEL SERVICIO']); const iDEV=i(['FECHA DE DEVOLUCION','FECHA DE DEVOLUCIÓN']);
       const iDIAS=i(['DIAS EN SERVICIO','DÍAS EN SERVICIO']); const iPREC=i(['PRECIO']); const iINGR=i(['INGRESO ACUMULADO','INGRESO ACUMULDDO']); const iREN=i(['RENTA ACUMULADA']);
-      const dInicio = parseDMY(inpInicio.value); const dTerm = parseDMY(inpTerm.value);
+      const dInicio = parseDMY(inpInicio.value); const dTerm = inpTerm ? parseDMY(inpTerm.value) : null;
       const today = new Date(); today.setHours(0,0,0,0);
-      const endEff = (dTerm && dTerm>dInicio) ? dTerm : today;
-      const diasTotales = dInicio ? daysInclusive(dInicio, endEff) : '';
-      const precioNum = parseFloat(String(inpPrecio.value||'').replace(/,/g,''));
+      // Nuevo criterio: al crear el registro solo se registra 1 día de servicio (para días en servicio),
+      // pero el PRECIO e ingresos/rentas se asignan exclusivamente en actividadmin.
+      const diasTotales = dInicio ? 1 : '';
+      const precioNum = NaN;
       const newRows = [];
       for (const eq of selected){
         const sr = invSerialByEquipo.get(eq) || invSerialByEquipo.get(String(eq).toUpperCase()) || (outSerial.textContent||'');
         const ds = invDescByEquipo.get(eq) || invDescByEquipo.get(String(eq).toUpperCase()) || (outDesc.textContent||'');
+        const edoVal = (outEdo && outEdo.textContent) ? outEdo.textContent : '';
+        const certVal = (outCert && outCert.textContent) ? outCert.textContent : '';
         const r = [...headers].map(()=> '');
         if (iPROPIEDAD>=0) r[iPROPIEDAD] = baseProp;
         if (iSERIAL>=0) r[iSERIAL] = sr;
         if (iEQUIPO>=0) r[iEQUIPO] = eq;
         if (iDESC>=0) r[iDESC] = ds;
+        if (iEDO>=0) r[iEDO] = edoVal;
         if (iCLIENTE>=0) r[iCLIENTE] = inpCliente.value||'';
         if (iAREA>=0) r[iAREA] = inpArea.value||'';
         if (iUBIC>=0) r[iUBIC] = inpUbic.value||'';
         if (iFACT>=0) r[iFACT] = inpFactura.value||'';
         if (iOC>=0) r[iOC] = inpOC.value||'';
+        if (iCERT>=0) r[iCERT] = certVal;
         if (iESTCOT>=0) r[iESTCOT] = inpEstCot.value||'';
         if (iOS>=0) r[iOS] = loteId || (inpOS.value||'');
         if (iEMB>=0) r[iEMB] = inpEmbarque.value||'';
         if (iINI>=0) r[iINI] = inpInicio.value||'';
-        // fin parcial / continuación calculados mensualmente (25/27) hasta endEff
-        if (iFINP>=0 || iCONT>=0){
-          if (dInicio){
-            const fins=[]; const conts=[];
-            let c = cutoff25(dInicio);
-            while (c < endEff){
-              fins.push(formatDMY(c));
-              const cont = continuation27From(c); conts.push(formatDMY(cont));
-              c = cutoff25(new Date(c.getFullYear(), c.getMonth()+1, 25));
-            }
-            if (iFINP>=0) r[iFINP] = fins.join('\n');
-            if (iCONT>=0) r[iCONT] = conts.join('\n');
-          } else {
-            if (iFINP>=0) r[iFINP] = '';
-            if (iCONT>=0) r[iCONT] = '';
-          }
-        }
-        if (iTERM>=0) r[iTERM] = inpTerm.value||'';
-        if (iDEV>=0 && dTerm){ const dev = new Date(dTerm); dev.setDate(dev.getDate()+1); r[iDEV] = formatDMY(dev); }
+        // Al crear el registro no se generan FIN PARCIAL / CONTINUACIÓN; se dejan vacíos
+        if (iFINP>=0) r[iFINP] = '';
+        if (iCONT>=0) r[iCONT] = '';
+        // Terminación y devolución quedan en blanco hasta que se administren después
+        if (iTERM>=0) r[iTERM] = '';
+        if (iDEV>=0) r[iDEV] = '';
         if (iDIAS>=0) r[iDIAS] = String(diasTotales||'');
-        if (!isNaN(precioNum) && diasTotales){ const monto = diasTotales * precioNum; if (iINGR>=0) r[iINGR] = String(monto); if (iREN>=0) r[iREN] = String(monto); }
-        if (iPREC>=0) r[iPREC] = String(precioNum||'');
+        // PRECIO, INGRESO y RENTA se dejan en blanco para ser administrados en actividadmin
+        if (iINGR>=0) r[iINGR] = '';
+        if (iREN>=0) r[iREN] = '';
+        if (iPREC>=0) r[iPREC] = '';
         newRows.push(r);
       }
       rows = [...newRows, ...rows]; view = rows; buildExternalOptionsBase(); renderHead(); populateClientFilter(); renderBody(view);
@@ -739,10 +912,13 @@
   }
 
   window.openDocEditor = openDocEditor;
+  window.syncActivitiesToTestOrders = syncActivitiesToTestOrders;
   newRowBtn.addEventListener('click', openDocEditor);
   q.addEventListener('input', applyFilter);
   clearQ.addEventListener('click', ()=>{ q.value=''; applyFilter(); q.focus(); });
-  clientFilterEl?.addEventListener('change', ()=>{ collapsedClients.clear(); applyFilter(); });
+  if (clientFilterEl){
+    clientFilterEl.addEventListener('change', ()=>{ collapsedClients.clear(); applyFilter(); });
+  }
 
   if (document.readyState === 'complete') { setTimeout(load, 0); } else { window.addEventListener('load', load); }
 })();

@@ -52,7 +52,7 @@
                   <li><a href="regactividad.html">Historial de registros</a></li>
                 </ul></details></li>
                 <li class="nav-dropdown"><details><summary>Pruebas</summary><ul>
-                  <li><a href="pruebas.html">Pruebas PND (pruebas no destructibles)</a></li>
+                  <li><a href="pruebas.html">PND (pruebas no destructivas)</a></li>
                   <li><a href="stockpruebas.html">PND x equipo</a></li>
                   <li><a href="listapruebas.html">Registro PND</a></li>
                 </ul></details></li>
@@ -135,7 +135,7 @@
         });
       }
     }
-    const INVENTARIO_SRC = 'docs/INVENTARIO GENERAL PCT 2025 UNIFICADO.csv';
+    const INVENTARIO_SRC = 'docs/invpnd.csv';
     function fmt(n){ try { return n.toLocaleString('es-MX'); } catch { return String(n); } }
     function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g, m=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;' }[m])); }
     async function countInventario(){

@@ -51,7 +51,7 @@
           <li><a href="regactividad.html">Historial de registros</a></li>
         </ul></details></li>
         <li class="nav-dropdown"><details><summary>Pruebas</summary><ul>
-          <li><a href="pruebas.html">Pruebas PND (pruebas no destructibles)</a></li>
+          <li><a href="pruebas.html">PND (pruebas no destructivas)</a></li>
           <li><a href="stockpruebas.html">PND x equipo</a></li>
           <li><a href="listapruebas.html">Registro PND</a></li>
         </ul></details></li>
@@ -145,22 +145,26 @@
         <label>Inicio del servicio</label>
         <input id="doc-inicio" type="text" placeholder="dd/mm/yy" class="date-input-masked" style="width:160px; height:32px;">
 
-        <label>Terminación del servicio</label>
-        <input id="doc-term" type="text" placeholder="dd/mm/yy" class="date-input-masked" style="width:160px; height:32px;">
-
         <label>Días en servicio</label>
         <input id="doc-dias" type="number" min="0" placeholder="0" style="width:120px; height:32px; padding:6px 10px; border:1px solid #e5e7eb; border-radius:8px;">
 
         <label>Precio</label>
-        <input id="doc-precio" type="number" min="0" step="0.01" placeholder="0.00" style="width:160px; height:32px; padding:6px 10px; border:1px solid #e5e7eb; border-radius:8px; text-align:right;">
+        <input id="doc-precio" type="number" min="0" step="0.01" placeholder="Asignar en Administración (actividadmin)" readonly style="width:160px; height:32px; padding:6px 10px; border:1px solid #e5e7eb; border-radius:8px; text-align:right; background:#f9fafb;">
 
         <label>Serial (auto)</label>
         <div id="doc-serial" style="color:#6b7280; font-style:italic; white-space:pre-line; max-height:120px; overflow-y:auto;">—</div>
 
+        <label>Estado (auto)</label>
+        <div id="doc-edo" style="color:#6b7280; font-style:italic;">—</div>
+
+        <label>Propiedad (auto)</label>
+        <div id="doc-propiedad" style="color:#6b7280; font-style:italic;">PCT</div>
+
+        <label>No. de reporte / certificado (auto)</label>
+        <div id="doc-cert" style="color:#6b7280; font-style:italic;">—</div>
+
         <label>Descripción (auto)</label>
         <div id="doc-desc" style="color:#6b7280; font-style:italic; white-space:pre-line; max-height:120px; overflow-y:auto;">—</div>
-
-        
       </div>
     </section>
 

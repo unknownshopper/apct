@@ -50,7 +50,23 @@ function updateAuthUI() {
 let headers = [];
 let headerIndices = {};
 const norm = (s)=> String(s||'').trim().toUpperCase().replace(/\s+/g,' ');
-function getHeaderIndex(variants){ for (const v of variants){ const nv=norm(v); for (let i=0;i<headers.length;i++){ if (norm(headers[i])===nv) return i; } } return -1; }
+function normalizeHeader(h){ return String(h||'').normalize('NFD').replace(/[\u0000-\u001F]/g,'').replace(/\s+/g,' ').trim(); }
+function getHeaderIndex(variants){ const hdrs = headers.map(h=>normalizeHeader(h).toUpperCase()); for (const v of variants){ const idx = hdrs.indexOf(normalizeHeader(v).toUpperCase()); if (idx>=0) return idx; } return -1; }
+
+function normalizeLegacyClientsInRows(list){
+  try{
+    const idx = headerIndices.CLIENTE ?? getHeaderIndex(['CLIENTE']);
+    if (idx == null || idx < 0) return;
+    list.forEach(r => {
+      if (!r) return;
+      const raw = String(r[idx]||'').trim().toLowerCase();
+      if (!raw) return;
+      if (raw === 'jajaja') r[idx] = 'Cliente 1';
+      else if (raw === 'qqq') r[idx] = 'Cliente 2';
+      else if (raw === 'www') r[idx] = 'Cliente 3';
+    });
+  }catch(e){ console.warn('[regactividad] normalizeLegacyClientsInRows', e); }
+}
 
 async function loadHeaders(){ try{ const resp = await fetch('docs/REGISTRO DE ACTIVIDAD PCT 2025.csv'); const text = await resp.text(); const lines = text.split('\n'); for (let i=0;i<Math.min(20,lines.length);i++){ const cells = lines[i].split(','); if (cells.some(c=>/propiedad|serial|equipo|cliente/i.test(c))){ headers = cells.map(c=>c.trim()); headerIndices = { PROPIEDAD:getHeaderIndex(['PROPIEDAD']), SERIAL:getHeaderIndex(['SERIAL','#']), EQUIPO:getHeaderIndex(['EQUIPO / ACTIVO','EQUIPO/ACTIVO','EQUIPO ACTIVO','EQUIPO']), DESCRIPCION:getHeaderIndex(['DESCRIPCION','DESCRIPCIÓN']), CLIENTE:getHeaderIndex(['CLIENTE']), AREA:getHeaderIndex(['AREA DEL CLIENTE','ÁREA DEL CLIENTE']), UBICACION:getHeaderIndex(['UBICACION','UBICACIÓN']), FACTURA:getHeaderIndex(['FACTURA']), EMBARQUE:getHeaderIndex(['FECHA EMBARQUE','FECHA DE EMBARQUE']), INICIO:getHeaderIndex(['INICIO DEL SERVICIO']), TERMINACION:getHeaderIndex(['TERMINACION DEL SERVICIO','TERMINACIÓN DEL SERVICIO']), DEVOLUCION:getHeaderIndex(['FECHA DE DEVOLUCION','FECHA DE DEVOLUCIÓN']), DIAS:getHeaderIndex(['DIAS EN SERVICIO','DÍAS EN SERVICIO']), PRECIO:getHeaderIndex(['PRECIO']), INGRESO:getHeaderIndex(['INGRESO ACUMULADO','INGRESO ACUMULDDO']), RENTA:getHeaderIndex(['RENTA ACUMULADA']) }; break; } } }catch(e){ console.error('[regactividad] headers:',e);} }
 
@@ -75,6 +91,9 @@ async function loadHistory() {
             _timestamp: data.timestamp
           };
         });
+
+        // Normalizar nombres de cliente heredados
+        normalizeLegacyClientsInRows(rows);
         
         console.log(`[regactividad] Cargados ${rows.length} registros desde Firestore`);
         
@@ -96,12 +115,14 @@ async function loadHistory() {
         // Fallback a localStorage
         const stored = localStorage.getItem('actividad:newRows');
         rows = stored ? JSON.parse(stored) : [];
+        if (Array.isArray(rows) && rows.length){ normalizeLegacyClientsInRows(rows); }
         console.log('[regactividad] Usando datos de localStorage (fallback)');
       }
     } else {
       // Sin Firebase, usar localStorage
       const stored = localStorage.getItem('actividad:newRows');
       rows = stored ? JSON.parse(stored) : [];
+      if (Array.isArray(rows) && rows.length){ normalizeLegacyClientsInRows(rows); }
       console.log('[regactividad] Firebase no disponible, usando localStorage');
     }
     
@@ -173,68 +194,116 @@ async function loadHistory() {
 function renderTable(rows){ 
   const tbody=document.getElementById('historyTableBody'); 
   tbody.innerHTML=''; 
-  rows.forEach((row,idx)=>{ 
-    const tr=document.createElement('tr'); 
-    const tdF=document.createElement('td'); 
-    tdF.textContent=new Date().toLocaleDateString('es-MX'); 
-    tr.appendChild(tdF); 
-    const tdT=document.createElement('td'); 
-    const prop=row[headerIndices.PROPIEDAD]||''; 
-    const tipo=prop==='PCT'?'PROPIO':'TERCEROS'; 
-    tdT.innerHTML=`<span class="badge ${prop==='PCT'?'badge-interno':'badge-externo'}">${tipo}</span>`; 
-    tr.appendChild(tdT); 
-    const makeTd=(val)=>{const td=document.createElement('td'); td.textContent=val||'-'; return td;}; 
-    tr.appendChild(makeTd(row[headerIndices.SERIAL])); 
-    tr.appendChild(makeTd(row[headerIndices.EQUIPO])); 
-    tr.appendChild(makeTd(row[headerIndices.CLIENTE])); 
-    tr.appendChild(makeTd(row[headerIndices.INICIO])); 
-    tr.appendChild(makeTd(row[headerIndices.TERMINACION])); 
-    const tdDias=makeTd(row[headerIndices.DIAS]||'0'); 
-    tdDias.style.textAlign='center'; 
-    tr.appendChild(tdDias); 
-    const tdPrec=document.createElement('td'); 
-    const prec=parseFloat(row[headerIndices.PRECIO]||0); 
-    tdPrec.textContent='$'+prec.toLocaleString('es-MX',{minimumFractionDigits:2}); 
-    tdPrec.style.textAlign='right'; 
-    tr.appendChild(tdPrec); 
-    const tdEst=document.createElement('td'); 
-    const sTerm=row[headerIndices.TERMINACION]; 
-    let est='Desconocido'; 
-    if (sTerm){ 
-      const [d,m,y]=sTerm.split('/'); 
-      const f=new Date(2000+parseInt(y),parseInt(m)-1,parseInt(d)); 
-      est=f>new Date()?'Activo':'Finalizado'; 
-    } 
-    tdEst.innerHTML=`<span class="badge ${est==='Activo'?'badge-activo':'badge-finalizado'}">${est}</span>`; 
-    tr.appendChild(tdEst); 
-    const tdAcc=document.createElement('td'); 
-    tdAcc.style.whiteSpace='nowrap'; 
-    const bPdf=document.createElement('button'); 
-    bPdf.className='pdf-row-btn'; 
-    bPdf.innerHTML='📄'; 
-    bPdf.title='Generar PDF'; 
-    bPdf.style.marginRight='8px'; 
-    bPdf.onclick=()=>generatePDF(row); 
-    const bEd=document.createElement('button'); 
-    bEd.className='edit-row-btn'; 
-    bEd.innerHTML='✏️'; 
-    bEd.title='Editar'; 
-    bEd.style.marginRight='8px'; 
-    bEd.onclick=()=>editRecord(idx,row); 
-    const bDel=document.createElement('button'); 
-    bDel.className='delete-row-btn'; 
-    bDel.innerHTML='🗑️'; 
-    bDel.title='Eliminar'; 
-    bDel.onclick=()=>deleteRecord(idx,row); 
-    if (!(window.isAdmin && window.isAdmin())) {
-      bEd.style.display = 'none';
-      bDel.style.display = 'none';
-    }
-    tdAcc.append(bPdf,bEd,bDel); 
-    tr.appendChild(tdAcc); 
-    tbody.appendChild(tr); 
-  }); 
-}
+
+  // Agrupar por cliente
+  const groups = new Map();
+  rows.forEach((row,idx)=>{
+    const cliIdx = headerIndices.CLIENTE;
+    const cli = cliIdx!=null && cliIdx>=0 ? String(row[cliIdx]||'').trim() : '';
+    if (!groups.has(cli)) groups.set(cli, []);
+    groups.get(cli).push({ row, idx });
+  });
+
+  const collapsed = (renderTable._collapsedClients = renderTable._collapsedClients || new Set());
+  const clients = Array.from(groups.keys()).sort((a,b)=>a.localeCompare(b||'', 'es', {sensitivity:'base'}));
+
+  // Primera vez: si no hay estado previo, colapsar todos los clientes por defecto
+  if (collapsed.size === 0){
+    clients.forEach(c => collapsed.add(c));
+  }
+
+  clients.forEach(cli=>{
+    const rowsForClient = groups.get(cli) || [];
+    const trCli = document.createElement('tr');
+    const tdCli = document.createElement('td');
+    tdCli.colSpan = 10; // coincide con columnas visibles de la tabla
+    tdCli.style.background = '#f3f4f6';
+    tdCli.style.fontWeight = '700';
+    tdCli.style.padding = '6px 10px';
+    tdCli.style.cursor = 'pointer';
+
+    const isCollapsed = collapsed.has(cli);
+    const caret = document.createElement('span');
+    caret.textContent = isCollapsed ? '►' : '▼';
+    caret.style.marginRight = '8px';
+    const title = document.createElement('span');
+    title.textContent = cli || '— Sin cliente —';
+    tdCli.appendChild(caret);
+    tdCli.appendChild(title);
+
+    tdCli.addEventListener('click', ()=>{
+      if (collapsed.has(cli)) collapsed.delete(cli); else collapsed.add(cli);
+      renderTable(rows);
+    });
+
+    trCli.appendChild(tdCli);
+    tbody.appendChild(trCli);
+
+    if (isCollapsed) return;
+
+    rowsForClient.forEach(({row, idx})=>{
+      const tr=document.createElement('tr'); 
+      const tdF=document.createElement('td'); 
+      tdF.textContent=new Date().toLocaleDateString('es-MX'); 
+      tr.appendChild(tdF); 
+      const tdT=document.createElement('td'); 
+      const prop=row[headerIndices.PROPIEDAD]||''; 
+      const tipo=prop==='PCT'?'PROPIO':'TERCEROS'; 
+      tdT.innerHTML=`<span class="badge ${prop==='PCT'?'badge-interno':'badge-externo'}">${tipo}</span>`; 
+      tr.appendChild(tdT); 
+      const makeTd=(val)=>{const td=document.createElement('td'); td.textContent=val||'-'; return td;}; 
+      tr.appendChild(makeTd(row[headerIndices.SERIAL])); 
+      tr.appendChild(makeTd(row[headerIndices.EQUIPO])); 
+      tr.appendChild(makeTd(row[headerIndices.CLIENTE])); 
+      tr.appendChild(makeTd(row[headerIndices.INICIO])); 
+      tr.appendChild(makeTd(row[headerIndices.TERMINACION])); 
+      const tdDias=makeTd(row[headerIndices.DIAS]||'0'); 
+      tdDias.style.textAlign='center'; 
+      tr.appendChild(tdDias); 
+      const tdPrec=document.createElement('td'); 
+      const prec=parseFloat(row[headerIndices.PRECIO]||0); 
+      tdPrec.textContent='$'+prec.toLocaleString('es-MX',{minimumFractionDigits:2}); 
+      tdPrec.style.textAlign='right'; 
+      tr.appendChild(tdPrec); 
+      const tdEst=document.createElement('td'); 
+      const sTerm=row[headerIndices.TERMINACION]; 
+      let est='Desconocido'; 
+      if (sTerm){ 
+        const [d,m,y]=sTerm.split('/'); 
+        const f=new Date(2000+parseInt(y),parseInt(m)-1,parseInt(d)); 
+        est=f>new Date()?'Activo':'Finalizado'; 
+      } 
+      tdEst.innerHTML=`<span class="badge ${est==='Activo'?'badge-activo':'badge-finalizado'}">${est}</span>`; 
+      tr.appendChild(tdEst); 
+      const tdAcc=document.createElement('td'); 
+      tdAcc.style.whiteSpace='nowrap'; 
+      const bPdf=document.createElement('button'); 
+      bPdf.className='pdf-row-btn'; 
+      bPdf.innerHTML='📄'; 
+      bPdf.title='Generar PDF'; 
+      bPdf.style.marginRight='8px'; 
+      bPdf.onclick=()=>generatePDF(row); 
+      const bEd=document.createElement('button'); 
+      bEd.className='edit-row-btn'; 
+      bEd.innerHTML='✏️'; 
+      bEd.title='Editar'; 
+      bEd.style.marginRight='8px'; 
+      bEd.onclick=()=>editRecord(idx,row); 
+      const bDel=document.createElement('button'); 
+      bDel.className='delete-row-btn'; 
+      bDel.innerHTML='🗑️'; 
+      bDel.title='Eliminar'; 
+      bDel.onclick=()=>deleteRecord(idx,row); 
+      if (!(window.isAdmin && window.isAdmin())) {
+        bEd.style.display = 'none';
+        bDel.style.display = 'none';
+      }
+      tdAcc.append(bPdf,bEd,bDel); 
+      tr.appendChild(tdAcc); 
+      tbody.appendChild(tr); 
+    });
+  });
+} 
 
 async function deleteRecord(index, row) {
   if (!(window.isAdmin && window.isAdmin())) {

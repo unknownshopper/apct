@@ -14,6 +14,7 @@
   let rows = [];
   let view = [];
   let visible = null;
+  const collapsedClients = new Set();
 
   const norm = (s)=> String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\s+/g,' ').trim();
   const fmt = (n)=> n.toLocaleString('es-MX', { minimumFractionDigits:0, maximumFractionDigits:2 });
@@ -27,6 +28,30 @@
   }
 
   function headerIndex(variants){ const H = headers.map(h=>norm(h).toUpperCase()); for(const v of variants){ const i = H.indexOf(norm(v).toUpperCase()); if (i>=0) return i; } return -1; }
+
+  function parseDMY(s){
+    const m = String(s||'').trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
+    if (!m) return null;
+    let d = parseInt(m[1],10), M = parseInt(m[2],10)-1, y = parseInt(m[3],10);
+    if (y < 100) y += 2000;
+    const dt = new Date(y, M, d); dt.setHours(0,0,0,0);
+    return isNaN(dt.getTime()) ? null : dt;
+  }
+
+  function normalizeLegacyClients(list){
+    try{
+      const idx = headerIndex(['CLIENTE']);
+      if (idx < 0) return;
+      list.forEach(r => {
+        if (!r) return;
+        const raw = String(r[idx]||'').trim().toLowerCase();
+        if (!raw) return;
+        if (raw === 'jajaja') r[idx] = 'Cliente 1';
+        else if (raw === 'qqq') r[idx] = 'Cliente 2';
+        else if (raw === 'www') r[idx] = 'Cliente 3';
+      });
+    }catch(e){ console.warn('[actividadmin] normalizeLegacyClients', e); }
+  }
 
   function buildVisible(){
     const wanted = ['CLIENTE','EQUIPO / ACTIVO','EQUIPO/ACTIVO','EQUIPO ACTIVO','INICIO DEL SERVICIO','TERMINACION DEL SERVICIO','TERMINACIÓN DEL SERVICIO','DIAS EN SERVICIO','DÍAS EN SERVICIO','PRECIO','INGRESO ACUMULADO','INGRESO ACUMULDDO','RENTA ACUMULADA','O. S.','ORDEN DE SERVICIO','FACTURA'];
@@ -52,14 +77,32 @@
     const iPrecio = headerIndex(['PRECIO']);
     const iIng = headerIndex(['INGRESO ACUMULADO','INGRESO ACUMULDDO']);
     const iRen = headerIndex(['RENTA ACUMULADA']);
-    const d = iDias>=0 ? num(row[iDias]) : 0;
-    const p = iPrecio>=0 ? num(row[iPrecio]) : 0;
-    if ((iIng<0 && iRen<0) || (num(row[iIng])===0 && num(row[iRen])===0)){
-      const monto = d*p;
-      const prop = iProp>=0 ? String(row[iProp]||'').trim().toUpperCase() : '';
-      if (prop==='PCT' && iIng>=0) row[iIng] = String(monto);
-      if (prop!=='PCT' && iRen>=0) row[iRen] = String(monto);
+    const iIni = headerIndex(['INICIO DEL SERVICIO']);
+    const iTerm = headerIndex(['TERMINACION DEL SERVICIO','TERMINACIÓN DEL SERVICIO']);
+
+    const today = new Date(); today.setHours(0,0,0,0);
+    let d = 0;
+    if (iIni>=0){
+      const di = parseDMY(row[iIni]);
+      const dt = parseDMY(row[iTerm]);
+      if (di){
+        const end = (dt && dt>di) ? dt : today;
+        if (end >= di){
+          d = Math.max(0, Math.ceil((end - di)/(1000*60*60*24)) + 1);
+        }
+      }
     }
+
+    const p = iPrecio>=0 ? num(row[iPrecio]) : 0;
+
+    // Actualizar días en servicio en memoria para mostrar el valor dinámico
+    if (iDias>=0 && d>0) row[iDias] = String(d);
+
+    // Recalcular siempre el importe en vista, sin tocar el CSV original
+    const monto = d*p;
+    const prop = iProp>=0 ? String(row[iProp]||'').trim().toUpperCase() : '';
+    if (prop==='PCT' && iIng>=0) row[iIng] = String(monto);
+    if (prop!=='PCT' && iRen>=0) row[iRen] = String(monto);
   }
 
   function renderHead(){
@@ -70,16 +113,100 @@
 
   function renderBody(data){
     const frag = document.createDocumentFragment();
-    for(let i=0;i<data.length;i++){
-      const r = data[i]; ensureComputedAmounts(r);
-      const tr = document.createElement('tr');
-      visible.order.forEach((idx, j)=>{
-        const td = document.createElement('td');
-        td.textContent = String(r[idx] ?? '');
-        tr.appendChild(td);
-      });
-      frag.appendChild(tr);
+    const iCliente = headerIndex(['CLIENTE']);
+    const iArea = headerIndex(['AREA DEL CLIENTE','ÁREA DEL CLIENTE']);
+    const iPrecio = headerIndex(['PRECIO']);
+
+    // Construir estructura Cliente -> Área -> filas
+    const groups = new Map();
+    data.forEach(r => {
+      const cli = iCliente>=0 ? String(r[iCliente]||'').trim() : '';
+      const area = iArea>=0 ? String(r[iArea]||'').trim() : '';
+      if (!groups.has(cli)) groups.set(cli, new Map());
+      const byArea = groups.get(cli);
+      if (!byArea.has(area)) byArea.set(area, []);
+      byArea.get(area).push(r);
+    });
+
+    const sortedClients = Array.from(groups.keys()).sort((a,b)=>a.localeCompare(b||'', 'es', {sensitivity:'base'}));
+
+    // Si es la primera vez y no hay estado de colapso, colapsar todos por defecto
+    if (collapsedClients.size === 0){
+      sortedClients.forEach(c => collapsedClients.add(c));
     }
+
+    sortedClients.forEach(cli => {
+      const byArea = groups.get(cli);
+      const clientRow = document.createElement('tr');
+      const tdCli = document.createElement('td');
+      tdCli.colSpan = visible.order.length;
+      tdCli.style.background = '#f3f4f6';
+      tdCli.style.fontWeight = '700';
+      tdCli.style.padding = '6px 10px';
+      tdCli.style.cursor = 'pointer';
+
+      const isCollapsed = collapsedClients.has(cli);
+      const caret = document.createElement('span');
+      caret.textContent = isCollapsed ? '►' : '▼';
+      caret.style.marginRight = '8px';
+      const title = document.createElement('span');
+      title.textContent = cli || '— Sin cliente —';
+      tdCli.appendChild(caret);
+      tdCli.appendChild(title);
+
+      tdCli.addEventListener('click', ()=>{
+        if (collapsedClients.has(cli)) collapsedClients.delete(cli); else collapsedClients.add(cli);
+        renderBody(view);
+      });
+
+      clientRow.appendChild(tdCli);
+      frag.appendChild(clientRow);
+
+      if (isCollapsed) return;
+
+      const sortedAreas = Array.from(byArea.keys()).sort((a,b)=>a.localeCompare(b||'', 'es', {sensitivity:'base'}));
+      sortedAreas.forEach(area => {
+        const areaRow = document.createElement('tr');
+        const tdArea = document.createElement('td');
+        tdArea.colSpan = visible.order.length;
+        tdArea.textContent = area || '— Sin área —';
+        tdArea.style.background = '#f9fafb';
+        tdArea.style.fontWeight = '600';
+        tdArea.style.padding = '4px 10px';
+        areaRow.appendChild(tdArea);
+        frag.appendChild(areaRow);
+
+        const rowsForArea = byArea.get(area) || [];
+        rowsForArea.forEach(r => {
+          ensureComputedAmounts(r);
+          const tr = document.createElement('tr');
+          visible.order.forEach((idx, j)=>{
+            const td = document.createElement('td');
+            const label = visible.labels[j] || '';
+            const isPrecioCol = idx === iPrecio || norm(label).toUpperCase()==='PRECIO';
+            if (isPrecioCol){
+              const inp = document.createElement('input');
+              inp.type = 'number';
+              inp.step = '0.01';
+              inp.style.width = '100%';
+              inp.style.boxSizing = 'border-box';
+              inp.value = String(r[idx] ?? '');
+              inp.addEventListener('change', ()=>{
+                const v = parseFloat(inp.value.replace(/,/g,''));
+                r[idx] = isNaN(v) ? '' : String(v);
+                ensureComputedAmounts(r);
+                renderBody(view);
+              });
+              td.appendChild(inp);
+            } else {
+              td.textContent = String(r[idx] ?? '');
+            }
+            tr.appendChild(td);
+          });
+          frag.appendChild(tr);
+        });
+      });
+    });
     tbody.innerHTML=''; tbody.appendChild(frag);
     count.textContent = `${data.length} registros`;
     updateKpis();
@@ -111,15 +238,34 @@
 
   async function load(){
     try{
-      const resp = await fetch(SRC); const txt = await resp.text();
-      const parsed = Papa.parse(txt, { skipEmptyLines:true });
-      const data = parsed.data || [];
-      // Detect header row
-      let headerRow = 0; for (let i=0;i<Math.min(20,data.length);i++){ if (isLikelyHeaderRow(data[i])){ headerRow = i; break; } }
-      headers = data[headerRow] || [];
-      rows = data.slice(headerRow+1);
-      // Mezclar nuevos locales
-      try{ const extra = JSON.parse(localStorage.getItem('actividad:newRows')||'[]'); if (Array.isArray(extra)&&extra.length){ rows = [...extra, ...rows]; } }catch{}
+      const lsKey = 'actividad:newRows';
+      let extra = [];
+      try{
+        extra = JSON.parse(localStorage.getItem(lsKey) || '[]');
+      }catch{
+        extra = [];
+      }
+
+      if (Array.isArray(extra) && extra.length){
+        // Cuando hay caché en localStorage, usarla como fuente principal.
+        // Las cabeceras se toman del CSV para conservar el mapeo de columnas.
+        const resp = await fetch(SRC); const txt = await resp.text();
+        const parsed = Papa.parse(txt, { skipEmptyLines:true });
+        const data = parsed.data || [];
+        let headerRow = 0; for (let i=0;i<Math.min(20,data.length);i++){ if (isLikelyHeaderRow(data[i])){ headerRow = i; break; } }
+        headers = data[headerRow] || [];
+        rows = extra;
+        normalizeLegacyClients(rows);
+      } else {
+        // Sin caché local, usar únicamente el CSV como respaldo.
+        const resp = await fetch(SRC); const txt = await resp.text();
+        const parsed = Papa.parse(txt, { skipEmptyLines:true });
+        const data = parsed.data || [];
+        let headerRow = 0; for (let i=0;i<Math.min(20,data.length);i++){ if (isLikelyHeaderRow(data[i])){ headerRow = i; break; } }
+        headers = data[headerRow] || [];
+        rows = data.slice(headerRow+1);
+        normalizeLegacyClients(rows);
+      }
       buildVisible();
       view = rows; renderHead(); renderBody(view);
     }catch(e){ console.error('[actividadmin] Error al cargar datos', e); }

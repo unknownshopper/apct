@@ -29,6 +29,11 @@
       table.inventory th, table.inventory td { padding: 6px 8px; border-bottom: 1px solid #e5e7eb; font-size: 12px; text-align: left; }
       table.inventory th { background: #f9fafb; position: sticky; top: 0; z-index: 1; }
       #search { border: 1px solid #e5e7eb; border-radius: 8px; padding: 8px 10px; }
+      .btn-edit, .btn-delete { font-size:11px; padding:2px 6px; border-radius:4px; border:1px solid transparent; margin-right:4px; cursor:pointer; }
+      .btn-edit { background:#e5f3ff; border-color:#3b82f6; color:#1d4ed8; }
+      .btn-edit:hover { background:#dbeafe; }
+      .btn-delete { background:#fee2e2; border-color:#ef4444; color:#b91c1c; }
+      .btn-delete:hover { background:#fecaca; }
     </style>
   </head>
   <body>
@@ -42,8 +47,8 @@
             <li><a href="actividad.html">Registro de actividad</a></li>
             <li><a href="regactividad.html">Historial de registros</a></li>
           </ul></details></li>
-          <li class="nav-dropdown"><details open><summary>Pruebas</summary><ul>
-            <li><a href="pruebas.html">Pruebas PND (pruebas no destructibles)</a></li>
+          <li class="nav-dropdown"><details><summary>Pruebas</summary><ul>
+            <li><a href="pruebas.html">PND (pruebas no destructivas)</a></li>
             <li><a href="stockpruebas.html">PND x equipo</a></li>
             <li><a class="active" href="listapruebas.html">Registro PND</a></li>
           </ul></details></li>
@@ -61,11 +66,35 @@
 
     <main class="wide">
       <h1 style="margin-bottom: 1rem;">Registro PND</h1>
+
+      <h2 style="font-size:14px; margin:0 0 .25rem; color:#374151;">Próximas pruebas</h2>
+      <div class="toolbar" style="margin-bottom:.5rem;">
+        <div class="group">
+          <span class="toolbar-count" id="upcoming-count">0 órdenes</span>
+          <input id="up-f-os" type="text" placeholder="Filtrar OS" />
+          <input id="up-f-oc" type="text" placeholder="Filtrar OC" />
+          <input id="up-f-cli" type="text" placeholder="Filtrar Cliente" />
+          <input id="up-f-eq" type="text" placeholder="Filtrar Equipo" />
+          <select id="up-f-status">
+            <option value="">Todos</option>
+            <option value="pendiente">pendiente</option>
+          </select>
+        </div>
+      </div>
+      <div class="table-responsive" style="margin-bottom:1rem;">
+        <div class="table-scroll">
+          <table id="upcoming-table" class="inventory"></table>
+        </div>
+      </div>
+
+      <h2 style="font-size:14px; margin:0 0 .25rem; color:#374151;">Pruebas realizadas</h2>
       <div class="toolbar">
         <div class="group">
           <a class="btn-primary" href="pruebas.html">Crear Prueba PND</a>
           <input id="search" type="text" placeholder="Buscar..." />
           <button id="btn-clear" type="button">Limpiar</button>
+          <button id="btn-seed-mocks" type="button">Generar 30 mocks</button>
+          <button id="btn-clear-mocks" type="button">Eliminar mocks</button>
         </div>
         <div id="count" class="toolbar-count">0 pruebas</div>
       </div>
@@ -85,10 +114,15 @@
 
     <script>
       (function(){
-        const CSV_URL = 'docs/inventario.csv';
+        const CSV_URL = 'docs/invpnd.csv';
+        const ACT_CSV_URL = 'docs/REGISTRO DE ACTIVIDAD PCT 2025.csv';
         let HEADERS = [];
         let DATA = [];
         let VIEW = [];
+        let UPCOMING_VIEW = [];
+        let UPCOMING_DATA = [];
+        let SORT_KEY = null;
+        let SORT_DIR = 'asc'; // 'asc' | 'desc'
 
         function parseCSV(text){
           const lines = text.replace(/\r\n?/g,'\n').split('\n').filter(l=>l.length);
@@ -103,28 +137,141 @@
           return rows;
         }
 
+        function normalizeHeader(h){
+          return String(h||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\s+/g,' ').trim();
+        }
+
+        function headerIndexByVariantsFrom(headersArr, variants){
+          const normHeaders = headersArr.map(h=> normalizeHeader(h).toUpperCase());
+          for (const v of variants){
+            const idx = normHeaders.indexOf(normalizeHeader(v).toUpperCase());
+            if (idx >= 0) return idx;
+          }
+          return -1;
+        }
+
+        function applySort(){
+          if (!SORT_KEY){ return; }
+          const key = SORT_KEY;
+          const dir = SORT_DIR === 'desc' ? -1 : 1;
+
+          // Detectar si es una columna de fecha
+          const isDateCol = ['FECHA','FECHA DE PRUEBA','FECHA PRUEBA','FECHA REALIZACION','FECHA REALIZACIÓN'].includes(normalizeHeader(key).toUpperCase());
+
+          const parseDate = (v)=>{
+            const s = String(v||'').trim();
+            if (!s) return 0;
+            const d = new Date(s);
+            const t = d.getTime();
+            return isNaN(t) ? 0 : t;
+          };
+
+          VIEW.sort((a,b)=>{
+            const va = a.data ? a.data[key] : '';
+            const vb = b.data ? b.data[key] : '';
+            if (isDateCol){
+              const da = parseDate(va);
+              const db = parseDate(vb);
+              return da === db ? 0 : (da < db ? -dir : dir);
+            }
+            const sa = String(va||'').toUpperCase();
+            const sb = String(vb||'').toUpperCase();
+            if (sa === sb) return 0;
+            return sa < sb ? -dir : dir;
+          });
+        }
+
         function renderTable(){
           const table = document.getElementById('pruebas-table');
           const thead = document.createElement('thead');
           const htr = document.createElement('tr');
+
+          // Columna de acciones al inicio
+          const thActions = document.createElement('th');
+          thActions.textContent = 'Acciones';
+          htr.appendChild(thActions);
+
           for (const h of HEADERS){
-            const th = document.createElement('th'); th.textContent = h; htr.appendChild(th);
+            const th = document.createElement('th');
+            const label = String(h||'').trim();
+            th.textContent = (label === '#') ? 'SERIAL' : label;
+            th.dataset.key = h;
+            th.classList.add('sortable');
+            htr.appendChild(th);
           }
           thead.appendChild(htr);
           const tbody = document.createElement('tbody');
           for (const row of VIEW){
             const tr = document.createElement('tr');
-            for (const h of HEADERS){
+            tr.dataset.id = row.id || '';
+
+            // Celda de acciones
+            const tdActions = document.createElement('td');
+            const btnEdit = document.createElement('button');
+            btnEdit.type = 'button';
+            btnEdit.textContent = 'Editar';
+            btnEdit.className = 'btn-edit';
+            const btnDel = document.createElement('button');
+            btnDel.type = 'button';
+            btnDel.textContent = 'Eliminar';
+            btnDel.className = 'btn-delete';
+            tdActions.appendChild(btnEdit);
+            tdActions.appendChild(btnDel);
+            tr.appendChild(tdActions);
+
+            HEADERS.forEach(h => {
               const td = document.createElement('td');
               td.textContent = (row.data && row.data[h]) ? String(row.data[h]) : '';
               tr.appendChild(td);
-            }
+            });
             tbody.appendChild(tr);
           }
           table.innerHTML = '';
           table.appendChild(thead);
           table.appendChild(tbody);
           document.getElementById('count').textContent = VIEW.length + ' pruebas';
+        }
+
+        function renderUpcoming(){
+          const table = document.getElementById('upcoming-table');
+          const cols = ['Equipo','Pruebas requeridas','OS','OC','Cliente','Edo','Estado'];
+          const thead = document.createElement('thead');
+          const htr = document.createElement('tr');
+          cols.forEach(h=>{ const th = document.createElement('th'); th.textContent=h; htr.appendChild(th); });
+          thead.appendChild(htr);
+          const tbody = document.createElement('tbody');
+          for (const o of UPCOMING_VIEW){
+            const tr = document.createElement('tr');
+            const tEq = document.createElement('td'); tEq.textContent = o.equipo || ''; tr.appendChild(tEq);
+            const tPr = document.createElement('td'); tPr.textContent = (o.pruebasRequeridas||[]).join(', '); tr.appendChild(tPr);
+            const tOs = document.createElement('td'); tOs.textContent = o.os || ''; tr.appendChild(tOs);
+            const tOc = document.createElement('td'); tOc.textContent = o.oc || ''; tr.appendChild(tOc);
+            const tCli = document.createElement('td'); tCli.textContent = o.cliente || ''; tr.appendChild(tCli);
+            const tEdo = document.createElement('td'); tEdo.textContent = o.edo || ''; tr.appendChild(tEdo);
+            const tSt = document.createElement('td'); tSt.textContent = o.status || ''; tr.appendChild(tSt);
+            tbody.appendChild(tr);
+          }
+          table.innerHTML = '';
+          table.appendChild(thead);
+          table.appendChild(tbody);
+          const upCount = document.getElementById('upcoming-count');
+          if (upCount) upCount.textContent = UPCOMING_VIEW.length + ' órdenes';
+        }
+
+        function applyUpcomingFilter(){
+          const f = {
+            os: (document.getElementById('up-f-os')?.value||'').toLowerCase(),
+            oc: (document.getElementById('up-f-oc')?.value||'').toLowerCase(),
+            cli:(document.getElementById('up-f-cli')?.value||'').toLowerCase(),
+            eq: (document.getElementById('up-f-eq')?.value||'').toLowerCase(),
+            status:(document.getElementById('up-f-status')?.value||'').toLowerCase()
+          };
+          const match = (o)=> (!f.os || String(o.os||'').toLowerCase().includes(f.os))
+            && (!f.oc || String(o.oc||'').toLowerCase().includes(f.oc))
+            && (!f.cli|| String(o.cliente||'').toLowerCase().includes(f.cli))
+            && (!f.eq || String(o.equipo||'').toLowerCase().includes(f.eq))
+            && (!f.status || String(o.status||'').toLowerCase() === f.status);
+          UPCOMING_VIEW = UPCOMING_DATA.filter(match);
         }
 
         function applyFilter(){
@@ -141,7 +288,252 @@
           if (!res.ok) throw new Error('No se pudo cargar el CSV');
           const txt = await res.text();
           const rows = parseCSV(txt);
-          HEADERS = rows[0].slice();
+          let headers = rows[0].slice();
+
+          // Normalizar: si existe SERIAL real, eliminar la columna '#'
+          const norm = (h)=> normalizeHeader(h).toUpperCase();
+          const hasSerial = headers.some(h => norm(h) === 'SERIAL');
+          if (hasSerial){
+            headers = headers.filter(h => norm(h) !== '#');
+          }
+
+          // Asegurar que las columnas CONTADOR y ACUMULADO existan y queden al final
+          const normHeaders = headers.map(norm);
+          if (!normHeaders.includes('CONTADOR')){
+            headers.push('CONTADOR');
+          }
+          if (!normHeaders.includes('ACUMULADO')){
+            headers.push('ACUMULADO');
+          }
+          HEADERS = headers;
+        }
+
+        function generateMockPruebas(headers, count){
+          const clientes = ['CLIENTE A','CLIENTE B','CLIENTE C','CLIENTE D'];
+          const tiposPrueba = ['VT','PT','MT','UTT','LT'];
+          const estados = ['PROGRAMADA','EN PROCESO','FINALIZADA'];
+          const baseDate = new Date();
+
+          function setField(rowData, variants, value){
+            const idx = headerIndexByVariantsFrom(headers, variants);
+            if (idx >= 0){
+              const key = headers[idx];
+              rowData[key] = value;
+            }
+          }
+
+          const mocks = [];
+          for (let i=1;i<=count;i++){
+            const rowData = {};
+            const d = new Date(baseDate.getTime());
+            d.setDate(d.getDate() - i);
+            const pad = (n)=>String(n).padStart(2,'0');
+            const fechaStr = `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+
+            setField(rowData, ['EQUIPO / ACTIVO','EQUIPO/ACTIVO','EQUIPO ACTIVO','EQUIPO'], `EQ-${pad(i)}`);
+            setField(rowData, ['SERIAL','#'], `SN-${1000+i}`);
+            setField(rowData, ['CLIENTE'], clientes[(i-1)%clientes.length]);
+            setField(rowData, ['FECHA','FECHA PRUEBA','FECHA DE PRUEBA'], fechaStr);
+            setField(rowData, ['PRUEBA / CALIBRACION','PRUEBA/CALIBRACION','PRUEBA','TIPO DE PRUEBA'], tiposPrueba[(i-1)%tiposPrueba.length]);
+            setField(rowData, ['ORDEN DE SERVICIO','O. S.','O.S.','OS'], `OS-${pad(i)}`);
+            setField(rowData, ['ORDEN DE COMPRA','ORDEN COMPRA','NO. ORDEN DE COMPRA','NO ORDEN DE COMPRA','NÚMERO DE ORDEN','NUMERO DE ORDEN','OC'], `OC-${2000+i}`);
+            setField(rowData, ['ESTADO','EDO'], estados[(i-1)%estados.length]);
+
+            mocks.push({ id: `mock-${i}`, data: rowData });
+          }
+          return mocks;
+        }
+
+        async function seedMockPruebas(count = 30){
+          try{
+            if (!window.db || !window.firebase){
+              console.warn('[listapruebas] Firebase no está inicializado');
+              return;
+            }
+
+            // Cargar inventario real desde invpnd.csv
+            const res = await fetch(CSV_URL, { cache: 'no-store' });
+            if (!res.ok){
+              console.warn('[listapruebas] No se pudo cargar invpnd.csv para seed');
+              return;
+            }
+            const txt = await res.text();
+            const rows = parseCSV(txt);
+            if (!rows.length){
+              console.warn('[listapruebas] invpnd.csv vacío, no se pueden generar mocks');
+              return;
+            }
+
+            let headers = rows[0].slice();
+            const normHeader = (h)=> normalizeHeader(h).toUpperCase();
+
+            // Normalizar: si existe SERIAL real, eliminar la columna '#'
+            const hasSerialSeed = headers.some(h => normHeader(h) === 'SERIAL');
+            if (hasSerialSeed){
+              headers = headers.filter(h => normHeader(h) !== '#');
+            }
+
+            // Asegurar que headers tenga CONTADOR y ACUMULADO al final
+            const normH = headers.map(normHeader);
+            if (!normH.includes('CONTADOR')) headers.push('CONTADOR');
+            if (!normH.includes('ACUMULADO')) headers.push('ACUMULADO');
+            HEADERS = headers.slice(); // mantener sincronizado con la vista
+            const dataRows = rows.slice(1);
+
+            const idxEquipo = headerIndexByVariantsFrom(headers, ['EQUIPO / ACTIVO','EQUIPO/ACTIVO','EQUIPO ACTIVO','EQUIPO']);
+            if (idxEquipo < 0){
+              console.warn('[listapruebas] invpnd.csv no tiene columna EQUIPO / ACTIVO');
+              return;
+            }
+
+            const validRows = dataRows.filter(r => String(r[idxEquipo]||'').trim());
+            if (!validRows.length){
+              console.warn('[listapruebas] No hay filas con EQUIPO / ACTIVO para mocks');
+              return;
+            }
+
+            const batch = window.db.batch();
+            const col = window.db.collection('pruebas');
+            const now = window.firebase.firestore.FieldValue.serverTimestamp();
+
+            const todayBase = new Date();
+            const pad = (n)=>String(n).padStart(2,'0');
+
+            const emisores = ['PCT CHIHUAHUA','PCT CDMX','PCT MONTERREY'];
+            const tecnicos = ['TÉCNICO 1','TÉCNICO 2','TÉCNICO 3','TÉCNICO 4'];
+
+            function setFieldByVariants(rowData, variants, value){
+              const idx = headerIndexByVariantsFrom(headers, variants);
+              if (idx >= 0){
+                const key = headers[idx];
+                rowData[key] = value;
+              }
+            }
+
+            // Generar hasta 'count' pruebas combinando equipos con 1-3 pruebas c/u en los últimos 3 años
+            const maxTotal = count;
+            let globalCounter = 0;
+            const seenPerEquipo = new Map(); // eqKey -> cuántas pruebas ya tiene
+
+            for (const r of validRows){
+              const eqRaw = String(r[idxEquipo]||'').trim();
+              if (!eqRaw) continue;
+              const eqKey = eqRaw.toUpperCase();
+              const prev = seenPerEquipo.get(eqKey) || 0;
+              if (prev >= 3) continue; // máx 3 pruebas por equipo
+
+              // decidir cuántas pruebas más crear para este equipo (1 o las que falten hasta 3)
+              const remainingForEq = 3 - prev;
+              const toCreate = Math.min(remainingForEq, 3);
+
+              for (let localIdx = 0; localIdx < toCreate; localIdx++){
+                if (globalCounter >= maxTotal) break;
+
+                const rowData = {};
+                headers.forEach((h, idx) => { rowData[h] = r[idx] ?? ''; });
+
+                // Fecha de prueba simulada: repartir en los últimos 36 meses
+                const d = new Date(todayBase.getTime());
+                const monthsBackBase = 36 - (prev + localIdx) * 6; // 36,30,24,...
+                d.setMonth(d.getMonth() - Math.max(1, monthsBackBase));
+                const fechaStr = `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+                setFieldByVariants(rowData,
+                  ['FECHA DE PRUEBA','FECHA PRUEBA','FECHA REALIZACION','FECHA REALIZACIÓN','FECHA'],
+                  fechaStr
+                );
+
+                // Próxima prueba: 1 año después
+                const dNext = new Date(d.getTime());
+                dNext.setFullYear(dNext.getFullYear() + 1);
+                const proxStr = `${dNext.getFullYear()}-${pad(dNext.getMonth()+1)}-${pad(dNext.getDate())}`;
+                setFieldByVariants(rowData,
+                  ['PROXIMA PRUEBA','PRÓXIMA PRUEBA','PROXIMA','PRÓXIMA'],
+                  proxStr
+                );
+
+                // No-reporte/certificado simulado
+                setFieldByVariants(rowData,
+                  ['NO. DE REPORTE/CERTIFICADO','NO. DE REPORTE / CERTIFICADO','NO DE REPORTE/CERTIFICADO','NO REPORTE/CERTIFICADO'],
+                  `RPT-${2025}${pad(globalCounter+1)}`
+                );
+
+                // Ejecución: interno / externo alternado
+                const execVal = (globalCounter % 2 === 0) ? 'INTERNO' : 'EXTERNO';
+                setFieldByVariants(rowData,
+                  ['EJECUCCION','EJECUCION','EJECUCIÓN'],
+                  execVal
+                );
+
+                // Emisor y Técnico
+                setFieldByVariants(rowData,
+                  ['EMISOR'],
+                  emisores[globalCounter % emisores.length]
+                );
+                setFieldByVariants(rowData,
+                  ['TECNICO','TÉCNICO'],
+                  tecnicos[globalCounter % tecnicos.length]
+                );
+
+                // Contador global de mocks (simple consecutivo)
+                globalCounter += 1;
+                rowData['CONTADOR'] = String(globalCounter);
+
+                // Acumulado en días desde la fecha de prueba hasta hoy
+                const today = new Date();
+                const diffMs = today.getTime() - d.getTime();
+                const diffDays = Math.max(0, Math.round(diffMs / (1000*60*60*24)));
+                rowData['ACUMULADO'] = String(diffDays);
+
+                const ref = col.doc();
+                batch.set(ref, {
+                  headers,
+                  data: rowData,
+                  createdAt: now,
+                  createdBy: 'seed@local'
+                });
+
+                seenPerEquipo.set(eqKey, (seenPerEquipo.get(eqKey)||0)+1);
+              }
+              if (globalCounter >= maxTotal) break;
+            }
+
+            await batch.commit();
+            console.log(`[listapruebas] Se crearon ${globalCounter} pruebas simuladas en Firestore a partir de invpnd.csv`);
+          }catch(e){
+            console.error('[listapruebas] Error en seedMockPruebas', e);
+          }
+        }
+
+        async function clearMockPruebas(){
+          try{
+            if (!window.db){
+              console.warn('[listapruebas] Firebase no está inicializado');
+              return;
+            }
+            let totalDeleted = 0;
+            // Borrar en lotes de 100 hasta que no queden mocks con createdBy='seed@local'
+            while (true){
+              const snap = await window.db.collection('pruebas')
+                .where('createdBy','==','seed@local')
+                .limit(100)
+                .get();
+              if (snap.empty){
+                break;
+              }
+              const batch = window.db.batch();
+              snap.docs.forEach(doc => batch.delete(doc.ref));
+              await batch.commit();
+              totalDeleted += snap.size;
+              if (snap.size < 100) break; // ya no quedan más de 100
+            }
+            if (totalDeleted === 0){
+              console.log('[listapruebas] No hay mocks para eliminar');
+            } else {
+              console.log(`[listapruebas] Se eliminaron ${totalDeleted} pruebas simuladas`);
+            }
+          }catch(e){
+            console.error('[listapruebas] Error en clearMockPruebas', e);
+          }
         }
 
         async function loadPruebas(){
@@ -150,17 +542,128 @@
           VIEW = DATA.slice();
         }
 
+        async function loadUpcoming(){
+          try{
+            const res = await fetch(ACT_CSV_URL, { cache: 'no-store' });
+            if (!res.ok) throw new Error('No se pudo cargar el CSV de actividad');
+            const txt = await res.text();
+            const rows = parseCSV(txt);
+            if (!rows.length) { UPCOMING_VIEW = []; return; }
+
+            const actHeaders = rows[0].slice();
+            const actData = rows.slice(1);
+
+            const idxEquipo = headerIndexByVariantsFrom(actHeaders, ['EQUIPO / ACTIVO','EQUIPO/ACTIVO','EQUIPO ACTIVO','EQUIPO']);
+            const idxCliente = headerIndexByVariantsFrom(actHeaders, ['CLIENTE']);
+            const idxOS = headerIndexByVariantsFrom(actHeaders, ['ORDEN DE SERVICIO','O. S.','O.S.']);
+            const idxOC = headerIndexByVariantsFrom(actHeaders, ['ORDEN DE COMPRA','ORDEN COMPRA','NO. ORDEN DE COMPRA','NO ORDEN DE COMPRA','NÚMERO DE ORDEN','NUMERO DE ORDEN','OC']);
+
+            const upcoming = [];
+            actData.forEach(r => {
+              const equipo = idxEquipo>=0 ? String(r[idxEquipo]||'').trim() : '';
+              if (!equipo) return;
+              const cliente = idxCliente>=0 ? String(r[idxCliente]||'').trim() : '';
+              const os = idxOS>=0 ? String(r[idxOS]||'').trim() : '';
+              const oc = idxOC>=0 ? String(r[idxOC]||'').trim() : '';
+              upcoming.push({
+                equipo,
+                pruebasRequeridas: [],
+                os,
+                oc,
+                cliente,
+                edo: '',
+                status: 'pendiente'
+              });
+            });
+
+            UPCOMING_DATA = upcoming;
+            UPCOMING_VIEW = UPCOMING_DATA.slice();
+          }catch(e){ console.warn('[listapruebas] loadUpcoming error', e); UPCOMING_VIEW = []; }
+        }
+
         async function init(){
           try {
             await loadHeaders();
             await loadPruebas();
+            await loadUpcoming();
             applyFilter();
+            applySort();
+            applyUpcomingFilter();
             renderTable();
+            renderUpcoming();
           } catch (e){
             console.error(e);
           }
           document.getElementById('search').addEventListener('input', ()=>{ applyFilter(); renderTable(); });
           document.getElementById('btn-clear').addEventListener('click', ()=>{ document.getElementById('search').value=''; applyFilter(); renderTable(); });
+          const pruebasTable = document.getElementById('pruebas-table');
+          if (pruebasTable){
+            pruebasTable.addEventListener('click', async (e)=>{
+              const th = e.target.closest('th.sortable');
+              if (th){
+                const key = th.dataset.key;
+                if (key){
+                  if (SORT_KEY === key){
+                    SORT_DIR = SORT_DIR === 'asc' ? 'desc' : 'asc';
+                  } else {
+                    SORT_KEY = key;
+                    SORT_DIR = 'asc';
+                  }
+                  applyFilter();
+                  applySort();
+                  renderTable();
+                }
+                return;
+              }
+
+              const btnDel = e.target.closest('.btn-delete');
+              if (btnDel){
+                const tr = btnDel.closest('tr');
+                const rowId = tr?.dataset.id || '';
+                if (!rowId) return;
+                if (!window.db) return;
+                if (!confirm('¿Eliminar esta prueba?')) return;
+                try{
+                  await window.db.collection('pruebas').doc(rowId).delete();
+                  await loadPruebas();
+                  applyFilter();
+                  applySort();
+                  renderTable();
+                }catch(err){ console.error('[listapruebas] Error eliminando prueba', err); }
+                return;
+              }
+
+              const btnEdit = e.target.closest('.btn-edit');
+              if (btnEdit){
+                const tr = btnEdit.closest('tr');
+                const rowId = tr?.dataset.id || '';
+                if (!rowId) return;
+                // Por ahora, solo dejamos preparado el flujo de edición vía querystring
+                window.location.href = `pruebas.html?editId=${encodeURIComponent(rowId)}`;
+              }
+            });
+          }
+          const btnSeed = document.getElementById('btn-seed-mocks');
+          const btnClearMocks = document.getElementById('btn-clear-mocks');
+          if (btnSeed){
+            btnSeed.addEventListener('click', async ()=>{
+              await seedMockPruebas(30);
+              await loadPruebas();
+              applyFilter();
+              renderTable();
+            });
+          }
+          if (btnClearMocks){
+            btnClearMocks.addEventListener('click', async ()=>{
+              await clearMockPruebas();
+              await loadPruebas();
+              applyFilter();
+              renderTable();
+            });
+          }
+          ['up-f-os','up-f-oc','up-f-cli','up-f-eq','up-f-status'].forEach(id=>{
+            const el = document.getElementById(id); if (el) el.addEventListener('input', ()=>{ applyUpcomingFilter(); renderUpcoming(); });
+          });
         }
 
         if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
@@ -172,5 +675,6 @@
     <script src="https://www.gstatic.com/firebasejs/9.6.11/firebase-firestore-compat.js"></script>
     <script src="firebase-config.js"></script>
     <script src="firebase-init.js"></script>
+    <script src="script.js"></script>
   </body>
 </html>

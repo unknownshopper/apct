@@ -33,7 +33,7 @@
               <li><a href="regactividad.html">Historial de registros</a></li>
             </ul></details></li>
           <li class="nav-dropdown"><details open><summary>Pruebas</summary><ul>
-              <li><a href="pruebas.html">Pruebas PND (pruebas no destructibles)</a></li>
+              <li><a href="pruebas.html">PND (pruebas no destructivas)</a></li>
               <li><a class="active" href="stockpruebas.html">PND x equipo</a></li>
               <li><a href="listapruebas.html">Registro PND</a></li>
             </ul></details></li>
@@ -52,6 +52,7 @@
       <h1 style="margin-bottom: 1rem;">PND x equipo</h1>
       <div id="inventory-tools" class="toolbar">
         <div class="group">
+          <input id="inv-search" type="text" placeholder="Buscar por equipo, prueba, serie..." aria-label="Buscar" />
           <button id="btn-clear-filters" class="btn-primary">Limpiar filtros</button>
           <button id="btn-export-csv" class="btn-primary">Exportar CSV</button>
         </div>
@@ -86,7 +87,7 @@
 
     <script>
       (function () {
-        const CSV_URL = 'docs/inventario.csv';
+        const CSV_URL = 'docs/invpnd.csv';
 
         function parseCSVLine(line) {
           const out = [];
@@ -117,12 +118,24 @@
 
         function applyFilters(rows) {
           const entries = Object.entries(FILTERS).filter(([, v]) => v !== undefined && v !== null && String(v).trim() !== '');
-          // Filtro global: excluir equipos con EDO != ON si existe columna
-          const edoIdx = HEADERS.indexOf('EDO');
+          // Filtro global: excluir equipos con estado != ON si existe columna
+          const edoIdx = HEADERS.indexOf('EDO') !== -1 ? HEADERS.indexOf('EDO') : HEADERS.indexOf('EDO_GENERAL');
           const base = rows.filter(r => edoIdx === -1 ? true : String(r[edoIdx]||'').trim().toUpperCase() === 'ON');
-          if (entries.length === 0) return base;
-          return base.filter((row) => {
-            for (const [colName, val] of entries) {
+
+          // Filtro de búsqueda global (_q): busca en todas las columnas visibles
+          const qEntry = entries.find(([k]) => k === '_q');
+          let out = base;
+          if (qEntry) {
+            const needle = String(qEntry[1]).toLowerCase();
+            out = out.filter(row =>
+              needle === '' || row.some(c => String(c||'').toLowerCase().includes(needle))
+            );
+          }
+
+          const colEntries = entries.filter(([k]) => k !== '_q');
+          if (!colEntries.length) return out;
+          return out.filter((row) => {
+            for (const [colName, val] of colEntries) {
               const colIdx = HEADERS.indexOf(colName);
               if (colIdx === -1) continue;
               const raw = row[colIdx] != null ? String(row[colIdx]).toLowerCase() : '';
@@ -310,8 +323,8 @@
             const rows = parseCSV(text);
             HEADERS = rows[0].slice();
             ALL_ROWS = rows.slice(1);
-            // Aplicar filtro EDO=ON desde la carga inicial
-            const edoIdx = HEADERS.indexOf('EDO');
+            // Aplicar filtro de estado=ON (EDO o EDO_GENERAL) desde la carga inicial
+            const edoIdx = HEADERS.indexOf('EDO') !== -1 ? HEADERS.indexOf('EDO') : HEADERS.indexOf('EDO_GENERAL');
             if (edoIdx !== -1) {
               ALL_ROWS = ALL_ROWS.filter(r => String(r[edoIdx]||'').trim().toUpperCase() === 'ON');
             }
@@ -326,6 +339,8 @@
         function clearFilters() {
           FILTERS = {};
           SORT = { index: -1, dir: 1 };
+          const q = document.getElementById('inv-search');
+          if (q) q.value = '';
           renderTable([HEADERS, ...ALL_ROWS]);
         }
 
@@ -528,8 +543,15 @@
           }
           const btnClear = document.getElementById('btn-clear-filters');
           const btnExport = document.getElementById('btn-export-csv');
+          const qInput = document.getElementById('inv-search');
           btnClear?.addEventListener('click', clearFilters);
           btnExport?.addEventListener('click', exportCSV);
+          if (qInput) {
+            qInput.addEventListener('input', () => {
+              FILTERS._q = qInput.value || '';
+              refresh();
+            });
+          }
 
           // creación de pruebas se realiza en pruebas.html
         }

@@ -48,8 +48,8 @@
             <li><a href="actividad.html">Registro de actividad</a></li>
             <li><a href="regactividad.html">Historial de registros</a></li>
           </ul></details></li>
-          <li class="nav-dropdown"><details open><summary>Pruebas</summary><ul>
-            <li><a class="active" href="pruebas.html">Pruebas PND (pruebas no destructibles)</a></li>
+          <li class="nav-dropdown"><details><summary>Pruebas</summary><ul>
+            <li><a class="active" href="pruebas.html">PND (pruebas no destructivas)</a></li>
             <li><a href="stockpruebas.html">PND x equipo</a></li>
             <li><a href="listapruebas.html">Registro PND</a></li>
           </ul></details></li>
@@ -66,7 +66,7 @@
     </header>
     <main class="wide">
       <div class="page-header">
-        <h1 style="margin-bottom: .25rem;">Pruebas PND (pruebas no destructibles)</h1>
+        <h1 style="margin-bottom: .25rem;">PND (pruebas no destructivas)</h1>
         <p class="page-sub">Completa los datos de la prueba. Puedes seleccionar un equipo del inventario para autocompletar información relacionada.</p>
       </div>
       <div class="toolbar">
@@ -74,21 +74,6 @@
           <a class="btn-primary" href="listapruebas.html">Ver Registro PND</a>
         </div>
         <div id="status" class="toolbar-count"></div>
-      </div>
-      <div class="card" id="orders-inbox">
-        <p class="section-title">Órdenes de prueba pendientes</p>
-        <div class="two-col" style="margin-bottom:8px; grid-template-columns: repeat(5, 1fr);">
-          <input id="ord-f-os" placeholder="Filtrar OS">
-          <input id="ord-f-oc" placeholder="Filtrar OC">
-          <input id="ord-f-cli" placeholder="Filtrar Cliente">
-          <input id="ord-f-eq" placeholder="Filtrar Equipo">
-          <select id="ord-f-status">
-            <option value="pending" selected>pending</option>
-            <option value="in_progress">in_progress</option>
-            <option value="done">done</option>
-          </select>
-        </div>
-        <div id="orders-list" style="max-height:260px; overflow:auto;"></div>
       </div>
       <form id="prueba-form">
         <div class="card">
@@ -135,19 +120,10 @@
     <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
     <script>
       (function(){
-        const CSV_URL = 'docs/inventario.csv';
-        const GEN_INV_URL = 'docs/INVENTARIO GENERAL PCT 2025 UNIFICADO.csv';
+        const CSV_URL = 'docs/invpnd.csv';
         let HEADERS = [];
         let ALL_ROWS = [];
         let EQUIPO_IDX = -1;
-        // Inventario general (ingral.html) como respaldo para serie
-        let GEN_HEADERS = [];
-        let GEN_ROWS = [];
-        let GEN_EQUIPO_IDX = -1;
-        let GEN_SERIE_IDX = -1;
-        let GEN_EDO_IDX = -1;
-        const serieByEquipo = new Map();
-        const edoByEquipo = new Map(); // key (normalizado) -> 'ON'|'OFF'|...
 
         function parseCSV(text){
           const lines = text.replace(/\r\n?/g,'\n').split('\n').filter(l=>l.length);
@@ -172,22 +148,25 @@
           return -1;
         }
 
-        function headerIndexByVariantsGen(variantList){
-          const norm = (s)=> String(s||'').toUpperCase();
-          const headersNorm = GEN_HEADERS.map(h=>norm(h));
-          for (const v of variantList){
-            const idx = headersNorm.indexOf(norm(v));
-            if (idx>=0) return idx;
-          }
-          return -1;
-        }
-
         function safeEscapeAttr(v){
           try { return CSS && typeof CSS.escape==='function' ? CSS.escape(v) : String(v).replace(/"/g,'\\"'); } catch { return String(v).replace(/"/g,'\\"'); }
         }
         function getInputByHeader(headerName){
           const sel = `input[name="${safeEscapeAttr(headerName)}"]`;
           return document.querySelector(sel);
+        }
+
+        function attachDMYMask(input){
+          if (!input) return;
+          input.addEventListener('input', (e)=>{
+            let value = e.target.value.replace(/\D/g,'');
+            if (value.length>6) value = value.slice(0,6);
+            let f='';
+            if (value.length>=1) f += value.slice(0,2);
+            if (value.length>=3) f += '/' + value.slice(2,4);
+            if (value.length>=5) f += '/' + value.slice(4,6);
+            e.target.value = f;
+          });
         }
 
         function autofillFromEquipo(value){
@@ -202,6 +181,11 @@
           const idxPrueba = headerIndexByVariants(['PRUEBA / CALIBRACION','PRUEBA/CALIBRACION','PRUEBA / CALIBRACIÓN','PRUEBA/CALIBRACIÓN']);
           const idxTipo = headerIndexByVariants(['TIPO EQUIPO']);
           const idxArea = headerIndexByVariants(['ÁREA A INSPECIONAR','AREA A INSPECIONAR']);
+          const idxSerial = headerIndexByVariants(['SERIAL']);
+          const idxEdoGen = headerIndexByVariants(['EDO_GENERAL','EDO']);
+          const idxEstadoHeader = headerIndexByVariants(['ESTADO']);
+          const idxProp = headerIndexByVariants(['PROPIEDAD']);
+          const idxCert = headerIndexByVariants(['NO. DE REPORTE / CERTIFICADO','NO. DE REPORTE/CERTIFICADO','NO DE REPORTE / CERTIFICADO','NO DE REPORTE/CERTIFICADO']);
           // asignar a inputs si existen
           function setIf(idx, header){
             if (idx>=0){ const inp = getInputByHeader(header); if (inp){ inp.value = String(row[idx]||''); } }
@@ -211,48 +195,21 @@
           if (idxPrueba>=0) setIf(idxPrueba, HEADERS[idxPrueba]);
           if (idxTipo>=0) setIf(idxTipo, HEADERS[idxTipo]);
           if (idxArea>=0) setIf(idxArea, HEADERS[idxArea]);
-          // Popular '#' con número de serie si existe
-          const hashInput = getInputByHeader('#');
-          if (hashInput){
-            let serieVal = '';
-            // Buscar SOLO en inventario general (ingral)
-            const normKey = (s)=> String(s||'').toUpperCase().replace(/[^A-Z0-9]/g,'');
-            const key = normKey(val);
-            const hasKey = serieByEquipo.has(key);
-            console.log('[pruebas] lookup serie', { input: val, key, hasKey, mapSize: serieByEquipo.size });
-            if (hasKey) serieVal = String(serieByEquipo.get(key)||'');
-            if (serieVal) {
-              hashInput.value = serieVal;
-              console.log('[pruebas] Serie encontrada para', val, '=>', serieVal);
-            } else {
-              // búsqueda laxa por contiene
-              const candidates = [];
-              for (const [k,v] of serieByEquipo.entries()){
-                if (k.includes(key)) candidates.push([k,v]);
-              }
-              if (candidates.length){
-                hashInput.value = String(candidates[0][1]||'');
-                console.log('[pruebas] Serie aproximada usada para', val, '=>', candidates[0]);
-              } else {
-                // Fallback directo escaneando GEN_ROWS por si el mapa no se llenó como esperamos
-                if (GEN_EQUIPO_IDX>=0 && GEN_SERIE_IDX>=0 && GEN_ROWS.length){
-                  const direct = GEN_ROWS.find(r => {
-                    const ge = String(r[GEN_EQUIPO_IDX]||'');
-                    return ge.toUpperCase().trim() === val.toUpperCase().trim()
-                      || normKey(ge) === key;
-                  });
-                  if (direct){
-                    const vdir = String(direct[GEN_SERIE_IDX]||'').trim();
-                    if (vdir){
-                      hashInput.value = vdir;
-                      console.log('[pruebas] Serie encontrada via fallback directo para', val, '=>', vdir);
-                      return;
-                    }
-                  }
-                }
-                console.log('[pruebas] Serie NO encontrada para', val, '(sin candidatos ni fallback)');
-              }
-            }
+          if (idxSerial>=0) setIf(idxSerial, HEADERS[idxSerial]);
+          // EDO_GENERAL se copia literal desde inventario
+          if (idxEdoGen>=0) setIf(idxEdoGen, HEADERS[idxEdoGen]);
+          if (idxProp>=0) setIf(idxProp, HEADERS[idxProp]);
+          if (idxCert>=0) setIf(idxCert, HEADERS[idxCert]);
+
+          // ESTADO operativo (select) se deriva inicialmente de EDO_GENERAL ON/OFF
+          if (idxEstadoHeader>=0){
+            const edoValRaw = (idxEdoGen>=0 ? String(row[idxEdoGen]||'') : '');
+            const edoNorm = norm(edoValRaw);
+            let estadoVal = '';
+            if (edoNorm === 'ON') estadoVal = 'DISPONIBLE';
+            else if (edoNorm === 'OFF') estadoVal = 'FUERA DE SERVICIO';
+            const estadoInput = getInputByHeader(HEADERS[idxEstadoHeader]);
+            if (estadoInput){ estadoInput.value = estadoVal; }
           }
           console.log('[pruebas] buildForm inputs', { equipoHeader: HEADERS.find(h=>/EQUIPO\s*\/\s*ACTIVO|^EQUIPO\s*ACTIVO$|^EQUIPO$/i.test(String(h).replace(/\s*\/\s*/g,'/')) || String(h).trim().toUpperCase()==='EQUIPO / ACTIVO'), hasHash: !!getInputByHeader('#') });
         }
@@ -273,7 +230,9 @@
           for (const h of HEADERS){
             const labelText = String(h||'').trim();
             const wrap = document.createElement('div'); wrap.className = 'form-field';
-            const label = document.createElement('label'); label.textContent = labelText; label.htmlFor = 'fld-' + btoa(labelText).replace(/[^a-z0-9]/gi,'');
+            const label = document.createElement('label');
+            const visibleLabel = labelText;
+            label.textContent = visibleLabel; label.htmlFor = 'fld-' + btoa(labelText).replace(/[^a-z0-9]/gi,'');
             let input;
             const normAll = labelText.toUpperCase();
             if (normAll === 'EJECUCCION'){
@@ -281,26 +240,31 @@
               sel.innerHTML = '<option value="INTERNO">INTERNO</option><option value="EXTERNO">EXTERNO</option>';
               input = sel;
             } else {
-              input = document.createElement('input'); input.type='text'; input.id=label.htmlFor; input.name=labelText; input.placeholder=labelText;
+              input = document.createElement('input'); input.type='text'; input.id=label.htmlFor; input.name=labelText; input.placeholder=visibleLabel;
             }
             const norm = labelText.toUpperCase().replace(/\s*\/\s*/g,'/');
             const isEquipo = /^(EQUIPO\/ACTIVO|EQUIPO\s*ACTIVO|EQUIPO)$/.test(norm) || labelText.trim().toUpperCase()==='EQUIPO / ACTIVO';
             if (isEquipo){
-              // Construir opciones desde ALL_ROWS y EQUIPO_IDX
+              // Construir opciones desde ALL_ROWS y EQUIPO_IDX (solo invpnd.csv)
               if (EQUIPO_IDX >= 0 && ALL_ROWS.length){
                 const set = new Set();
-                const normKey = (s)=> String(s||'').trim().toUpperCase().replace(/[^A-Z0-9]/g,'');
                 for (const r of ALL_ROWS){
                   const v = String(r[EQUIPO_IDX]||'').trim(); if (!v) continue;
-                  const k = normKey(v);
-                  const edo = edoByEquipo.get(k) || 'ON';
-                  if (edo === 'ON') set.add(v);
+                  set.add(v);
                 }
                 const opts = Array.from(set).sort((a,b)=>a.localeCompare(b));
                 ensureDatalist('dl-inventory-equipos', opts);
                 input.setAttribute('list','dl-inventory-equipos');
                 input.placeholder = 'Equipo/Activo (inventario)';
               }
+            }
+
+            // Máscara de fecha corta para campos de fecha en inventario (dd/mm/aa)
+            const upperNoAccents = labelText.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase();
+            if (upperNoAccents === 'PROXIMA PRUEBA' ||
+                upperNoAccents === 'FECHA REALIZACION' ||
+                upperNoAccents === 'FECHA REALIZACION '){
+              attachDMYMask(input);
             }
             // Auto-popular campos relacionados al cambiar selección
             const trigger = ()=> autofillFromEquipo(input.value||'');
@@ -311,7 +275,7 @@
           // Si ya hay un valor prellenado en EQUIPO/ACTIVO, disparar autofill
           const equipoHeader = HEADERS.find(h=>/EQUIPO\s*\/\s*ACTIVO|^EQUIPO\s*ACTIVO$|^EQUIPO$/i.test(String(h).replace(/\s*\/\s*/g,'/')) || String(h).trim().toUpperCase()==='EQUIPO / ACTIVO');
           const eqInput = equipoHeader ? getInputByHeader(equipoHeader) : null;
-          console.debug('[pruebas] buildForm inputs', { equipoHeader, hasHash: !!getInputByHeader('#') });
+          console.debug('[pruebas] buildForm inputs', { equipoHeader, hasSerial: !!getInputByHeader('Serial') });
           if (eqInput && eqInput.value) autofillFromEquipo(eqInput.value);
         }
 
@@ -320,17 +284,12 @@
             const res = await fetch(CSV_URL, { cache: 'no-store' });
             if (!res.ok) throw new Error('No se pudo cargar el CSV');
             const txt = await res.text();
-            // Usar parser general con soporte de comillas
             const rows = parseCSV(txt);
             if (!rows.length) throw new Error('CSV vacío');
             // Filtrar EDO=ON si existe columna
             const heads = rows[0].slice();
-            const edoIdx = heads.indexOf('EDO');
             HEADERS = heads;
             ALL_ROWS = rows.slice(1);
-            if (edoIdx !== -1) {
-              ALL_ROWS = ALL_ROWS.filter(r => String(r[edoIdx]||'').trim().toUpperCase() === 'ON');
-            }
             // localizar índice de EQUIPO / ACTIVO (con variantes)
             const norm = (s)=> String(s||'').toUpperCase().replace(/\s*\/\s*/g,'/');
             const variants = new Set(['EQUIPO/ACTIVO','EQUIPO ACTIVO','EQUIPO']);
@@ -340,8 +299,6 @@
               if (H==='EQUIPO/ACTIVO' || variants.has(H)) { EQUIPO_IDX = i; break; }
             }
             console.log('[pruebas] HEADERS cargados', { EQUIPO_IDX, HEADERS });
-            // Cargar inventario general para respaldo de serie
-            await loadGeneralInventory();
             buildForm();
           }catch(err){
             console.error(err);
@@ -349,102 +306,54 @@
           }
         }
 
-        function parseCSVGeneral(text){
-          try {
-            if (window.Papa){
-              const res = Papa.parse(text, { delimiter: ',', quoteChar: '"', escapeChar: '"', skipEmptyLines: true });
-              return Array.isArray(res?.data) ? res.data : [];
-            }
-          } catch(e){ console.error('[pruebas] Papa.parse error', e); }
-          return parseCSV(text);
-        }
-
-        async function loadGeneralInventory(){
-          try{
-            const url = GEN_INV_URL;
-            const res = await fetch(url, { cache: 'no-store' });
-            if (!res.ok) { console.log('[pruebas] Fetch general inventory failed', { url, status: res.status }); return; }
-            const txt = await res.text();
-            const rows = parseCSVGeneral(txt);
-            if (!rows.length) return;
-            GEN_HEADERS = rows[0].slice();
-            GEN_ROWS = rows.slice(1);
-            // índices para equipo y serie en inventario general
-            GEN_EQUIPO_IDX = headerIndexByVariantsGen(['EQUIPO / ACTIVO','EQUIPO/ACTIVO','EQUIPO ACTIVO','EQUIPO']);
-            GEN_SERIE_IDX = headerIndexByVariantsGen(['SERIE','NUMERO DE SERIE','NÚMERO DE SERIE','SERIAL','SERIAL NO','NO. SERIE']);
-            GEN_EDO_IDX    = headerIndexByVariantsGen(['EDO','ESTADO']);
-            console.log('[pruebas] Inventario unificado cargado', { url, GEN_EQUIPO_IDX, GEN_SERIE_IDX, headers: GEN_HEADERS });
-            try { document.getElementById('status').textContent = `Inventario unificado (equip:${GEN_EQUIPO_IDX}, serie:${GEN_SERIE_IDX})`; } catch {}
-            if (GEN_EQUIPO_IDX>=0 && GEN_SERIE_IDX>=0){
-              serieByEquipo.clear();
-              const norm = (s)=> String(s||'').trim().toUpperCase().replace(/[^A-Z0-9]/g,'');
-              edoByEquipo.clear();
-              for (const r of GEN_ROWS){
-                const k = norm(r[GEN_EQUIPO_IDX]);
-                const v = String(r[GEN_SERIE_IDX]||'').trim();
-                if (k && v && !serieByEquipo.has(k)) serieByEquipo.set(k, v);
-                if (GEN_EDO_IDX>=0){ const edo = String(r[GEN_EDO_IDX]||'').trim().toUpperCase(); if (k && edo && !edoByEquipo.has(k)) edoByEquipo.set(k, edo); }
-              }
-              console.log('[pruebas] Serie map size:', serieByEquipo.size);
-              try { document.getElementById('status').textContent += ` | series:${serieByEquipo.size}`; } catch {}
-            }
-          }catch(e){ console.error('[pruebas] loadGeneralInventory error', e); }
-        }
-
         function getCurrentUser(){
           try { return firebase?.auth?.().currentUser || null; } catch { return null; }
         }
 
-        let CURRENT_ORDER = null;
-        async function fetchOrders(){
+        function getEditIdFromQuery(){
           try{
-            const status = (document.getElementById('ord-f-status')?.value)||'pending';
-            let q = window.db.collection('testOrders').where('status','==', status).orderBy('createdAt','desc');
-            const snap = await q.limit(300).get();
-            return snap.docs.map(d=>({ id:d.id, ...d.data() }));
-          }catch(e){ console.warn('[pruebas] fetchOrders', e); return []; }
+            const qs = new URLSearchParams(window.location.search);
+            const v = qs.get('editId');
+            return v && v.trim() ? v.trim() : null;
+          }catch{ return null; }
         }
-        function renderOrders(list){
-          const host = document.getElementById('orders-list'); if (!host) return; host.innerHTML='';
-          const f = {
-            os: (document.getElementById('ord-f-os')?.value||'').toLowerCase(),
-            oc: (document.getElementById('ord-f-oc')?.value||'').toLowerCase(),
-            cli:(document.getElementById('ord-f-cli')?.value||'').toLowerCase(),
-            eq: (document.getElementById('ord-f-eq')?.value||'').toLowerCase()
-          };
-          const match = (o)=> (!f.os || String(o.os||'').toLowerCase().includes(f.os))
-            && (!f.oc || String(o.oc||'').toLowerCase().includes(f.oc))
-            && (!f.cli|| String(o.cliente||'').toLowerCase().includes(f.cli))
-            && (!f.eq || String(o.equipo||'').toLowerCase().includes(f.eq));
-          const rows = list.filter(match);
-          rows.forEach(o=>{
-            const div = document.createElement('div');
-            div.style.display='flex'; div.style.justifyContent='space-between'; div.style.alignItems='center';
-            div.style.border='1px solid #e5e7eb'; div.style.borderRadius='8px'; div.style.padding='8px 10px'; div.style.margin='6px 0';
-            div.innerHTML = `<div>
-              <div><strong>${o.equipo||'-'}</strong> • ${(o.pruebasRequeridas||[]).join(', ')||'-'}</div>
-              <div style="color:#6b7280; font-size:12px;">OS:${o.os||'-'} • OC:${o.oc||'-'} • Cliente:${o.cliente||'-'} • Edo:${o.edo||'-'}</div>
-            </div>
-            <div><button class="btn-primary" data-id="${o.id}">Iniciar</button></div>`;
-            div.querySelector('button')?.addEventListener('click', ()=> startOrder(o));
-            host.appendChild(div);
-          });
-          if (!rows.length){ host.innerHTML = '<div style="color:#6b7280; font-size:12px;">Sin órdenes para los filtros actuales</div>'; }
-        }
-        async function refreshOrders(){ const list = await fetchOrders(); renderOrders(list); }
-        async function startOrder(o){
-          CURRENT_ORDER = o;
-          const equipoHeader = HEADERS.find(h=>/EQUIPO\s*\/\s*ACTIVO|EQUIPO\s*ACTIVO|EQUIPO/i.test(h.replace(/\s*\/\s*/g,'/')));
-          if (equipoHeader){ const inp = getInputByHeader(equipoHeader); if (inp){ inp.value = o.equipo || ''; autofillFromEquipo(o.equipo||''); } }
-          const hashInput = getInputByHeader('#'); if (hashInput && o.serial) hashInput.value = o.serial;
-          document.getElementById('status').textContent = `Orden en progreso: ${o.equipo||''} (${o.os||o.oc||''})`;
-          try{ await window.db.collection('testOrders').doc(o.id).update({ status:'in_progress', updatedAt: firebase.firestore.FieldValue.serverTimestamp() }); }
-          catch(e){ console.warn('[pruebas] startOrder update', e); }
-        }
-        async function completeOrderIfAny(){
-          if (!CURRENT_ORDER) return;
-          try{ await window.db.collection('testOrders').doc(CURRENT_ORDER.id).update({ status:'done', updatedAt: firebase.firestore.FieldValue.serverTimestamp() }); CURRENT_ORDER=null; await refreshOrders(); }
-          catch(e){ console.warn('[pruebas] completeOrderIfAny', e); }
+
+        async function loadPruebaForEdit(editId){
+          if (!editId || !window.db) return;
+          const status = document.getElementById('status');
+          try{
+            const doc = await window.db.collection('pruebas').doc(editId).get();
+            if (!doc.exists){
+              status.textContent = 'No se encontró la prueba a editar';
+              return;
+            }
+            const payload = doc.data() || {};
+            const data = payload.data || {};
+
+            // Normalizar serial: si viene en '#' y 'SERIAL' está vacío, moverlo a 'SERIAL'
+            if (Object.prototype.hasOwnProperty.call(data, '#')){
+              const hashVal = data['#'];
+              const hasSerialKey = Object.prototype.hasOwnProperty.call(data, 'SERIAL');
+              const serialVal = hasSerialKey ? data['SERIAL'] : '';
+              if (hashVal && !serialVal){
+                data['SERIAL'] = hashVal;
+                data['#'] = '';
+              }
+            }
+            const form = document.getElementById('prueba-form');
+            form.querySelectorAll('input, select, textarea').forEach(inp => {
+              const name = inp.name||'';
+              if (!name) return;
+              if (Object.prototype.hasOwnProperty.call(data, name)){
+                inp.value = data[name] || '';
+              }
+            });
+            status.textContent = 'Editando prueba existente';
+            const saveBtn = document.getElementById('btn-save');
+            if (saveBtn){ saveBtn.textContent = 'Actualizar'; }
+          }catch(err){
+            console.error('[pruebas] Error al cargar prueba para edición', err);
+          }
         }
 
         async function savePrueba(){
@@ -456,17 +365,138 @@
           try{
             const user = getCurrentUser();
             if (!user){ status.textContent = 'Debes iniciar sesión para guardar'; alert('Inicia sesión para crear pruebas'); btn.disabled = false; return; }
-            const payload = {
-              headers: HEADERS,
-              data,
-              createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-              createdBy: user?.email || ''
-            };
-            await window.db.collection('pruebas').add(payload);
-            await completeOrderIfAny();
-            status.textContent = 'Guardado';
-            alert('Prueba creada');
-            form.reset();
+
+            // Autocompletar campos derivados si faltan (fecha realización, próxima prueba, reporte, emisor, técnico, contador, acumulado)
+            const norm = (s)=> String(s||'').toUpperCase();
+            function headerIndexByVariantsLocal(variantList){
+              const headersNorm = HEADERS.map(h=>norm(h));
+              for (const v of variantList){
+                const idx = headersNorm.indexOf(norm(v));
+                if (idx>=0) return idx;
+              }
+              return -1;
+            }
+            function setFieldByVariantsLocal(obj, variants, value){
+              const idx = headerIndexByVariantsLocal(variants);
+              if (idx >= 0){
+                const key = HEADERS[idx];
+                if (!Object.prototype.hasOwnProperty.call(obj, key) || !obj[key]){
+                  obj[key] = value;
+                }
+              }
+            }
+
+            // Fecha de prueba principal (campo fijo del formulario)
+            const fechaPruebaRaw = form.querySelector('#fld-fecha-prueba')?.value || '';
+            if (fechaPruebaRaw){
+              const d = new Date(fechaPruebaRaw);
+              if (!isNaN(d.getTime())){
+                const pad = (n)=> String(n).padStart(2,'0');
+                const fechaISO = `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+                // FECHA DE PRUEBA / FECHA REALIZACIÓN
+                setFieldByVariantsLocal(data,
+                  ['FECHA DE PRUEBA','FECHA PRUEBA','FECHA REALIZACION','FECHA REALIZACIÓN','FECHA'],
+                  fechaISO
+                );
+                // PROXIMA PRUEBA (1 año después)
+                const dNext = new Date(d.getTime());
+                dNext.setFullYear(dNext.getFullYear()+1);
+                const proxStr = `${dNext.getFullYear()}-${pad(dNext.getMonth()+1)}-${pad(dNext.getDate())}`;
+                setFieldByVariantsLocal(data,
+                  ['PROXIMA PRUEBA','PRÓXIMA PRUEBA','PROXIMA','PRÓXIMA'],
+                  proxStr
+                );
+                // ACUMULADO en días desde la fecha de prueba hasta hoy (si aún no se ha calculado)
+                if (!data['ACUMULADO']){
+                  const today = new Date();
+                  const diffMs = today.getTime() - d.getTime();
+                  const diffDays = Math.max(0, Math.round(diffMs / (1000*60*60*24)));
+                  data['ACUMULADO'] = String(diffDays);
+                }
+              }
+            }
+
+            // Si todavía no hay ACUMULADO, intentar calcularlo usando FECHA REALIZACION (dd/mm/aa) del inventario
+            if (!data['ACUMULADO']){
+              const idxFechaReal = headerIndexByVariantsLocal(['FECHA REALIZACION','FECHA REALIZACIÓN']);
+              if (idxFechaReal >= 0){
+                const keyFR = HEADERS[idxFechaReal];
+                const valFR = data[keyFR] || '';
+                if (valFR){
+                  // Formato esperado: dd/mm/aa o dd/mm/aaaa
+                  const m = String(valFR).match(/^(\d{2})\/(\d{2})\/(\d{2,4})$/);
+                  if (m){
+                    const dd = parseInt(m[1],10);
+                    const mm = parseInt(m[2],10)-1;
+                    let yy = parseInt(m[3],10);
+                    if (yy < 100) yy = 2000 + yy; // asumir 20xx
+                    const d = new Date(yy, mm, dd);
+                    if (!isNaN(d.getTime())){
+                      const today = new Date();
+                      const diffMs = today.getTime() - d.getTime();
+                      const diffDays = Math.max(0, Math.round(diffMs / (1000*60*60*24)));
+                      data['ACUMULADO'] = String(diffDays);
+                    }
+                  }
+                }
+              }
+            }
+
+            // Número de reporte/certificado (consecutivo sencillo por sesión/navegador)
+            let hasReporte = false;
+            for (let i=0;i<HEADERS.length;i++){
+              const h = HEADERS[i];
+              if (!h) continue;
+              if (norm(h).includes('REPORTE') && data[h]){ hasReporte = true; break; }
+            }
+            if (!hasReporte){
+              let counter = 0;
+              try {
+                const raw = localStorage.getItem('pruebas:rptCounter');
+                counter = raw ? parseInt(raw,10)||0 : 0;
+              } catch{}
+              counter += 1;
+              try { localStorage.setItem('pruebas:rptCounter', String(counter)); } catch{}
+              const rpt = `RPT-${String(counter).padStart(4,'0')}`;
+              setFieldByVariantsLocal(data,
+                ['NO. DE REPORTE / CERTIFICADO','NO. DE REPORTE/CERTIFICADO','NO DE REPORTE / CERTIFICADO','NO DE REPORTE/CERTIFICADO'],
+                rpt
+              );
+            }
+
+            // Emisor y Técnico por defecto desde el usuario actual
+            const emisorDefault = user?.email || '';
+            setFieldByVariantsLocal(data, ['EMISOR'], emisorDefault);
+            setFieldByVariantsLocal(data, ['TECNICO','TÉCNICO'], emisorDefault);
+
+            // Contador simple si no existe
+            if (!data['CONTADOR']){
+              data['CONTADOR'] = '1';
+            }
+
+            const editId = getEditIdFromQuery();
+            const col = window.db.collection('pruebas');
+
+            if (editId){
+              await col.doc(editId).update({
+                data,
+                updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+                updatedBy: user?.email || ''
+              });
+              status.textContent = 'Prueba actualizada';
+              alert('Prueba actualizada');
+            } else {
+              const payload = {
+                headers: HEADERS,
+                data,
+                createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                createdBy: user?.email || ''
+              };
+              await col.add(payload);
+              status.textContent = 'Guardado';
+              alert('Prueba creada');
+              form.reset();
+            }
           }catch(err){
             console.error(err);
             status.textContent = 'Error al guardar';
@@ -507,12 +537,13 @@
           } catch {}
 
           document.getElementById('btn-save').addEventListener('click', savePrueba);
-          // Filtros inbox
-          ['ord-f-os','ord-f-oc','ord-f-cli','ord-f-eq','ord-f-status'].forEach(id=>{
-            const el = document.getElementById(id); if (el) el.addEventListener('input', ()=>{ refreshOrders(); });
-          });
-          refreshOrders();
           document.getElementById('btn-cancel').addEventListener('click', ()=>{ window.location.href = 'listapruebas.html'; });
+
+          // Si venimos desde listapruebas con un editId, cargar prueba
+          const editId = getEditIdFromQuery();
+          if (editId){
+            loadPruebaForEdit(editId);
+          }
         }
 
         if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();

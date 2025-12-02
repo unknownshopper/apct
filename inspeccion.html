@@ -472,7 +472,7 @@
           renderObservaciones([], { scroll: false });
         }catch{}
       }
-      const INGRAL_SRC = 'docs/INVENTARIO GENERAL PCT 2025 UNIFICADO.csv';
+      const INGRAL_SRC = 'docs/invpnd.csv';
       let ingrIndex = null; // Map por equipo/activo
 
       function setupElastomero(id){
@@ -1350,27 +1350,23 @@
         const rows = csv.data || [];
         if (!rows.length) return new Map();
         const hmap = indexMapForHeaderRow(rows[0]);
+        // invpnd.csv: #,ESTADO,EQUIPO / ACTIVO,SERIAL,EDO_GENERAL,PROPIEDAD,PRODUCTO,DESCRIPCION,...
         const idxEquipo = pickIndex(hmap, ['equipo / activo','equipo/activo','equipo activo','equipo']);
-        const idxConexion1 = pickIndex(hmap, ['conexión 1','conexion 1','conexion1','conexión1','conexion']);
-        const idxSerial = pickIndex(hmap, ['serial','no de serie','nserie']); // opcional
-        const idxDiametro = pickIndex(hmap, ['diametro 1','diámetro 1','diametro1','diámetro1','diametro','diámetro']);
+        const idxSerial = pickIndex(hmap, ['serial','no de serie','nserie']); // SERIAL en invpnd
         const idxDescripcion = pickIndex(hmap, ['descripcion','descripción']);
-        const idxEstado = pickIndex(hmap, ['edo','estado']);
-        
+        const idxEstado = pickIndex(hmap, ['edo_general','edo','estado']);
+
         const map = new Map();
         for (let i=1;i<rows.length;i++){
           const r = rows[i];
           const equipo = String(r[idxEquipo]||'').trim();
           if (!equipo) continue;
-          
-          // Incluir TODOS los equipos del inventario, sin filtrar por estado
+
           const estado = idxEstado >= 0 ? String(r[idxEstado]||'').trim().toUpperCase() : '';
-          const conexion = String(r[idxConexion1]||'').trim();
           const serial = idxSerial>=0 ? String(r[idxSerial]||'').trim() : '';
-          const diametro = idxDiametro>=0 ? String(r[idxDiametro]||'').trim() : '';
           const descripcion = idxDescripcion>=0 ? String(r[idxDescripcion]||'').trim() : '';
-          
-          // Extraer longitud de la descripción (buscar LONG: o L: seguido de número)
+
+          // Extraer longitud y conexión desde la descripción (como antes)
           let longitud = '';
           if (descripcion) {
             const matchLong = descripcion.match(/\bLONG[:\s]*([0-9.]+)/i);
@@ -1378,7 +1374,10 @@
               longitud = matchLong[1];
             }
           }
-          
+          const parsed = parseFromDescripcion(descripcion) || {};
+          const conexion = parsed.conexion || '';
+          const diametro = parsed.diametro || '';
+
           map.set(equipo, { equipo, conexion, serial, diametro, descripcion, longitud, estado });
         }
         return map;
