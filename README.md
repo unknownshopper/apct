@@ -1,5 +1,39 @@
 # PCT – Plataforma de Control e Inspección
 
+## Objetivo actual (Diciembre 2025)
+
+- **Módulo de Actividad**
+  - `actividad.html` (operativa):
+    - Alta de actividades con autocompletado de Equipo/Activo desde inventario.
+    - Soporte a múltiples equipos por registro (lista de chips), con autofill de Serial / Estado / Propiedad / Descripción desde `invpnd.csv`.
+    - Generación automática de **Orden de Servicio (OS)** y **Orden de Compra (OC)** cuando vienen vacías al guardar.
+    - Tabla agrupada por cliente con dropdowns independientes (se pueden abrir muchos clientes a la vez).
+    - **Precio** y **Factura** se mantienen en los datos, pero ya no se muestran en la vista operativa.
+  - `regactividad.html` (historial):
+    - Fuente de verdad principal en Firestore (`activityRecords`), con fallback a `localStorage`.
+    - Vista de historial con KPIs (activos, vencidos, días promedio), PDF detallado y tabulador cronológico completo.
+    - Modal de edición que recalcula días, fin parcial, continuaciones, ingresos/rentas y sincroniza con Firestore.
+  - `actividadmin.html` (administración ingresos/rentas):
+    - Vista admin sólo para roles autorizados, usada para fijar **Precio** y **Terminación del servicio**.
+    - **PRECIO** y **TERMINACION DEL SERVICIO** editables por fila, con máscara `dd/mm/aa`, cálculo dinámico de días y montos.
+    - Lógica financiera: si `PROPIEDAD = PCT` → usa `INGRESO ACUMULADO`; si no, usa `RENTA ACUMULADA`.
+    - KPIs de ingresos, rentas y ticket promedio calculados sobre las filas visibles.
+    - Formato de moneda consistente (`$` + separador de miles, alineado a la derecha) para precio, ingresos y rentas.
+    - Estructura visual y toolbar alineadas al estilo general de `actividad.html`.
+
+- **Persistencia y sincronización**
+  - Uso de `localStorage('actividad:newRows')` como caché local de actividad, sincronizada desde `regactividad`.
+  - Plan inmediato: mover la edición de **Precio** y **Terminación del servicio** en `actividadmin` a Firestore, de modo que:
+    - Los cambios hechos por usuarios con permiso admin/director se guarden directamente en `activityRecords`.
+    - `regactividad` y `actividad` lean siempre valores consistentes desde Firestore, sin sobrescribir ediciones locales.
+
+- **Próximo paso (tabulador en actividadmin)**
+  - Agregar un tabulador **visual** (dropdown por fila) en `actividadmin` que, usando Inicio, Terminación y Precio:
+    - Muestre cortes de **Fin Parcial**, **Continuación del servicio** y **Terminación** por tramos.
+    - Calcule días y monto por tramo, sólo para consulta (sin modificar todavía las columnas de CSV / Firestore).
+
+> Nota: este bloque resume el estado actual del trabajo en el módulo de actividad para futuras sesiones de desarrollo. Cuando se retome el proyecto, revisar esta sección antes de continuar con cambios en `actividad.js`, `regactividad.js` y `actividadmin.js`.
+
 ## Descripción general
 Sistema web para gestionar inventario, inspecciones y actividad operativa de equipos industriales. Soporta autenticación, control de roles, registro de inspecciones con geolocalización y gestión financiera de servicios.
 
