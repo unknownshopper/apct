@@ -130,6 +130,33 @@ Sistema web para gestionar inventario, inspecciones y actividad operativa de equ
 - Exportación CSV completa
 - Modal de edición con recálculo opcional
 
+## Cambios recientes (Diciembre 2025)
+
+### Flujo Actividad → Pruebas PND
+- Se documentó visualmente en `flujo2.html` el flujo completo:
+  - `actividad.html` crea actividades (sin edición ni eliminación) y genera órdenes de prueba por equipo solo cuando `EDO = ON`.
+  - Cada actividad se guarda en Firestore (`activityRecords`) con `_firestoreId` y copia en `localStorage` (`actividad:newRows`).
+  - `regactividad.html` consume `activityRecords` y permite editar/eliminar usando `_firestoreId`.
+  - Al eliminar una actividad en `regactividad`, las órdenes pendientes relacionadas en `testOrders` se marcan como `cancelled`.
+  - `listapruebas.html` construye "Próximas pruebas" combinando historial (`pruebas`) y órdenes pendientes de `testOrders`.
+
+### Módulo de Actividad (actividad / regactividad)
+- `actividad.html`:
+  - Se retiró la columna de acciones (editar/eliminar); esta vista queda solo para **alta y consulta rápida**.
+  - Se reforzó el autocompletado del campo **Equipo/Activo** usando `inventoryOptions` y el `datalist` `dl-inventory-equipos`.
+- `regactividad.html`:
+  - Permanece como **fuente de verdad operativa**: solo aquí se pueden eliminar actividades (según rol).
+  - Al eliminar un registro se invoca `cancelRelatedTestOrders`, que localiza en Firestore las órdenes en `testOrders` con `actividadRef` y `status = 'pending'` y las marca como `cancelled`.
+
+### Próximas pruebas PND (`listapruebas.html`)
+- Se consolidó la lógica de "Próximas pruebas":
+  - Lee pruebas históricas desde la colección `pruebas` (usando fechas de próxima prueba).
+  - Agrega también las órdenes generadas desde actividad en la colección `testOrders` con `status = 'pending'`.
+- Se agregó un botón para **borrar todas las órdenes pendientes** en `testOrders` (limpia el backlog cuando se quiere reiniciar la agenda).
+- El listado distingue entre:
+  - Pruebas ya realizadas (tabla principal `pruebas-table`).
+  - Próximas pruebas (tabla superior `upcoming-table`, alimentada desde historial + `testOrders`).
+
 ## Cambios recientes (Noviembre 2025)
 
 ### Módulo de Actividad - Mejoras financieras y PDF
