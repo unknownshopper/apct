@@ -13,21 +13,13 @@
     setExpanded(isOpen);
   });
 
-  // Collapse all nav dropdowns by default (ensure clean initial state)
+  // Dropdowns: permitir varios abiertos a la vez, solo sincronizar aria-expanded
   try {
     const dropdowns = nav.querySelectorAll('.nav-dropdown details');
-    dropdowns.forEach(d => { if (d.hasAttribute('open')) d.removeAttribute('open'); });
-    // Make dropdowns mutually exclusive when opening
     dropdowns.forEach(d => {
-      d.addEventListener('toggle', () => {
-        if (d.open) {
-          dropdowns.forEach(other => { if (other !== d && other.open) other.removeAttribute('open'); });
-        }
-      });
-      // Keep summary aria-expanded in sync
       const summary = d.querySelector('summary');
       if (summary) {
-        summary.setAttribute('aria-expanded', 'false');
+        summary.setAttribute('aria-expanded', d.open ? 'true' : 'false');
         d.addEventListener('toggle', () => {
           summary.setAttribute('aria-expanded', d.open ? 'true' : 'false');
         });

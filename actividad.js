@@ -19,6 +19,7 @@
   const clientFilterEl = document.getElementById('clientFilter');
   // Estado de colapso por cliente (para grupos)
   const collapsedClients = new Set();
+  let collapsedInitialized = false;
 
   let rows = [];
   let headers = [];
@@ -448,8 +449,11 @@
       const seen = new Set();
       for (let i=0;i<data.length;i++){ const c=String(data[i][clienteIdx]||'').trim(); if (!seen.has(c)){ seen.add(c); orderOfClients.push(c); } }
     }
-    // Inicial: si no hay filtro y no hemos fijado estados, colapsar todos
-    if (!selClient && collapsedClients.size===0){ orderOfClients.forEach(c=>collapsedClients.add(c)); }
+    // Inicial: si no hay filtro y no hemos fijado estados, colapsar todos UNA sola vez
+    if (!selClient && !collapsedInitialized && collapsedClients.size===0){
+      orderOfClients.forEach(c=>collapsedClients.add(c));
+      collapsedInitialized = true;
+    }
     let currentGroup = null;
     for (let i=0;i<data.length;i++){
       const row = data[i];
@@ -471,7 +475,11 @@
         const title = document.createElement('span'); title.textContent = cli || '— Sin cliente —';
         tdg.appendChild(caret); tdg.appendChild(title);
         tdg.style.cursor = 'pointer';
-        tdg.addEventListener('click', ()=>{ if (isCollapsed) collapsedClients.delete(cli); else collapsedClients.add(cli); renderBody(view); });
+        tdg.addEventListener('click', ()=>{
+          const nowCollapsed = collapsedClients.has(cli);
+          if (nowCollapsed) collapsedClients.delete(cli); else collapsedClients.add(cli);
+          renderBody(view);
+        });
         trGroup.appendChild(tdg);
         frag.appendChild(trGroup);
       }
@@ -548,14 +556,30 @@
       opts.forEach(v=>{ const o=document.createElement('option'); o.value=v; o.textContent = v? `${v} (${counts.get(v)||0})` : 'Todos los clientes'; clientFilterEl.appendChild(o); });
     }catch(e){ console.warn('[actividad] populateClientFilter', e); }
   }
-  function toggleSort(col){ if (sortCol === col){ sortDir = (sortDir==='asc'?'desc':'asc'); } else { sortCol = col; sortDir = 'asc'; } applySort(); renderHead(); renderBody(view); }
-  function applySort(){ const dir = sortDir === 'asc' ? 1 : -1; const order = visibleCols ? visibleCols.order : headers.map((_,k)=>k); const idx = order[sortCol] ?? sortCol; view = [...view].sort((a,b)=>{ const av = a[idx] ?? ''; const bv = b[idx] ?? ''; const an = parseFloat(String(av).replace(/,/g,'')); const bn = parseFloat(String(bv).replace(/,/g,'')); const bothNum = !isNaN(an) && !isNaN(bn); if (bothNum) return (an>bn?1:an<bn?-1:0)*dir; return String(av).localeCompare(String(bv), 'es', { sensitivity:'base' }) * dir; }); }
 
   function buildVisibleColumns(){
-    const wanted = [ 'SERIAL','#', 'EQUIPO / ACTIVO','EQUIPO/ACTIVO','EQUIPO ACTIVO', 'DESCRIPCION','DESCRIPCIÓN', 'CLIENTE','AREA DEL CLIENTE','UBICACIÓN', 'FECHA EMBARQUE', 'INICIO DEL SERVICIO', 'TERMINACION DEL SERVICIO', 'DIAS EN SERVICIO', 'PRECIO', 'COT / ESTIMACION', 'FACTURA', 'O. S.', 'ORDEN DE COMPRA','ORDEN COMPRA','NO. ORDEN DE COMPRA','NO ORDEN DE COMPRA','NÚMERO DE ORDEN','NUMERO DE ORDEN','OC','ORDEN DE COMRA' ];
+    // Columnas visibles en la tabla operativa (se omiten PRECIO y FACTURA a propósito)
+    const wanted = [
+      'SERIAL','#',
+      'EQUIPO / ACTIVO','EQUIPO/ACTIVO','EQUIPO ACTIVO',
+      'DESCRIPCION','DESCRIPCIÓN',
+      'CLIENTE','AREA DEL CLIENTE','UBICACIÓN',
+      'FECHA EMBARQUE',
+      'INICIO DEL SERVICIO',
+      'TERMINACION DEL SERVICIO',
+      'DIAS EN SERVICIO',
+      'COT / ESTIMACION',
+      'O. S.',
+      'ORDEN DE COMPRA','ORDEN COMPRA','NO. ORDEN DE COMPRA','NO ORDEN DE COMPRA','NÚMERO DE ORDEN','NUMERO DE ORDEN','OC','ORDEN DE COMRA'
+    ];
     const normHeaders = headers.map(h=>normalizeHeader(h).toUpperCase());
     const order = []; const labels = []; const seen = new Set();
-    wanted.forEach(name=>{ const idx = normHeaders.indexOf(normalizeHeader(name).toUpperCase()); if (idx>=0 && !seen.has(idx)){ order.push(idx); labels.push(headers[idx]); seen.add(idx); } });
+    wanted.forEach(name=>{
+      const idx = normHeaders.indexOf(normalizeHeader(name).toUpperCase());
+      if (idx>=0 && !seen.has(idx)){
+        order.push(idx); labels.push(headers[idx]); seen.add(idx);
+      }
+    });
     if (!order.length){ visibleCols = null; return; }
     const normLabel = (s)=> normalizeHeader(s).toUpperCase();
     const ocVariants = new Set(['ORDEN DE COMPRA','ORDEN COMPRA','NO. ORDEN DE COMPRA','NO ORDEN DE COMPRA','NÚMERO DE ORDEN','NUMERO DE ORDEN','OC','ORDEN DE COMRA']);
@@ -571,7 +595,12 @@
       if (osVariants.has(lnorm)) labels[k] = 'ORDEN DE SERVICIO';
     }
     const hasDesc = labels.some(l=>normLabel(l)==='DESCRIPCION');
-    if (!hasDesc){ const eqIdx = labels.findIndex(l=>['EQUIPO / ACTIVO','EQUIPO/ACTIVO','EQUIPO ACTIVO','EQUIPO'].includes(normLabel(l))); const insertAt = eqIdx>=0 ? eqIdx+1 : 1; labels.splice(insertAt, 0, 'DESCRIPCION'); order.splice(insertAt, 0, -1); }
+    if (!hasDesc){
+      const eqIdx = labels.findIndex(l=>['EQUIPO / ACTIVO','EQUIPO/ACTIVO','EQUIPO ACTIVO','EQUIPO'].includes(normLabel(l)));
+      const insertAt = eqIdx>=0 ? eqIdx+1 : 1;
+      labels.splice(insertAt, 0, 'DESCRIPCION');
+      order.splice(insertAt, 0, -1);
+    }
     visibleCols = { order, labels };
     propiedadIdx = normHeaders.indexOf('PROPIEDAD');
     computeVisibleIndices();
@@ -775,12 +804,95 @@
     const eqClear = document.getElementById('doc-equipo-clear');
     const eqCounter = document.getElementById('doc-equipo-counter');
     const eqList = document.getElementById('doc-multi-list');
+    const inpCliente = document.getElementById('doc-cliente');
+    const inpArea = document.getElementById('doc-area');
+    const inpUbic = document.getElementById('doc-ubic');
+    const inpOS = document.getElementById('doc-os');
+    const inpOC = document.getElementById('doc-oc');
+    const inpFactura = document.getElementById('doc-factura');
+    const inpEstCot = document.getElementById('doc-estcot');
+    const inpEmbarque = document.getElementById('doc-embarque');
+    const inpInicio = document.getElementById('doc-inicio');
+    const inpDias = document.getElementById('doc-dias');
+    const inpPrecio = document.getElementById('doc-precio');
+    // Campos que hoy no existen en el formulario pero se usan en lógica heredada
+    const inpTerm = null;
+    const outDevol = null;
+    const outFinP = null;
+    const outCont = null;
+    const outIngreso = null;
+    const outRenta = null;
+    const outSerial = document.getElementById('doc-serial');
+    const outEdo = document.getElementById('doc-edo');
+    const outProp = document.getElementById('doc-propiedad');
+    const outCert = document.getElementById('doc-cert');
+    const outDesc = document.getElementById('doc-desc');
+
+    // Autocompletado de cliente usando clientes ya registrados en la tabla
+    try{
+      if (inpCliente && rows && Array.isArray(rows) && clienteIdx>=0){
+        const cliSet = new Set();
+        rows.forEach(r=>{ const v = String(r[clienteIdx]||'').trim(); if (v) cliSet.add(v); });
+        const cliOpts = Array.from(cliSet.values()).sort((a,b)=>a.localeCompare(b||'', 'es', {sensitivity:'base'}));
+        ensureDatalist('dl-actividad-clientes', cliOpts);
+        inpCliente.setAttribute('list','dl-actividad-clientes');
+      }
+    }catch(e){ console.warn('[actividad] cliente datalist', e); }
+
+    // Ocultar campo secundario de "agregar otro equipo/activo", usamos solo el principal con lista múltiple
+    try{
+      if (eqAdd && eqAdd.parentElement){ eqAdd.parentElement.style.display = 'none'; }
+      if (eqClear){ eqClear.style.marginLeft = '0'; }
+    }catch(e){ console.warn('[actividad] ocultar eq-add', e); }
+
+    function refreshSerialDescFromSelection(){
+      try{
+        const selected = (multiSelectEquipos && multiSelectEquipos.size>0)
+          ? Array.from(multiSelectEquipos)
+          : (((eqInput && eqInput.value)||'').trim() ? [eqInput.value.trim()] : []);
+        const serials = [];
+        const descs = [];
+        const edos = [];
+        const props = [];
+        selected.forEach(eq=>{
+          const keyU = String(eq||'').toUpperCase();
+          const s = invSerialByEquipo.get(eq) || invSerialByEquipo.get(keyU) || '';
+          const d = invDescByEquipo.get(eq) || invDescByEquipo.get(keyU) || '';
+          const edo = invEstadoByEquipo.get(eq) || invEstadoByEquipo.get(keyU) || '';
+          const prop = invPropByEquipo.get(eq) || invPropByEquipo.get(keyU) || '';
+          if (s) serials.push(s);
+          if (d) descs.push(d);
+          if (edo) edos.push(edo);
+          if (prop) props.push(prop);
+        });
+        if (outSerial) outSerial.textContent = serials.length ? serials.join('\n') : '—';
+        if (outDesc) outDesc.textContent = descs.length ? descs.join('\n') : '—';
+        if (outEdo) outEdo.textContent = edos.length ? edos.join(', ') : '—';
+        if (outProp) outProp.textContent = props.length ? props.join(', ') : 'PCT';
+        // El certificado se mantiene como está; se administra en otro flujo
+      }catch(e){ console.warn('[actividad] refreshSerialDescFromSelection error', e); }
+    }
     function autofillFromEquipo(){ refreshSerialDescFromSelection(); }
-    eqInput.addEventListener('input', ()=>{ autofillFromEquipo(); updateDocSaveEnabled(); });
-    eqInput.addEventListener('change', ()=>{ autofillFromEquipo(); updateDocSaveEnabled(); });
+    function addEquipoFromInput(){
+      if (!eqInput) return;
+      const val = (eqInput.value||'').trim();
+      if (!val) return;
+      multiSelectEquipos.add(val);
+      eqInput.value = '';
+      renderSelectedList();
+      autofillFromEquipo();
+      updateDocSaveEnabled();
+    }
+    // Al salir del campo principal de equipo, agregar ese equipo a la lista múltiple y limpiar input
+    if (eqInput){
+      eqInput.addEventListener('blur', ()=>{ addEquipoFromInput(); });
+      eqInput.addEventListener('keydown', (e)=>{
+        if (e.key === 'Enter'){ e.preventDefault(); addEquipoFromInput(); }
+      });
+    }
 
     function attachDateMask(input){ if (!input) return; input.addEventListener('input', (e)=>{ let value = e.target.value.replace(/\D/g,''); if (value.length>6) value = value.slice(0,6); let f=''; if (value.length>=1) f += value.slice(0,2); if (value.length>=3) f += '/' + value.slice(2,4); if (value.length>=5) f += '/' + value.slice(4,6); e.target.value = f; }); }
-    [inpEmbarque, inpInicio, inpTerm].forEach(attachDateMask);
+    [inpEmbarque, inpInicio].forEach(attachDateMask);
 
     function recomputeDias(){
       const di = parseDMY(inpInicio.value);
@@ -788,14 +900,30 @@
       // Nuevo criterio: al registrar actividad solo se contabiliza 1 día (ingreso diario)
       inpDias.value = '1';
     }
-    function recomputeDevolucion(){ if (!inpTerm){ outDevol.textContent='—'; return; } const dt = parseDMY(inpTerm.value); if (!dt){ outDevol.textContent='—'; return; } const d = new Date(dt); d.setDate(d.getDate()+1); outDevol.textContent = formatDMY(d); }
+    function recomputeDevolucion(){
+      if (!inpTerm || !outDevol) return;
+      const dt = parseDMY(inpTerm.value);
+      if (!dt){ outDevol.textContent='—'; return; }
+      const d = new Date(dt); d.setDate(d.getDate()+1);
+      outDevol.textContent = formatDMY(d);
+    }
     function recomputeFinParcialesContinuacion(){
       // Al crear el registro ya no se generan fin parcial ni continuaciones;
       // se dejan en blanco para que se administren posteriormente.
-      outFinP.textContent='';
-      outCont.textContent='';
+      if (outFinP) outFinP.textContent='';
+      if (outCont) outCont.textContent='';
     }
-    function recomputeIngresoRenta(){ const d = parseFloat(inpDias.value)||0; const p = parseFloat(inpPrecio.value)||0; const total = d*p; const tipo = selTipo.value; outIngreso.textContent = (tipo==='propio' && total>0) ? ('$'+ total.toLocaleString('es-MX',{minimumFractionDigits:2, maximumFractionDigits:2})) : '—'; outRenta.textContent = (tipo==='terceros' && total>0) ? ('$'+ total.toLocaleString('es-MX',{minimumFractionDigits:2, maximumFractionDigits:2})) : '—'; }
+    function recomputeIngresoRenta(){
+      if (!outIngreso || !outRenta) return;
+      const d = parseFloat(inpDias.value)||0;
+      const p = parseFloat(inpPrecio.value)||0;
+      const total = d*p;
+      const tipo = selTipo.value;
+      outIngreso.textContent = (tipo==='propio' && total>0)
+        ? ('$'+ total.toLocaleString('es-MX',{minimumFractionDigits:2, maximumFractionDigits:2})) : '—';
+      outRenta.textContent = (tipo==='terceros' && total>0)
+        ? ('$'+ total.toLocaleString('es-MX',{minimumFractionDigits:2, maximumFractionDigits:2})) : '—';
+    }
 
     [inpInicio, inpTerm].forEach(el=>{ if(el){ el.addEventListener('change', ()=>{ recomputeDias(); recomputeDevolucion(); recomputeFinParcialesContinuacion(); updateDocSaveEnabled(); }); el.addEventListener('blur', recomputeFinParcialesContinuacion); }});
     if (inpDias) inpDias.addEventListener('input', ()=>{ recomputeIngresoRenta(); updateDocSaveEnabled(); });
@@ -810,14 +938,22 @@
       const baseProp = selTipo.value==='propio' ? 'PCT' : (provInput.value||'');
       const selected = (multiSelectEquipos && multiSelectEquipos.size>0) ? Array.from(multiSelectEquipos) : ((eqInput.value||'').trim()? [eqInput.value.trim()] : []);
       if (!selected.length){ alert('Selecciona al menos un equipo.'); return; }
-      // Requerir OS u OC para trazabilidad e inbox
-      const osVal = (inpOS.value||'').trim();
-      const ocVal = (inpOC.value||'').trim();
+      // OS/OC: si vienen vacíos, generarlos automáticamente
+      let osVal = (inpOS.value||'').trim();
+      let ocVal = (inpOC.value||'').trim();
+      if (!osVal && !ocVal){
+        const autoId = generateLoteId();
+        osVal = 'OS-' + autoId;
+        ocVal = 'OC-' + autoId;
+        inpOS.value = osVal;
+        inpOC.value = ocVal;
+      }
+      // Validación suave: solo si por alguna razón siguen vacíos, bloquear
       if (!requireOSorOC(osVal, ocVal)){
-        alert('Captura ORDEN DE SERVICIO y/o ORDEN DE COMPRA para generar órdenes de prueba.');
+        alert('No se pudo generar ORDEN DE SERVICIO / COMPRA. Intenta de nuevo.');
         return;
       }
-      const loteId = (selected.length>1) ? generateLoteId() : (inpOS.value||'');
+      const loteId = (selected.length>1) ? osVal : osVal;
       const i = (vars)=> headerIndex(vars);
       const iPROPIEDAD=i(['PROPIEDAD']); const iSERIAL=i(['SERIAL','#']); const iEQUIPO=i(['EQUIPO / ACTIVO','EQUIPO/ACTIVO','EQUIPO ACTIVO','EQUIPO']);
       const iDESC=i(['DESCRIPCION','DESCRIPCIÓN']); const iCLIENTE=i(['CLIENTE']); const iAREA=i(['AREA DEL CLIENTE','ÁREA DEL CLIENTE']);

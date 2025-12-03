@@ -15,6 +15,7 @@
   let view = [];
   let visible = null;
   const collapsedClients = new Set();
+  let collapsedInitialized = false;
 
   const norm = (s)=> String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\s+/g,' ').trim();
   const fmt = (n)=> n.toLocaleString('es-MX', { minimumFractionDigits:0, maximumFractionDigits:2 });
@@ -86,7 +87,9 @@
       const di = parseDMY(row[iIni]);
       const dt = parseDMY(row[iTerm]);
       if (di){
-        const end = (dt && dt>di) ? dt : today;
+        // Si la terminación es pasada, usamos terminación; si es futura o vacía, contamos hasta hoy
+        let end = today;
+        if (dt && dt >= di && dt <= today) end = dt;
         if (end >= di){
           d = Math.max(0, Math.ceil((end - di)/(1000*60*60*24)) + 1);
         }
@@ -105,6 +108,38 @@
     if (prop!=='PCT' && iRen>=0) row[iRen] = String(monto);
   }
 
+  function saveRowsToLocal(){
+    try {
+      const lsKey = 'actividad:newRows';
+      const normalizeRow = (r)=>{
+        if (Array.isArray(r)) return r;
+        if (!r || typeof r !== 'object') return [];
+        const out = [];
+        for (let i=0;i<headers.length;i++){
+          out[i] = r[i] ?? '';
+        }
+        return out;
+      };
+      const clean = Array.isArray(rows) ? rows.map(normalizeRow) : [];
+      localStorage.setItem(lsKey, JSON.stringify(clean));
+    } catch(e) {
+      console.warn('[actividadmin] No se pudo guardar en localStorage', e);
+    }
+  }
+
+  function attachDateMask(input){
+    if (!input) return;
+    input.addEventListener('input', (e)=>{
+      let value = String(e.target.value||'').replace(/\D/g,'');
+      if (value.length>6) value = value.slice(0,6);
+      let f='';
+      if (value.length>=1) f += value.slice(0,2);
+      if (value.length>=3) f += '/' + value.slice(2,4);
+      if (value.length>=5) f += '/' + value.slice(4,6);
+      e.target.value = f;
+    });
+  }
+
   function renderHead(){
     const tr = document.createElement('tr');
     visible.labels.forEach(l=>{ const th = document.createElement('th'); th.textContent = l; tr.appendChild(th); });
@@ -116,6 +151,9 @@
     const iCliente = headerIndex(['CLIENTE']);
     const iArea = headerIndex(['AREA DEL CLIENTE','ÁREA DEL CLIENTE']);
     const iPrecio = headerIndex(['PRECIO']);
+    const iTerm = headerIndex(['TERMINACION DEL SERVICIO','TERMINACIÓN DEL SERVICIO']);
+    const iIng = headerIndex(['INGRESO ACUMULADO','INGRESO ACUMULDDO']);
+    const iRen = headerIndex(['RENTA ACUMULADA']);
 
     // Construir estructura Cliente -> Área -> filas
     const groups = new Map();
@@ -130,9 +168,10 @@
 
     const sortedClients = Array.from(groups.keys()).sort((a,b)=>a.localeCompare(b||'', 'es', {sensitivity:'base'}));
 
-    // Si es la primera vez y no hay estado de colapso, colapsar todos por defecto
-    if (collapsedClients.size === 0){
+    // Si es la primera vez y no hay estado de colapso, colapsar todos por defecto (una sola vez)
+    if (!collapsedInitialized && collapsedClients.size === 0){
       sortedClients.forEach(c => collapsedClients.add(c));
+      collapsedInitialized = true;
     }
 
     sortedClients.forEach(cli => {
@@ -183,21 +222,51 @@
           visible.order.forEach((idx, j)=>{
             const td = document.createElement('td');
             const label = visible.labels[j] || '';
-            const isPrecioCol = idx === iPrecio || norm(label).toUpperCase()==='PRECIO';
-            if (isPrecioCol){
+            const upperLabel = norm(label).toUpperCase();
+            const isPrecioCol = idx === iPrecio || upperLabel==='PRECIO';
+            const isTermCol = idx === iTerm || upperLabel==='TERMINACION DEL SERVICIO';
+            if (isTermCol){
+              const inp = document.createElement('input');
+              inp.type = 'text';
+              inp.placeholder = 'dd/mm/aa';
+              inp.style.width = '100%';
+              inp.style.boxSizing = 'border-box';
+              inp.value = String(r[idx] ?? '');
+              attachDateMask(inp);
+              const commitTerm = ()=>{
+                r[idx] = inp.value.trim();
+                ensureComputedAmounts(r);
+                saveRowsToLocal();
+                renderBody(view);
+              };
+              inp.addEventListener('change', commitTerm);
+              inp.addEventListener('blur', commitTerm);
+              td.appendChild(inp);
+            } else if (isPrecioCol){
               const inp = document.createElement('input');
               inp.type = 'number';
               inp.step = '0.01';
               inp.style.width = '100%';
               inp.style.boxSizing = 'border-box';
+              inp.style.textAlign = 'right';
               inp.value = String(r[idx] ?? '');
-              inp.addEventListener('change', ()=>{
-                const v = parseFloat(inp.value.replace(/,/g,''));
+              const commitPrecio = ()=>{
+                const v = parseFloat(String(inp.value||'').replace(/,/g,''));
                 r[idx] = isNaN(v) ? '' : String(v);
                 ensureComputedAmounts(r);
+                saveRowsToLocal();
                 renderBody(view);
+              };
+              inp.addEventListener('change', commitPrecio);
+              inp.addEventListener('blur', commitPrecio);
+              inp.addEventListener('keydown', (e)=>{
+                if (e.key === 'Enter'){ e.preventDefault(); commitPrecio(); }
               });
               td.appendChild(inp);
+            } else if (idx === iIng || idx === iRen) {
+              const valNum = num(r[idx]);
+              td.textContent = valNum ? ('$' + fmt(valNum)) : '$0';
+              td.style.textAlign = 'right';
             } else {
               td.textContent = String(r[idx] ?? '');
             }

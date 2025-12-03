@@ -207,9 +207,10 @@ function renderTable(rows){
   const collapsed = (renderTable._collapsedClients = renderTable._collapsedClients || new Set());
   const clients = Array.from(groups.keys()).sort((a,b)=>a.localeCompare(b||'', 'es', {sensitivity:'base'}));
 
-  // Primera vez: si no hay estado previo, colapsar todos los clientes por defecto
-  if (collapsed.size === 0){
+  // Primera vez: si no hay estado previo, colapsar todos los clientes por defecto (solo una vez)
+  if (!renderTable._collapsedInitialized && collapsed.size === 0){
     clients.forEach(c => collapsed.add(c));
+    renderTable._collapsedInitialized = true;
   }
 
   clients.forEach(cli=>{

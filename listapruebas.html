@@ -627,58 +627,18 @@
             UPCOMING_VIEW = UPCOMING_VIEW.filter(o => !o.__isMock);
           } else {
             const pad = (n)=>String(n).padStart(2,'0');
+            // Tomar hasta 10 equipos reales ya calculados en UPCOMING_DATA
+            const base = UPCOMING_DATA.length ? UPCOMING_DATA : [];
+            const sample = base.slice(0, 10);
             const today = new Date(); today.setHours(0,0,0,0);
-
-            // Construir candidatos a partir de todas las pruebas (DATA) usando equipos reales
-            const candidatosMap = new Map(); // equipo -> objeto base
-            for (const doc of DATA){
-              const headers = doc.headers || HEADERS;
-              const data = doc.data || {};
-              if (!headers || !data) continue;
-
-              const idxEq = headerIndexByVariantsFrom(headers, ['EQUIPO / ACTIVO','EQUIPO/ACTIVO','EQUIPO ACTIVO','EQUIPO']);
-              if (idxEq < 0) continue;
-              const keyEq = headers[idxEq];
-              const equipo = String(data[keyEq]||'').trim();
-              if (!equipo || candidatosMap.has(equipo)) continue;
-
-              const idxCli = headerIndexByVariantsFrom(headers, ['CLIENTE']);
-              const idxOS  = headerIndexByVariantsFrom(headers, ['ORDEN DE SERVICIO','O. S.','O.S.','OS']);
-              const idxOC  = headerIndexByVariantsFrom(headers, ['ORDEN DE COMPRA','ORDEN COMPRA','NO. ORDEN DE COMPRA','NO ORDEN DE COMPRA','NÚMERO DE ORDEN','NUMERO DE ORDEN','OC']);
-              const idxEdo = headerIndexByVariantsFrom(headers, ['EDO_GENERAL','EDO','ESTADO']);
-              const idxPr  = headerIndexByVariantsFrom(headers, ['PRUEBA / CALIBRACION','PRUEBA/CALIBRACION','PRUEBA','TIPO DE PRUEBA']);
-
-              const cliente = idxCli>=0 ? String(data[headers[idxCli]]||'').trim() : '';
-              const os = idxOS>=0 ? String(data[headers[idxOS]]||'').trim() : '';
-              const oc = idxOC>=0 ? String(data[headers[idxOC]]||'').trim() : '';
-              const edo = idxEdo>=0 ? String(data[headers[idxEdo]]||'').trim() : '';
-              const prueba = idxPr>=0 ? String(data[headers[idxPr]]||'').trim() : '';
-
-              candidatosMap.set(equipo, {
-                equipo,
-                pruebasRequeridas: prueba ? [prueba] : [],
-                os,
-                oc,
-                cliente,
-                edo,
-                status: 'pendiente'
-              });
-            }
-
-            const candidatos = Array.from(candidatosMap.values());
-            if (!candidatos.length){ updateMockButtonsState(); return; }
-
-            // Mezclar aleatoriamente y tomar hasta 10
-            for (let i=candidatos.length-1; i>0; i--){
-              const j = Math.floor(Math.random()*(i+1));
-              [candidatos[i], candidatos[j]] = [candidatos[j], candidatos[i]];
-            }
-            const sample = candidatos.slice(0, 10);
-
             const nuevos = sample.map((o, idx)=>{
-              const dProx = new Date(today.getTime());
-              dProx.setDate(dProx.getDate() + (idx+1)*7);
-              const proxStr = `${pad(dProx.getDate())}/${pad(dProx.getMonth()+1)}/${String(dProx.getFullYear()).slice(-2)}`;
+              // Si no hay fecha próxima explícita en el objeto, generarla a partir de hoy
+              let proxStr = o.proxima || '';
+              if (!proxStr){
+                const dProx = new Date(today.getTime());
+                dProx.setDate(dProx.getDate() + (idx+1)*7);
+                proxStr = `${pad(dProx.getDate())}/${pad(dProx.getMonth()+1)}/${String(dProx.getFullYear()).slice(-2)}`;
+              }
               return {
                 ...o,
                 __isMock: true,
@@ -690,7 +650,6 @@
                 proxima: proxStr
               };
             });
-
             UPCOMING_DATA = [...UPCOMING_DATA, ...nuevos];
             UPCOMING_VIEW = UPCOMING_DATA.slice();
           }
