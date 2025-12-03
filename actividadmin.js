@@ -2,6 +2,18 @@
   const SRC_BASE = 'docs/REGISTRO DE ACTIVIDAD PCT 2025.csv';
   const SRC = SRC_BASE + '?t=' + Date.now();
 
+  const COLLECTION_NAME = 'activityRecords';
+  let firebaseReady = false;
+  function waitForFirebase(){
+    return new Promise((resolve)=>{
+      const check = ()=>{
+        if (window.db && window.auth){ firebaseReady = true; resolve(true); }
+        else setTimeout(check, 100);
+      };
+      check();
+    });
+  }
+
   const thead = document.getElementById('theadMin');
   const tbody = document.getElementById('tbodyMin');
   const q = document.getElementById('qmin');
@@ -70,6 +82,20 @@
       if (u==='TERMINACION DEL SERVICIO' || u==='TERMINACIÓN DEL SERVICIO') labels[i] = 'TERMINACION DEL SERVICIO';
     }
     visible = { order, labels };
+  }
+
+  async function updateFirestoreRow(row){
+    try{
+      if (!firebaseReady || !window.db) return;
+      const id = row && row._firestoreId;
+      if (!id) return;
+      const payload = Array.isArray(row) ? Array.from(row) : row;
+      await window.db.collection(COLLECTION_NAME).doc(id).update({
+        row: payload,
+        timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+        updatedAt: new Date().toISOString()
+      });
+    }catch(e){ console.warn('[actividadmin] No se pudo actualizar Firestore', e); }
   }
 
   function ensureComputedAmounts(row){
@@ -238,6 +264,7 @@
                 ensureComputedAmounts(r);
                 saveRowsToLocal();
                 renderBody(view);
+                updateFirestoreRow(r);
               };
               inp.addEventListener('change', commitTerm);
               inp.addEventListener('blur', commitTerm);
@@ -306,6 +333,7 @@
   }
 
   async function load(){
+    await waitForFirebase();
     try{
       const lsKey = 'actividad:newRows';
       let extra = [];

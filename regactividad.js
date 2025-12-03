@@ -83,13 +83,11 @@ async function loadHistory() {
           .get();
         
         rows = snapshot.docs.map(doc => {
-          const data = doc.data();
-          return {
-            id: doc.id,
-            ...data.row,
-            _firestoreId: doc.id,
-            _timestamp: data.timestamp
-          };
+          const data = doc.data() || {};
+          const baseRow = Array.isArray(data.row) ? data.row.slice() : [];
+          baseRow._firestoreId = doc.id;
+          baseRow._timestamp = data.timestamp || null;
+          return baseRow;
         });
 
         // Normalizar nombres de cliente heredados
@@ -97,16 +95,16 @@ async function loadHistory() {
         
         console.log(`[regactividad] Cargados ${rows.length} registros desde Firestore`);
         
-        // Actualizar localStorage como caché
+        // Actualizar localStorage como caché (preservando _firestoreId en cada fila)
         try {
           const rowsData = rows.map(r => {
-            const { _firestoreId, _timestamp, id, ...rowData } = r;
-            return rowData;
+            if (!Array.isArray(r)) return r;
+            const arr = Array.from(r);
+            if (r._firestoreId) arr._firestoreId = r._firestoreId;
+            if (r._timestamp) arr._timestamp = r._timestamp;
+            return arr;
           });
           localStorage.setItem('actividad:newRows', JSON.stringify(rowsData));
-          localStorage.setItem('actividad:firestoreIds', JSON.stringify(
-            rows.map(r => ({ index: rows.indexOf(r), firestoreId: r._firestoreId }))
-          ));
         } catch (e) {
           console.warn('[regactividad] No se pudo actualizar caché local:', e);
         }
@@ -306,6 +304,32 @@ function renderTable(rows){
   });
 } 
 
+async function cancelRelatedTestOrders(row){
+  try{
+    await waitForFirebase();
+    if (!firebaseReady || !window.db) return;
+    const actividadId = row && row._firestoreId;
+    if (!actividadId) return;
+
+    const snap = await window.db.collection('testOrders')
+      .where('actividadRef','==',actividadId)
+      .where('status','==','pending')
+      .limit(500)
+      .get();
+    if (snap.empty) return;
+
+    const batch = window.db.batch();
+    snap.docs.forEach(doc => {
+      batch.update(doc.ref, {
+        status: 'cancelled',
+        updatedAt: new Date().toISOString()
+      });
+    });
+    await batch.commit();
+    console.log(`[regactividad] Órdenes de prueba canceladas para actividad ${actividadId}:`, snap.size);
+  }catch(e){ console.warn('[regactividad] No se pudieron cancelar testOrders relacionadas', e); }
+}
+
 async function deleteRecord(index, row) {
   if (!(window.isAdmin && window.isAdmin())) {
     alert('Solo un administrador puede eliminar registros.');
@@ -318,6 +342,9 @@ async function deleteRecord(index, row) {
       await window.db.collection(COLLECTION_NAME).doc(row._firestoreId).delete();
       console.log('[regactividad] Registro eliminado de Firestore:', row._firestoreId);
     }
+
+    // Marcar como canceladas las órdenes de prueba ligadas a esta actividad
+    await cancelRelatedTestOrders(row);
     
     // Eliminar de localStorage
     const key = 'actividad:newRows';

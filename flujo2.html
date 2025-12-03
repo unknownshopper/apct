@@ -1,0 +1,383 @@
+<!doctype html>
+<html lang="es">
+ <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Flujo de Actividad → Pruebas</title>
+  <style>
+   :root { --bg:#020617; --panel:#020617; --panel-soft:#0b1120; --muted:#9ca3af; --text:#e5e7eb; --accent:#3b82f6; --accent-2:#a855f7; --accent-3:#22c55e; --border-soft:rgba(148,163,184,.3); }
+   * { box-sizing: border-box; }
+   html, body { height: 100%; }
+   body {
+    margin: 0;
+    background:
+      radial-gradient(1200px 600px at 0% 0%, rgba(59,130,246,.20), transparent 60%),
+      radial-gradient(1000px 500px at 100% 100%, rgba(168,85,247,.18), transparent 60%),
+      linear-gradient(180deg,#020617,#020617 40%,#020617 100%);
+    color: var(--text);
+    font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+   }
+   .wrap { max-width: 1400px; margin: 0 auto; padding: 26px 20px 40px; }
+   h1 { font-size: 30px; letter-spacing: .3px; margin: 4px 0 10px; }
+   p.lead { color: var(--muted); margin: 0 0 18px; max-width: 70ch; }
+
+   .badge-row { display:flex; flex-wrap:wrap; gap:8px; margin-bottom: 10px; font-size: 12px; color: var(--muted); }
+   .badge { padding:3px 9px; border-radius:999px; border:1px solid rgba(148,163,184,.4); background:rgba(15,23,42,.8); display:inline-flex; align-items:center; gap:6px; }
+   .badge span.dot { width:7px; height:7px; border-radius:999px; background:var(--accent); }
+
+   .canvas {
+    position: relative;
+    margin-top: 24px;
+    border-radius: 18px;
+    padding: 22px 22px 26px;
+    background:
+      radial-gradient(1600px 700px at 0% 0%, rgba(59,130,246,.30), transparent 65%),
+      radial-gradient(1300px 700px at 100% 100%, rgba(168,85,247,.30), transparent 60%),
+      radial-gradient(800px 400px at 50% 100%, rgba(34,197,94,.25), transparent 65%),
+      #020617;
+    box-shadow: 0 30px 80px rgba(15,23,42,.9);
+    overflow-x:auto;
+    overflow-y:hidden;
+    cursor: grab;
+   }
+
+   /* Organigrama horizontal */
+   .org {
+    display:flex;
+    align-items:stretch;
+    gap:18px;
+    min-width: 1000px;
+    padding:6px 4px 4px;
+   }
+   .org-step {
+    min-width: 260px;
+    max-width: 320px;
+    flex: 0 0 auto;
+    display:flex;
+    flex-direction:column;
+    gap:8px;
+   }
+   .org-label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing:.14em;
+    color:#94a3b8;
+    padding-left:4px;
+   }
+   .org-connector {
+    flex:0 0 auto;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    min-width: 80px;
+    color: var(--muted);
+    font-size:11px;
+    text-align:center;
+    gap:6px;
+   }
+   .org-connector svg { width:56px; height:18px; }
+   .org-connector path { stroke-width:2; fill:none; stroke-dasharray:4 5; }
+
+   .card {
+    position:relative;
+    border-radius:16px;
+    padding:14px 14px 14px;
+    background: radial-gradient(400px 260px at 0% 0%, rgba(59,130,246,.25), transparent 70%),
+                radial-gradient(280px 200px at 100% 100%, rgba(168,85,247,.20), transparent 70%),
+                rgba(15,23,42,.96);
+    border: 1px solid rgba(148,163,184,.45);
+    box-shadow: 0 18px 40px rgba(15,23,42,.95);
+    backdrop-filter: blur(10px);
+    min-height: 140px;
+   }
+   .card--compact { min-height: 112px; }
+   .card-header { display:flex; align-items:flex-start; justify-content:space-between; gap:10px; margin-bottom:6px; }
+   .card-title { font-size:15px; font-weight:600; display:flex; flex-direction:column; gap:1px; }
+   .card-title span.sub { font-size:11px; font-weight:500; color: var(--muted); text-transform:uppercase; letter-spacing:.09em; }
+   .card-tag { font-size:11px; text-transform:uppercase; letter-spacing:.12em; padding:3px 9px; border-radius:999px; border:1px solid rgba(148,163,184,.5); color:#e5e7eb; background:rgba(15,23,42,.8); }
+   .card-tag--primary { border-color:rgba(59,130,246,.8); color:#bfdbfe; background:rgba(15,23,42,.9); }
+   .card-tag--db { border-color:rgba(52,211,153,.8); color:#bbf7d0; }
+   .card-tag--tests { border-color:rgba(250,204,21,.85); color:#fef9c3; }
+
+   .bubble { position:absolute; top:8px; right:10px; font-size:11px; color:#0b1120; background:#e5e7eb; border-radius:999px; padding:1px 7px; font-weight:600; border:1px solid rgba(15,23,42,.9); }
+
+   .card ul { margin:4px 0 0; padding-left:16px; color:var(--muted); font-size:13px; }
+   .card ul li { margin:2px 0; line-height:1.45; }
+
+   .chips { margin-top:6px; display:flex; flex-wrap:wrap; gap:6px; }
+   .chip { font-size:11px; border-radius:999px; padding:3px 8px; border:1px dashed rgba(148,163,184,.55); color:#cbd5f5; background:rgba(15,23,42,.85); }
+   .chip--in { border-style:solid; border-color:rgba(59,130,246,.7); background:rgba(15,23,42,.95); color:#bfdbfe; }
+   .chip--out { border-style:solid; border-color:rgba(22,163,74,.7); background:rgba(15,23,42,.95); color:#bbf7d0; }
+   .chip--file { border-color:rgba(249,115,22,.8); color:#fed7aa; }
+   .chip--view { border-color:rgba(168,85,247,.8); color:#e9d5ff; }
+
+   .legend { margin-top: 18px; display:flex; flex-wrap:wrap; gap:10px; font-size:12px; color:var(--muted); }
+   .pill { display:inline-flex; align-items:center; gap:7px; padding:5px 9px; border-radius:999px; background:rgba(15,23,42,.9); border:1px solid rgba(148,163,184,.7); }
+   .dot { width:8px; height:8px; border-radius:50%; }
+
+   @media (max-width: 980px) {
+    .canvas { padding:18px 14px 22px; }
+    .org { flex-direction:column; min-width:0; }
+    .org-step { max-width:100%; }
+    .org-connector { min-height:24px; }
+   }
+  </style>
+ </head>
+ <body>
+  <main class="wrap" aria-label="Flujo de actividad hacia pruebas">
+   <h1>Flujo: Actividad → Pruebas programadas</h1>
+   <p class="lead">Visualiza cómo una <strong>actividad creada en actividad.html</strong> se guarda en Firestore, genera órdenes de prueba por equipo y se refleja en las vistas de historial, mini admin y próximas pruebas PND.</p>
+   <div class="badge-row">
+    <span class="badge"><span class="dot"></span> Origen: actividad.html / actividad.js (solo creación)</span>
+    <span class="badge">Firestore: activityRecords, testOrders</span>
+    <span class="badge">Vistas: regactividad.html, actividadmin.html, listapruebas.html</span>
+   </div>
+
+   <section class="canvas" aria-label="Infografía del flujo de trabajo de actividad a pruebas">
+    <div class="org">
+
+     <div class="org-step">
+      <div class="org-label">Creación</div>
+      <article class="card" aria-label="Actividad">
+       <div class="bubble">1</div>
+       <div class="card-header">
+        <div class="card-title">
+         <span class="sub">Actividad</span>
+         <span>actividad.html / actividad.js</span>
+        </div>
+        <span class="card-tag card-tag--primary">Entrada</span>
+       </div>
+       <ul>
+        <li>Carga inventario y datos de cliente para programar una actividad.</li>
+        <li>Solo equipos con <strong>EDO = ON</strong> generan órdenes de prueba.</li>
+        <li>Por cada equipo del lote se construye la lista de pruebas requeridas.</li>
+        <li>En esta vista ya <strong>no se edita ni elimina</strong> la actividad, solo se crea.</li>
+       </ul>
+       <div class="chips" aria-label="Entradas y archivos">
+        <span class="chip chip--in">EDO, Cliente, OS / OC, Precio</span>
+        <span class="chip chip--file">inventario.csv</span>
+        <span class="chip chip--file">unificado.csv</span>
+       </div>
+      </article>
+     </div>
+
+     <div class="org-connector" aria-hidden="true">
+      <svg viewBox="0 0 100 20">
+       <path d="M 4 10 L 96 10" stroke="rgba(59,130,246,.9)" />
+      </svg>
+      <span>Guarda actividad</span>
+     </div>
+
+     <div class="org-step">
+      <div class="org-label">Persistencia</div>
+      <article class="card card--compact" aria-label="Registro de actividad en Firestore">
+       <div class="bubble">2</div>
+       <div class="card-header">
+        <div class="card-title">
+         <span class="sub">Actividad → Firestore</span>
+         <span>activityRecords</span>
+        </div>
+        <span class="card-tag card-tag--db">Firestore</span>
+       </div>
+       <ul>
+        <li>Por cada actividad se guarda una fila en <strong>activityRecords</strong>.</li>
+        <li>La fila se almacena como arreglo <code>row[]</code> con metadatos (timestamp, usuario).</li>
+        <li>Se adjunta <code>_firestoreId</code> a la fila en memoria y al caché local.</li>
+        <li>Este <code>_firestoreId</code> se usa después para editar o eliminar desde regactividad.</li>
+       </ul>
+       <div class="chips" aria-label="Salidas">
+        <span class="chip chip--out">row[] + _firestoreId</span>
+        <span class="chip chip--file">localStorage: actividad:newRows</span>
+       </div>
+      </article>
+
+     </div>
+
+     <div class="org-connector" aria-hidden="true">
+      <svg viewBox="0 0 100 20">
+       <path d="M 4 10 L 96 10" stroke="rgba(250,204,21,.9)" />
+      </svg>
+      <span>Genera órdenes</span>
+     </div>
+
+     <div class="org-step">
+      <div class="org-label">Persistencia</div>
+      <article class="card card--compact" aria-label="Órdenes de prueba en Firestore">
+       <div class="bubble">3</div>
+       <div class="card-header">
+        <div class="card-title">
+         <span class="sub">Órdenes de prueba</span>
+         <span>testOrders</span>
+        </div>
+        <span class="card-tag card-tag--tests">Cola de pruebas</span>
+       </div>
+       <ul>
+        <li>Desde la actividad se generan órdenes por equipo con estado <strong>pending</strong>.</li>
+        <li>Se guarda equipo, cliente, OS/OC, pruebas requeridas, <code>actividadRef</code> y estado.</li>
+        <li>Si se elimina la actividad en regactividad, las órdenes pendientes relacionadas se marcan como <strong>cancelled</strong>.</li>
+       </ul>
+       <div class="chips" aria-label="Salidas de órdenes">
+        <span class="chip chip--out">status: pending</span>
+        <span class="chip chip--out">pruebasRequeridas[]</span>
+       </div>
+      </article>
+     </div>
+
+     <div class="org-connector" aria-hidden="true">
+      <svg viewBox="0 0 100 20">
+       <path d="M 4 10 L 96 10" stroke="rgba(56,189,248,.9)" />
+      </svg>
+      <span>Consulta / administra</span>
+     </div>
+
+     <div class="org-step">
+      <div class="org-label">Consumo</div>
+      <article class="card card--compact" aria-label="Historial de actividad">
+       <div class="bubble">4</div>
+       <div class="card-header">
+        <div class="card-title">
+         <span class="sub">Historial</span>
+         <span>regactividad.html / regactividad.js</span>
+        </div>
+        <span class="card-tag card-tag--view">Operación</span>
+       </div>
+       <ul>
+        <li>Lee primero de <strong>activityRecords</strong> y usa <code>_firestoreId</code> para editar / borrar.</li>
+        <li>Solo perfiles autorizados pueden eliminar actividades desde esta vista.</li>
+        <li>Al eliminar una actividad, también se cancelan sus órdenes pendientes en <strong>testOrders</strong>.</li>
+        <li>Actualiza también el caché en <code>localStorage</code>.</li>
+       </ul>
+       <div class="chips">
+        <span class="chip chip--view">Vista de historial</span>
+        <span class="chip chip--in">row[] + _firestoreId</span>
+       </div>
+      </article>
+
+      <article class="card card--compact" aria-label="Mini admin de actividad">
+       <div class="bubble">5</div>
+       <div class="card-header">
+        <div class="card-title">
+         <span class="sub">Mini admin</span>
+         <span>actividadmin.html / actividadmin.js</span>
+        </div>
+        <span class="card-tag card-tag--view">Administración</span>
+       </div>
+       <ul>
+        <li>Permite editar <strong>Precio</strong> y <strong>Terminación del servicio</strong>.</li>
+        <li>Al guardar, actualiza <strong>activityRecords</strong> usando <code>_firestoreId</code>.</li>
+        <li>Sincroniza cambios con <code>localStorage</code> y KPIs.</li>
+       </ul>
+       <div class="chips">
+        <span class="chip chip--in">row[] + _firestoreId</span>
+        <span class="chip chip--out">updatedAt, timestamp</span>
+       </div>
+      </article>
+     </div>
+
+     <div class="org-connector" aria-hidden="true">
+      <svg viewBox="0 0 100 20">
+       <path d="M 4 10 L 96 10" stroke="rgba(250,204,21,.9)" />
+      </svg>
+      <span>Lee testOrders (pending)</span>
+     </div>
+
+     <div class="org-step">
+      <div class="org-label">Próximas pruebas</div>
+      <article class="card card--compact" aria-label="Próximas pruebas">
+       <div class="bubble">6</div>
+       <div class="card-header">
+        <div class="card-title">
+         <span class="sub">Agenda de pruebas</span>
+         <span>listapruebas.html</span>
+        </div>
+        <span class="card-tag card-tag--tests">Operación</span>
+       </div>
+       <ul>
+        <li>Construye "Próximas pruebas" con datos históricos (colección <strong>pruebas</strong>) y con la colección <strong>testOrders</strong> generada desde actividad.</li>
+        <li>Muestra por equipo: cliente, OS/OC, pruebas requeridas y estado.</li>
+        <li>Incluye control para <strong>borrar todas las órdenes pendientes</strong> de <code>testOrders</code> cuando se quiere reiniciar la agenda.</li>
+       </ul>
+       <div class="chips">
+        <span class="chip chip--in">testOrders (status = pending)</span>
+        <span class="chip">Próximas pruebas por equipo</span>
+       </div>
+      </article>
+     </div>
+
+     <div class="org-connector" aria-hidden="true">
+      <svg viewBox="0 0 100 20">
+       <path d="M 4 10 L 96 10" stroke="rgba(34,197,94,.9)" />
+      </svg>
+      <span>Ejecuta / cierra órdenes</span>
+     </div>
+
+     <div class="org-step">
+      <div class="org-label">Ejecución y cierre</div>
+      <article class="card card--compact" aria-label="Ejecución de pruebas y cierre de ciclo">
+       <div class="bubble">7</div>
+       <div class="card-header">
+        <div class="card-title">
+         <span class="sub">Ejecución</span>
+         <span>Resultados de pruebas / cierre de órdenes</span>
+        </div>
+        <span class="card-tag card-tag--primary">Salida</span>
+       </div>
+       <ul>
+        <li>Las pruebas se ejecutan y se actualiza el estado de cada orden en <strong>testOrders</strong>.</li>
+        <li>La actividad puede marcarse como terminada y alimentar dashboards y KPIs.</li>
+       </ul>
+       <div class="chips">
+        <span class="chip chip--out">status: completed / cancelled</span>
+        <span class="chip">Alimenta tableros y reporting</span>
+       </div>
+      </article>
+     </div>
+    </div>
+
+   </section>
+
+   <div class="legend" aria-label="Leyenda de la infografía">
+    <span class="pill"><span class="dot" style="background: var(--accent);"></span> Creación de actividad</span>
+    <span class="pill"><span class="dot" style="background: #22c55e;"></span> Firestore: activityRecords</span>
+    <span class="pill"><span class="dot" style="background: #eab308;"></span> Firestore: testOrders</span>
+    <span class="pill"><span class="dot" style="background: #a855f7;"></span> Vistas de operación / administración</span>
+   </div>
+
+  </main>
+
+  <script>
+  (function(){
+    const canvas = document.querySelector('.canvas');
+    if (!canvas) return;
+
+    let isDown = false;
+    let startX = 0;
+    let scrollLeft = 0;
+
+    canvas.addEventListener('mousedown', function(e){
+      if (e.button !== 0) return; // solo botón principal
+      isDown = true;
+      canvas.style.cursor = 'grabbing';
+      startX = e.pageX - canvas.offsetLeft;
+      scrollLeft = canvas.scrollLeft;
+    });
+
+    window.addEventListener('mousemove', function(e){
+      if (!isDown) return;
+      e.preventDefault();
+      const x = e.pageX - canvas.offsetLeft;
+      const walk = (x - startX) * 1.1; // sensibilidad
+      canvas.scrollLeft = scrollLeft - walk;
+    });
+
+    ['mouseup','mouseleave'].forEach(function(ev){
+      window.addEventListener(ev, function(){
+        if (!isDown) return;
+        isDown = false;
+        canvas.style.cursor = 'grab';
+      });
+    });
+  })();
+  </script>
+ </body>
+</html>

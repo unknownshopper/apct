@@ -49,7 +49,6 @@
           </ul></details></li>
           <li class="nav-dropdown"><details><summary>Pruebas</summary><ul>
             <li><a href="pruebas.html">PND (pruebas no destructivas)</a></li>
-            <li><a href="stockpruebas.html">PND x equipo</a></li>
             <li><a class="active" href="listapruebas.html">Registro PND</a></li>
           </ul></details></li>
           <li><a href="inspeccion.html">Inspección</a></li>
@@ -80,6 +79,7 @@
             <option value="pendiente">pendiente</option>
           </select>
           <button id="up-toggle-mocks" type="button">Generar 10 mocks</button>
+          <button id="up-clear-pending" type="button" style="margin-left:6px;">Borrar órdenes pend.</button>
         </div>
       </div>
       <div class="table-responsive" style="margin-bottom:1rem;">
@@ -537,6 +537,33 @@
           VIEW = DATA.slice();
         }
 
+        async function clearAllPendingTestOrders(){
+          try{
+            if (!window.db){
+              alert('Firebase no está inicializado');
+              return;
+            }
+            let totalDeleted = 0;
+            while (true){
+              const snap = await window.db.collection('testOrders')
+                .where('status','==','pending')
+                .limit(500)
+                .get();
+              if (snap.empty) break;
+              const batch = window.db.batch();
+              snap.docs.forEach(doc => batch.delete(doc.ref));
+              await batch.commit();
+              totalDeleted += snap.size;
+              if (snap.size < 500) break;
+            }
+            console.log(`[listapruebas] Órdenes pendientes eliminadas: ${totalDeleted}`);
+            alert(`Se eliminaron ${totalDeleted} órdenes pendientes de testOrders.`);
+          }catch(e){
+            console.error('[listapruebas] clearAllPendingTestOrders', e);
+            alert('Error al borrar órdenes pendientes: ' + e.message);
+          }
+        }
+
         async function loadUpcoming(){
           try{
             // Construir "Próximas pruebas" a partir de las pruebas existentes (DATA)
@@ -544,6 +571,7 @@
             const limit = new Date(today.getTime()); limit.setFullYear(limit.getFullYear()+1); // hasta 1 año
 
             const upcoming = [];
+            // Fuente 1: pruebas existentes (colección `pruebas`)
             for (const doc of DATA){
               const headers = doc.headers || HEADERS;
               const data = doc.data || {};
@@ -599,6 +627,28 @@
                 status: 'pendiente'
               });
             }
+
+            // Fuente 2: órdenes generadas desde actividad (colección `testOrders`)
+            try{
+              if (window.db){
+                const snapOrders = await window.db.collection('testOrders')
+                  .where('status','==','pending')
+                  .limit(2000)
+                  .get();
+                snapOrders.docs.forEach(doc => {
+                  const d = doc.data() || {};
+                  upcoming.push({
+                    equipo: d.equipo || '',
+                    pruebasRequeridas: Array.isArray(d.pruebasRequeridas) ? d.pruebasRequeridas : [],
+                    os: d.os || '',
+                    oc: d.oc || '',
+                    cliente: d.cliente || '',
+                    edo: d.edo || '',
+                    status: d.status || 'pendiente'
+                  });
+                });
+              }
+            }catch(e){ console.warn('[listapruebas] No se pudieron cargar testOrders', e); }
 
             UPCOMING_DATA = upcoming;
             UPCOMING_VIEW = UPCOMING_DATA.slice();
@@ -717,6 +767,18 @@
                 // Por ahora, solo dejamos preparado el flujo de edición vía querystring
                 window.location.href = `pruebas.html?editId=${encodeURIComponent(rowId)}`;
               }
+            });
+          }
+          const upClear = document.getElementById('up-clear-pending');
+          if (upClear){
+            upClear.addEventListener('click', async ()=>{
+              if (!confirm('¿Borrar TODAS las órdenes pendientes de testOrders? Esta acción no se puede deshacer.')) return;
+              if (!confirm('Confirmación final: se eliminarán todas las órdenes con estado "pending".')) return;
+              await clearAllPendingTestOrders();
+              await loadUpcoming();
+              applyUpcomingFilter();
+              renderUpcoming();
+              updateMockButtonsState();
             });
           }
           const btnToggleMocks = document.getElementById('btn-toggle-mocks');

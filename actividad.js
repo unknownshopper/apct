@@ -197,7 +197,7 @@
   async function saveToFirestore(row) {
     if (!firebaseReady || !window.db) { console.warn('[actividad] Firebase no disponible, solo se guardó en localStorage'); return null; }
     try {
-      const rowData = Array.isArray(row) ? row : Object.values(row);
+      const rowData = Array.isArray(row) ? Array.from(row) : Object.values(row || {});
       const docRef = await window.db.collection(COLLECTION_NAME).add({
         row: rowData,
         timestamp: firebase.firestore.FieldValue.serverTimestamp(),
@@ -205,6 +205,10 @@
         createdBy: window.auth.currentUser ? window.auth.currentUser.email : 'unknown'
       });
       console.log('[actividad] Registro guardado en Firestore:', docRef.id);
+      // Adjuntar referencia de Firestore a la fila en memoria para que otras vistas puedan actualizarla
+      if (row && typeof row === 'object') {
+        row._firestoreId = docRef.id;
+      }
       return docRef.id;
     } catch (e) {
       console.error('[actividad] Error al guardar en Firestore:', e);
@@ -513,15 +517,6 @@
         }
         tr.appendChild(td);
       }
-      // Columna de acciones al final
-      const tdActions = document.createElement('td');
-      const editBtn = document.createElement('button'); editBtn.className = 'edit-row-btn'; editBtn.innerHTML = '✏️'; editBtn.title = 'Editar este registro'; if (!(window.isAdmin && window.isAdmin())) { editBtn.style.display = 'none'; }
-      editBtn.addEventListener('click', () => { if (!(window.isAdmin && window.isAdmin())) { alert('Solo un administrador puede editar registros.'); return; } makeRowEditable(tr, row, i); });
-      const deleteBtn = document.createElement('button'); deleteBtn.className = 'delete-row-btn'; deleteBtn.innerHTML = '🗑️'; deleteBtn.title = 'Eliminar este registro'; if (!(window.isAdmin && window.isAdmin())) { deleteBtn.style.display = 'none'; }
-      deleteBtn.addEventListener('click', async () => { if (!(window.isAdmin && window.isAdmin())) { alert('Solo un administrador puede eliminar registros.'); return; } if (confirm('¿Estás seguro de eliminar este registro permanentemente?')){ const rowIndex = rows.indexOf(row); if (rowIndex >= 0) { if (row._firestoreId) { await deleteFromFirestore(row._firestoreId); } rows.splice(rowIndex, 1); view = rows; renderBody(view); updateKPIs(); try{ const keyLS = 'actividad:newRows'; const cleanRows = rows.map(r => { if (r._firestoreId) { const { _firestoreId, ...rest } = r; return rest; } return r; }); localStorage.setItem(keyLS, JSON.stringify(cleanRows)); }catch(e){ console.error('[actividad] Error al actualizar localStorage:', e); } console.log('[actividad] Registro eliminado correctamente'); } } });
-      tdActions.appendChild(editBtn);
-      tdActions.appendChild(deleteBtn);
-      tr.appendChild(tdActions);
       frag.appendChild(tr);
     }
     tbody.innerHTML = '';
@@ -839,6 +834,14 @@
       }
     }catch(e){ console.warn('[actividad] cliente datalist', e); }
 
+    // Autocompletado de Equipo/Activo usando inventario cargado (inventoryOptions)
+    try{
+      if (eqInput && Array.isArray(inventoryOptions)){
+        ensureDatalist('dl-inventory-equipos', inventoryOptions || []);
+        eqInput.setAttribute('list','dl-inventory-equipos');
+      }
+    }catch(e){ console.warn('[actividad] equipo datalist', e); }
+
     // Ocultar campo secundario de "agregar otro equipo/activo", usamos solo el principal con lista múltiple
     try{
       if (eqAdd && eqAdd.parentElement){ eqAdd.parentElement.style.display = 'none'; }
@@ -1006,18 +1009,29 @@
         newRows.push(r);
       }
       rows = [...newRows, ...rows]; view = rows; buildExternalOptionsBase(); renderHead(); populateClientFilter(); renderBody(view);
-      // Persistir y luego generar órdenes de prueba
+      // Guardar en Firestore y luego persistir cache local
       try{
-        const keyLS = 'actividad:newRows';
-        const prev = JSON.parse(localStorage.getItem(keyLS)||'[]');
-        const next = Array.isArray(prev) ? [...newRows, ...prev] : [...newRows];
-        localStorage.setItem(keyLS, JSON.stringify(next));
         // Guardar en Firestore y obtener un id de actividad (tomamos el primero como referencia)
         let actividadRef = null;
         for (let idx=0; idx<newRows.length; idx++){
           const id = await saveToFirestore(newRows[idx]);
           if (!actividadRef && id) actividadRef = id;
         }
+
+        // Actualizar localStorage con las filas nuevas, preservando _firestoreId
+        const keyLS = 'actividad:newRows';
+        const prevRaw = JSON.parse(localStorage.getItem(keyLS)||'[]');
+        const prev = Array.isArray(prevRaw) ? prevRaw : [];
+        const serializeRow = (r)=>{
+          if (Array.isArray(r)){
+            const arr = Array.from(r);
+            if (r._firestoreId) arr._firestoreId = r._firestoreId;
+            return arr;
+          }
+          return r;
+        };
+        const next = [...newRows.map(serializeRow), ...prev];
+        localStorage.setItem(keyLS, JSON.stringify(next));
         // Generar órdenes por equipo (solo EDO=ON)
         try{
           const clienteVal = (inpCliente.value||'').trim();
