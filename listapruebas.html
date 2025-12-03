@@ -79,6 +79,7 @@
             <option value="">Todos</option>
             <option value="pendiente">pendiente</option>
           </select>
+          <button id="up-toggle-mocks" type="button">Generar 10 mocks</button>
         </div>
       </div>
       <div class="table-responsive" style="margin-bottom:1rem;">
@@ -93,8 +94,7 @@
           <a class="btn-primary" href="pruebas.html">Crear Prueba PND</a>
           <input id="search" type="text" placeholder="Buscar..." />
           <button id="btn-clear" type="button">Limpiar</button>
-          <button id="btn-seed-mocks" type="button">Generar 30 mocks</button>
-          <button id="btn-clear-mocks" type="button">Eliminar mocks</button>
+          <button id="btn-toggle-mocks" type="button">Generar 30 mocks</button>
         </div>
         <div id="count" class="toolbar-count">0 pruebas</div>
       </div>
@@ -369,8 +369,14 @@
 
             // Normalizar: si existe SERIAL real, eliminar la columna '#'
             const hasSerialSeed = headers.some(h => normHeader(h) === 'SERIAL');
+            let dataRows = rows.slice(1);
             if (hasSerialSeed){
-              headers = headers.filter(h => normHeader(h) !== '#');
+              // Quitar la columna '#' tanto de headers como de cada fila de datos
+              const idxHash = rows[0].findIndex(h => normHeader(h) === '#');
+              headers = headers.filter((h, idx) => idx !== idxHash);
+              if (idxHash >= 0){
+                dataRows = dataRows.map(r => r.filter((_, idx) => idx !== idxHash));
+              }
             }
 
             // Asegurar que headers tenga CONTADOR y ACUMULADO al final
@@ -378,7 +384,6 @@
             if (!normH.includes('CONTADOR')) headers.push('CONTADOR');
             if (!normH.includes('ACUMULADO')) headers.push('ACUMULADO');
             HEADERS = headers.slice(); // mantener sincronizado con la vista
-            const dataRows = rows.slice(1);
 
             const idxEquipo = headerIndexByVariantsFrom(headers, ['EQUIPO / ACTIVO','EQUIPO/ACTIVO','EQUIPO ACTIVO','EQUIPO']);
             if (idxEquipo < 0){
@@ -410,33 +415,27 @@
               }
             }
 
-            // Generar hasta 'count' pruebas combinando equipos con 1-3 pruebas c/u en los últimos 3 años
+            // Generar exactamente 'count' pruebas. Si hay pocos equipos, se reutilizan.
             const maxTotal = count;
             let globalCounter = 0;
-            const seenPerEquipo = new Map(); // eqKey -> cuántas pruebas ya tiene
+            const totalEquipos = validRows.length;
 
-            for (const r of validRows){
-              const eqRaw = String(r[idxEquipo]||'').trim();
-              if (!eqRaw) continue;
-              const eqKey = eqRaw.toUpperCase();
-              const prev = seenPerEquipo.get(eqKey) || 0;
-              if (prev >= 3) continue; // máx 3 pruebas por equipo
+            while (globalCounter < maxTotal && totalEquipos > 0){
+              // Elegir un equipo pseudoaleatorio para evitar agrupamientos visibles
+              const randIdx = Math.floor(Math.random() * totalEquipos);
+              const r = validRows[randIdx];
 
-              // decidir cuántas pruebas más crear para este equipo (1 o las que falten hasta 3)
-              const remainingForEq = 3 - prev;
-              const toCreate = Math.min(remainingForEq, 3);
+              const rowData = {};
+              headers.forEach((h, idx) => { rowData[h] = r[idx] ?? ''; });
 
-              for (let localIdx = 0; localIdx < toCreate; localIdx++){
-                if (globalCounter >= maxTotal) break;
+              // Asegurar que la columna ESTADO tenga un valor legible (no numérico)
+              setFieldByVariants(rowData, ['ESTADO'], rowData['ESTADO'] || 'ACTIVO');
 
-                const rowData = {};
-                headers.forEach((h, idx) => { rowData[h] = r[idx] ?? ''; });
-
-                // Fecha de prueba simulada: repartir en los últimos 36 meses
-                const d = new Date(todayBase.getTime());
-                const monthsBackBase = 36 - (prev + localIdx) * 6; // 36,30,24,...
-                d.setMonth(d.getMonth() - Math.max(1, monthsBackBase));
-                const fechaStr = `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+              // Fecha de prueba simulada: repartir en los últimos 36 meses, espaciando por contador
+              const d = new Date(todayBase.getTime());
+              const monthsBackBase = 36 - (globalCounter * 2); // pasos de 2 meses aprox
+              d.setMonth(d.getMonth() - Math.max(1, monthsBackBase));
+                const fechaStr = `${pad(d.getDate())}/${pad(d.getMonth()+1)}/${String(d.getFullYear()).slice(-2)}`;
                 setFieldByVariants(rowData,
                   ['FECHA DE PRUEBA','FECHA PRUEBA','FECHA REALIZACION','FECHA REALIZACIÓN','FECHA'],
                   fechaStr
@@ -445,7 +444,7 @@
                 // Próxima prueba: 1 año después
                 const dNext = new Date(d.getTime());
                 dNext.setFullYear(dNext.getFullYear() + 1);
-                const proxStr = `${dNext.getFullYear()}-${pad(dNext.getMonth()+1)}-${pad(dNext.getDate())}`;
+                const proxStr = `${pad(dNext.getDate())}/${pad(dNext.getMonth()+1)}/${String(dNext.getFullYear()).slice(-2)}`;
                 setFieldByVariants(rowData,
                   ['PROXIMA PRUEBA','PRÓXIMA PRUEBA','PROXIMA','PRÓXIMA'],
                   proxStr
@@ -474,27 +473,23 @@
                   tecnicos[globalCounter % tecnicos.length]
                 );
 
-                // Contador global de mocks (simple consecutivo)
-                globalCounter += 1;
-                rowData['CONTADOR'] = String(globalCounter);
+              // Contador global de mocks (simple consecutivo) SOLO en columna CONTADOR
+              globalCounter += 1;
+              setFieldByVariants(rowData, ['CONTADOR'], String(globalCounter));
 
-                // Acumulado en días desde la fecha de prueba hasta hoy
-                const today = new Date();
-                const diffMs = today.getTime() - d.getTime();
-                const diffDays = Math.max(0, Math.round(diffMs / (1000*60*60*24)));
-                rowData['ACUMULADO'] = String(diffDays);
+              // Acumulado en días desde la fecha de prueba hasta hoy
+              const today = new Date();
+              const diffMs = today.getTime() - d.getTime();
+              const diffDays = Math.max(0, Math.round(diffMs / (1000*60*60*24)));
+              rowData['ACUMULADO'] = String(diffDays);
 
-                const ref = col.doc();
-                batch.set(ref, {
-                  headers,
-                  data: rowData,
-                  createdAt: now,
-                  createdBy: 'seed@local'
-                });
-
-                seenPerEquipo.set(eqKey, (seenPerEquipo.get(eqKey)||0)+1);
-              }
-              if (globalCounter >= maxTotal) break;
+              const ref = col.doc();
+              batch.set(ref, {
+                headers,
+                data: rowData,
+                createdAt: now,
+                createdBy: 'seed@local'
+              });
             }
 
             await batch.commit();
@@ -544,41 +539,162 @@
 
         async function loadUpcoming(){
           try{
-            const res = await fetch(ACT_CSV_URL, { cache: 'no-store' });
-            if (!res.ok) throw new Error('No se pudo cargar el CSV de actividad');
-            const txt = await res.text();
-            const rows = parseCSV(txt);
-            if (!rows.length) { UPCOMING_VIEW = []; return; }
-
-            const actHeaders = rows[0].slice();
-            const actData = rows.slice(1);
-
-            const idxEquipo = headerIndexByVariantsFrom(actHeaders, ['EQUIPO / ACTIVO','EQUIPO/ACTIVO','EQUIPO ACTIVO','EQUIPO']);
-            const idxCliente = headerIndexByVariantsFrom(actHeaders, ['CLIENTE']);
-            const idxOS = headerIndexByVariantsFrom(actHeaders, ['ORDEN DE SERVICIO','O. S.','O.S.']);
-            const idxOC = headerIndexByVariantsFrom(actHeaders, ['ORDEN DE COMPRA','ORDEN COMPRA','NO. ORDEN DE COMPRA','NO ORDEN DE COMPRA','NÚMERO DE ORDEN','NUMERO DE ORDEN','OC']);
+            // Construir "Próximas pruebas" a partir de las pruebas existentes (DATA)
+            const today = new Date(); today.setHours(0,0,0,0);
+            const limit = new Date(today.getTime()); limit.setFullYear(limit.getFullYear()+1); // hasta 1 año
 
             const upcoming = [];
-            actData.forEach(r => {
-              const equipo = idxEquipo>=0 ? String(r[idxEquipo]||'').trim() : '';
-              if (!equipo) return;
-              const cliente = idxCliente>=0 ? String(r[idxCliente]||'').trim() : '';
-              const os = idxOS>=0 ? String(r[idxOS]||'').trim() : '';
-              const oc = idxOC>=0 ? String(r[idxOC]||'').trim() : '';
+            for (const doc of DATA){
+              const headers = doc.headers || HEADERS;
+              const data = doc.data || {};
+              if (!headers || !data) continue;
+
+              const idxEq = headerIndexByVariantsFrom(headers, ['EQUIPO / ACTIVO','EQUIPO/ACTIVO','EQUIPO ACTIVO','EQUIPO']);
+              if (idxEq < 0) continue;
+              const keyEq = headers[idxEq];
+              const equipo = String(data[keyEq]||'').trim();
+              if (!equipo) continue;
+
+              const idxCli = headerIndexByVariantsFrom(headers, ['CLIENTE']);
+              const idxOS  = headerIndexByVariantsFrom(headers, ['ORDEN DE SERVICIO','O. S.','O.S.','OS']);
+              const idxOC  = headerIndexByVariantsFrom(headers, ['ORDEN DE COMPRA','ORDEN COMPRA','NO. ORDEN DE COMPRA','NO ORDEN DE COMPRA','NÚMERO DE ORDEN','NUMERO DE ORDEN','OC']);
+              const idxEdo = headerIndexByVariantsFrom(headers, ['EDO_GENERAL','EDO','ESTADO']);
+              const idxPr  = headerIndexByVariantsFrom(headers, ['PRUEBA / CALIBRACION','PRUEBA/CALIBRACION','PRUEBA','TIPO DE PRUEBA']);
+              const idxProx = headerIndexByVariantsFrom(headers, ['PROXIMA PRUEBA','PRÓXIMA PRUEBA','PROXIMA','PRÓXIMA']);
+
+              const keyProx = idxProx>=0 ? headers[idxProx] : null;
+              const proxRaw = keyProx ? String(data[keyProx]||'').trim() : '';
+              if (!proxRaw) continue;
+
+              // Parsear próxima prueba (dd/mm/aa, dd/mm/aaaa o yyyy-mm-dd)
+              let dProx = null;
+              const m1 = proxRaw.match(/^(\d{2})\/(\d{2})\/(\d{2,4})$/);
+              if (m1){
+                const dd = parseInt(m1[1],10);
+                const mm = parseInt(m1[2],10)-1;
+                let yy = parseInt(m1[3],10);
+                if (yy < 100) yy = 2000 + yy;
+                dProx = new Date(yy, mm, dd);
+              } else {
+                const tmp = new Date(proxRaw);
+                if (!isNaN(tmp.getTime())) dProx = tmp;
+              }
+              if (!dProx) continue;
+              dProx.setHours(0,0,0,0);
+              if (dProx < today || dProx > limit) continue; // solo próximas dentro del próximo año
+
+              const cliente = idxCli>=0 ? String(data[headers[idxCli]]||'').trim() : '';
+              const os = idxOS>=0 ? String(data[headers[idxOS]]||'').trim() : '';
+              const oc = idxOC>=0 ? String(data[headers[idxOC]]||'').trim() : '';
+              const edo = idxEdo>=0 ? String(data[headers[idxEdo]]||'').trim() : '';
+              const prueba = idxPr>=0 ? String(data[headers[idxPr]]||'').trim() : '';
+
               upcoming.push({
                 equipo,
-                pruebasRequeridas: [],
+                pruebasRequeridas: prueba ? [prueba] : [],
                 os,
                 oc,
                 cliente,
-                edo: '',
+                edo,
                 status: 'pendiente'
               });
-            });
+            }
 
             UPCOMING_DATA = upcoming;
             UPCOMING_VIEW = UPCOMING_DATA.slice();
           }catch(e){ console.warn('[listapruebas] loadUpcoming error', e); UPCOMING_VIEW = []; }
+        }
+
+        function updateMockButtonsState(){
+          const btnToggleMocks = document.getElementById('btn-toggle-mocks');
+          const upToggle = document.getElementById('up-toggle-mocks');
+
+          if (btnToggleMocks){
+            const hasMocks = DATA.some(d => d.createdBy === 'seed@local');
+            btnToggleMocks.textContent = hasMocks ? 'Eliminar 30 mocks' : 'Generar 30 mocks';
+          }
+
+          if (upToggle){
+            const hasUpMocks = UPCOMING_DATA.some(o => o.__isMock);
+            upToggle.textContent = hasUpMocks ? 'Eliminar 10 mocks' : 'Generar 10 mocks';
+          }
+        }
+
+        function toggleUpcomingMocks(){
+          const hasMocks = UPCOMING_DATA.some(o => o.__isMock);
+          if (hasMocks){
+            UPCOMING_DATA = UPCOMING_DATA.filter(o => !o.__isMock);
+            UPCOMING_VIEW = UPCOMING_VIEW.filter(o => !o.__isMock);
+          } else {
+            const pad = (n)=>String(n).padStart(2,'0');
+            const today = new Date(); today.setHours(0,0,0,0);
+
+            // Construir candidatos a partir de todas las pruebas (DATA) usando equipos reales
+            const candidatosMap = new Map(); // equipo -> objeto base
+            for (const doc of DATA){
+              const headers = doc.headers || HEADERS;
+              const data = doc.data || {};
+              if (!headers || !data) continue;
+
+              const idxEq = headerIndexByVariantsFrom(headers, ['EQUIPO / ACTIVO','EQUIPO/ACTIVO','EQUIPO ACTIVO','EQUIPO']);
+              if (idxEq < 0) continue;
+              const keyEq = headers[idxEq];
+              const equipo = String(data[keyEq]||'').trim();
+              if (!equipo || candidatosMap.has(equipo)) continue;
+
+              const idxCli = headerIndexByVariantsFrom(headers, ['CLIENTE']);
+              const idxOS  = headerIndexByVariantsFrom(headers, ['ORDEN DE SERVICIO','O. S.','O.S.','OS']);
+              const idxOC  = headerIndexByVariantsFrom(headers, ['ORDEN DE COMPRA','ORDEN COMPRA','NO. ORDEN DE COMPRA','NO ORDEN DE COMPRA','NÚMERO DE ORDEN','NUMERO DE ORDEN','OC']);
+              const idxEdo = headerIndexByVariantsFrom(headers, ['EDO_GENERAL','EDO','ESTADO']);
+              const idxPr  = headerIndexByVariantsFrom(headers, ['PRUEBA / CALIBRACION','PRUEBA/CALIBRACION','PRUEBA','TIPO DE PRUEBA']);
+
+              const cliente = idxCli>=0 ? String(data[headers[idxCli]]||'').trim() : '';
+              const os = idxOS>=0 ? String(data[headers[idxOS]]||'').trim() : '';
+              const oc = idxOC>=0 ? String(data[headers[idxOC]]||'').trim() : '';
+              const edo = idxEdo>=0 ? String(data[headers[idxEdo]]||'').trim() : '';
+              const prueba = idxPr>=0 ? String(data[headers[idxPr]]||'').trim() : '';
+
+              candidatosMap.set(equipo, {
+                equipo,
+                pruebasRequeridas: prueba ? [prueba] : [],
+                os,
+                oc,
+                cliente,
+                edo,
+                status: 'pendiente'
+              });
+            }
+
+            const candidatos = Array.from(candidatosMap.values());
+            if (!candidatos.length){ updateMockButtonsState(); return; }
+
+            // Mezclar aleatoriamente y tomar hasta 10
+            for (let i=candidatos.length-1; i>0; i--){
+              const j = Math.floor(Math.random()*(i+1));
+              [candidatos[i], candidatos[j]] = [candidatos[j], candidatos[i]];
+            }
+            const sample = candidatos.slice(0, 10);
+
+            const nuevos = sample.map((o, idx)=>{
+              const dProx = new Date(today.getTime());
+              dProx.setDate(dProx.getDate() + (idx+1)*7);
+              const proxStr = `${pad(dProx.getDate())}/${pad(dProx.getMonth()+1)}/${String(dProx.getFullYear()).slice(-2)}`;
+              return {
+                ...o,
+                __isMock: true,
+                os: o.os || `OS-MOCK-${pad(idx+1)}`,
+                oc: o.oc || `OC-MOCK-${pad(idx+1)}`,
+                cliente: o.cliente || 'CLIENTE MOCK',
+                edo: o.edo || 'ACTIVO',
+                status: o.status || 'pendiente',
+                proxima: proxStr
+              };
+            });
+
+            UPCOMING_DATA = [...UPCOMING_DATA, ...nuevos];
+            UPCOMING_VIEW = UPCOMING_DATA.slice();
+          }
+          updateMockButtonsState();
         }
 
         async function init(){
@@ -591,6 +707,7 @@
             applyUpcomingFilter();
             renderTable();
             renderUpcoming();
+            updateMockButtonsState();
           } catch (e){
             console.error(e);
           }
@@ -643,23 +760,24 @@
               }
             });
           }
-          const btnSeed = document.getElementById('btn-seed-mocks');
-          const btnClearMocks = document.getElementById('btn-clear-mocks');
-          if (btnSeed){
-            btnSeed.addEventListener('click', async ()=>{
-              await seedMockPruebas(30);
+          const btnToggleMocks = document.getElementById('btn-toggle-mocks');
+          if (btnToggleMocks){
+            btnToggleMocks.addEventListener('click', async ()=>{
+              const hasMocks = DATA.some(d => d.createdBy === 'seed@local');
+              if (hasMocks){
+                await clearMockPruebas();
+              } else {
+                await seedMockPruebas(30);
+              }
               await loadPruebas();
               applyFilter();
               renderTable();
+              updateMockButtonsState();
             });
           }
-          if (btnClearMocks){
-            btnClearMocks.addEventListener('click', async ()=>{
-              await clearMockPruebas();
-              await loadPruebas();
-              applyFilter();
-              renderTable();
-            });
+          const upToggle = document.getElementById('up-toggle-mocks');
+          if (upToggle){
+            upToggle.addEventListener('click', ()=>{ toggleUpcomingMocks(); applyUpcomingFilter(); renderUpcoming(); });
           }
           ['up-f-os','up-f-oc','up-f-cli','up-f-eq','up-f-status'].forEach(id=>{
             const el = document.getElementById(id); if (el) el.addEventListener('input', ()=>{ applyUpcomingFilter(); renderUpcoming(); });
