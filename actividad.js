@@ -57,8 +57,67 @@
     return `L-${ts}-${rnd}`;
   }
 
+  async function syncActivitiesToInspectionOrders(){
+    await waitForFirebase();
+    if (!firebaseReady || !window.db) {
+      console.warn('[actividad] Firebase no disponible, no se puede sincronizar actividades a inspectionOrders');
+      return;
+    }
+    try{
+      const i = (vars)=> headerIndex(vars);
+      const iEQUIPO = i(['EQUIPO / ACTIVO','EQUIPO/ACTIVO','EQUIPO ACTIVO','EQUIPO']);
+      const iCLIENTE = i(['CLIENTE']);
+      const iAREA = i(['AREA DEL CLIENTE','ÁREA DEL CLIENTE','AREA CLIENTE','ÁREA CLIENTE','AREA','ÁREA']);
+      const iOS = i(['ORDEN DE SERVICIO','O. S.','O.S.']);
+      const iOC = i(['ORDEN DE COMPRA','ORDEN COMPRA','NO. ORDEN DE COMPRA','NO ORDEN DE COMPRA','NÚMERO DE ORDEN','NUMERO DE ORDEN','OC']);
+
+      if (iEQUIPO<0){
+        console.warn('[actividad] syncActivitiesToInspectionOrders: no se encontró columna de EQUIPO');
+        return;
+      }
+
+      const col = window.db.collection(INSPECTION_ORDERS);
+      const userEmail = window.auth?.currentUser?.email || 'unknown';
+      const createdAt = firebase.firestore.FieldValue.serverTimestamp();
+      let total = 0;
+
+      for (const row of rows){
+        if (!row) continue;
+        const equipo = String(row[iEQUIPO]||'').trim();
+        if (!equipo) continue;
+        const cliente = iCLIENTE>=0 ? String(row[iCLIENTE]||'').trim() : '';
+        const area = iAREA>=0 ? String(row[iAREA]||'').trim() : '';
+        const os = iOS>=0 ? String(row[iOS]||'').trim() : '';
+        const oc = iOC>=0 ? String(row[iOC]||'').trim() : '';
+
+        try{
+          await col.add({
+            os,
+            oc,
+            cliente,
+            area,
+            equipoActivo: equipo,
+            tipoInspeccion: 'Primaria',
+            actividadRef: row._firestoreId || '',
+            status: 'pending',
+            createdAt,
+            createdAtLocal: new Date().toISOString(),
+            createdBy: userEmail,
+            updatedAt: null
+          });
+          total++;
+        }catch(e){ console.warn('[actividad] syncActivitiesToInspectionOrders add error', e); }
+      }
+
+      alert(`Sincronización de inspecciones completada. Órdenes generadas para aproximadamente ${total} equipo(s). Revisa inspeccionlist.html.`);
+    }catch(e){
+      console.error('[actividad] syncActivitiesToInspectionOrders error general', e);
+    }
+  }
+
   // --- Test Orders (PND) generation helpers ---
   const TEST_ORDERS = 'testOrders';
+  const INSPECTION_ORDERS = 'inspectionOrders';
   const INV_PND_URL = 'docs/invpnd.csv';
   const edoByEquipoKey = new Map(); // EQUIPO normalizado -> 'ON'|'OFF'
   const pruebasByEquipo = new Map(); // EQUIPO normalizado -> ['LT','VT','PT','MT','UTT',...]
@@ -183,6 +242,33 @@
       catch(e){ console.warn('[actividad] createTestOrders add error', e); }
     }
     return loteId;
+  }
+
+  async function createInspectionOrders({ os, oc, cliente, area, equipos, actividadRef, tipoInspeccion }){
+    if (!firebaseReady || !window.db) return null;
+    const userEmail = window.auth?.currentUser?.email || 'unknown';
+    const col = window.db.collection(INSPECTION_ORDERS);
+    const createdAt = firebase.firestore.FieldValue.serverTimestamp();
+    const tsLocal = new Date().toISOString();
+    const tipo = tipoInspeccion || 'Primaria';
+    for (const eq of equipos){
+      try{
+        await col.add({
+          os: String(os||''),
+          oc: String(oc||''),
+          cliente: String(cliente||''),
+          area: String(area||''),
+          equipoActivo: String(eq||''),
+          tipoInspeccion: tipo,
+          actividadRef: actividadRef || '',
+          status: 'pending',
+          createdAt,
+          createdAtLocal: tsLocal,
+          createdBy: userEmail,
+          updatedAt: null
+        });
+      }catch(e){ console.warn('[actividad] createInspectionOrders add error', e); }
+    }
   }
 
   const COLLECTION_NAME = 'activityRecords';
@@ -1176,10 +1262,14 @@
         };
         const next = [...newRows.map(serializeRow), ...prev];
         localStorage.setItem(keyLS, JSON.stringify(next));
-        // Generar órdenes por equipo (solo EDO=ON)
+        // Generar órdenes por equipo (solo EDO=ON) y órdenes de inspección pendientes
         try{
           const clienteVal = (inpCliente.value||'').trim();
+          const areaVal = (inpArea.value||'').trim();
           const lote = await createTestOrders({ os: osVal, oc: ocVal, cliente: clienteVal, equipos: selected, actividadRef });
+          try{
+            await createInspectionOrders({ os: osVal, oc: ocVal, cliente: clienteVal, area: areaVal, equipos: selected, actividadRef, tipoInspeccion: 'Primaria' });
+          }catch(e){ console.warn('[actividad] No se pudieron generar órdenes de inspección', e); }
           if (lote) {
             const msg = `Órdenes de prueba generadas para ${selected.length} equipo(s) (solo EDO=ON). Lote: ${lote}`;
             console.log('[actividad] '+msg);
@@ -1207,6 +1297,7 @@
 
   window.openDocEditor = openDocEditor;
   window.syncActivitiesToTestOrders = syncActivitiesToTestOrders;
+  window.syncActivitiesToInspectionOrders = syncActivitiesToInspectionOrders;
   newRowBtn.addEventListener('click', openDocEditor);
   q.addEventListener('input', applyFilter);
   clearQ.addEventListener('click', ()=>{ q.value=''; applyFilter(); q.focus(); });

@@ -74,9 +74,28 @@ async function loadHeaders(){ try{ const resp = await fetch('docs/REGISTRO DE AC
 async function loadHistory() {
   try {
     let rows = [];
+    let localRows = [];
+    try {
+      const storedLocal = localStorage.getItem('actividad:newRows');
+      localRows = storedLocal ? JSON.parse(storedLocal) : [];
+    } catch (e) {
+      console.warn('[regactividad] No se pudo leer caché local actividad:newRows:', e);
+      localRows = [];
+    }
     
-    // Intentar cargar desde Firestore si está disponible
-    if (firebaseReady && window.db) {
+    // Estrategia de carga:
+    // 1) Si hay datos en localStorage (actividad:newRows), usarlos como fuente principal
+    //    porque ahí actividadmin escribe terminación/precio actualizados.
+    // 2) Si no hay caché local, intentar cargar desde Firestore;
+    //    si falla o no hay Firebase, usar localStorage como respaldo.
+
+    const hasLocal = Array.isArray(localRows) && localRows.length > 0;
+
+    if (hasLocal) {
+      rows = localRows;
+      if (rows.length) { normalizeLegacyClientsInRows(rows); }
+      console.log('[regactividad] Usando datos de localStorage como fuente principal');
+    } else if (firebaseReady && window.db) {
       try {
         const snapshot = await window.db.collection(COLLECTION_NAME)
           .orderBy('timestamp', 'desc')
@@ -110,17 +129,14 @@ async function loadHistory() {
         }
       } catch (e) {
         console.error('[regactividad] Error al cargar desde Firestore:', e);
-        // Fallback a localStorage
-        const stored = localStorage.getItem('actividad:newRows');
-        rows = stored ? JSON.parse(stored) : [];
-        if (Array.isArray(rows) && rows.length){ normalizeLegacyClientsInRows(rows); }
-        console.log('[regactividad] Usando datos de localStorage (fallback)');
+        rows = Array.isArray(localRows) ? localRows : [];
+        if (rows.length){ normalizeLegacyClientsInRows(rows); }
+        console.log('[regactividad] Usando datos de localStorage (fallback tras error de Firestore)');
       }
     } else {
-      // Sin Firebase, usar localStorage
-      const stored = localStorage.getItem('actividad:newRows');
-      rows = stored ? JSON.parse(stored) : [];
-      if (Array.isArray(rows) && rows.length){ normalizeLegacyClientsInRows(rows); }
+      // Sin Firebase o sin datos en Firestore, usar localStorage
+      rows = Array.isArray(localRows) ? localRows : [];
+      if (rows.length){ normalizeLegacyClientsInRows(rows); }
       console.log('[regactividad] Firebase no disponible, usando localStorage');
     }
     

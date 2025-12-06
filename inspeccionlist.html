@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Inspecciones Pendientes - PCT</title>
+
+  <!-- SEO Meta Tags -->
+  <meta name="description" content="Lista de inspecciones pendientes por realizar en el sistema PCT.">
+  <meta name="author" content="PCT">
+  <link rel="canonical" href="https://pc-t.mx/inspeccionlist.html">
+
+  <!-- Open Graph / Facebook -->
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://pc-t.mx/inspeccionlist.html">
+  <meta property="og:title" content="Inspecciones Pendientes - PCT">
+  <meta property="og:description" content="Lista de inspecciones pendientes por realizar en el sistema PCT.">
+  <meta property="og:site_name" content="PCT">
+
+  <link rel="stylesheet" href="styles.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+  <link rel="icon" type="image/x-icon" href="img/logo.ico">
+  <link rel="shortcut icon" href="img/logo.ico">
+  <meta name="color-scheme" content="light">
+  <meta name="theme-color" content="#ffffff">
+</head>
+<body data-page="inspeccionlist">
+  <header>
+    <div class="logo"><img src="img/logopctch.png" alt="Logo" /></div>
+    <button class="menu-toggle" aria-label="Abrir menú" aria-controls="primary-nav" aria-expanded="false">☰</button>
+    <nav id="primary-nav">
+      <ul>
+        <li><a href="index.html">Dashboard</a></li>
+        <li class="nav-dropdown"><details><summary>Pruebas</summary><ul>
+          <li><a href="pruebas.html">Pruebas PND (pruebas no destructibles)</a></li>
+          <li><a href="listapruebas.html">Registro PND</a></li>
+        </ul></details></li>
+        <li class="nav-dropdown"><details><summary>Inspección</summary><ul>
+          <li><a href="inspeccion.html">Inspección primaria</a></li>
+          <li><a href="inspeccionlist.html">Inspecciones pendientes</a></li>
+          
+          <li><a href="reginspecciones.html">Registro de inspecciones</a></li>
+        </ul></details></li>
+        <li class="nav-dropdown"><details><summary>Actividad</summary><ul>
+          <li><a href="actividad.html">Registro de actividad</a></li>
+          <li><a href="regactividad.html">Historial de registros</a></li>
+        </ul></details></li>
+        <li><a href="tareas.html">Tareas</a></li>
+        <li><a href="reportes.html">Reportes</a></li>
+      </ul>
+    </nav>
+    <div class="user-box">
+      <span id="user-email"></span>
+      <a id="login-link" href="login.html">Login</a>
+      <button id="logout-btn" type="button" style="display:none">Salir</button>
+    </div>
+  </header>
+
+  <main class="wide">
+    <h1>Inspecciones Pendientes</h1>
+    <p style="margin-bottom: 0.75rem; color:#4b5563; max-width:720px;">
+      Lista de inspecciones programadas o pendientes por realizar, agrupadas por cliente y área de servicio.
+    </p>
+
+    <section class="dashboard" style="margin: 12px 0 8px;">
+      <div class="cards" id="insp-pend-cards"></div>
+    </section>
+
+    <div class="toolbar" role="region" aria-label="Herramientas de tabla">
+      <div class="group">
+        <input id="q" type="text" placeholder="Buscar por equipo, cliente, área u OS/OC..." aria-label="Buscar" />
+        <button id="clearQ" class="btn-primary" type="button">Limpiar</button>
+      </div>
+      <div class="group">
+        <select id="statusFilter">
+          <option value="">Todos los estados</option>
+          <option value="pending">Pendientes</option>
+          <option value="in_progress">En proceso</option>
+        </select>
+        <label style="display:inline-flex; align-items:center; gap:4px; font-size:0.875rem; color:#4b5563; margin-left:8px;">
+          <input type="checkbox" id="mineOnly" /> Solo mis inspecciones
+        </label>
+        <div class="toolbar-count" id="count">0 inspecciones</div>
+      </div>
+    </div>
+
+    <div id="insplist-wrapper" class="table-responsive" aria-live="polite">
+      <div class="scrollbar-x"><div class="scrollbar-content"></div></div>
+      <div class="table-scroll">
+        <table class="inventory" id="insplistTable">
+          <thead>
+            <tr>
+              <th>Cliente</th>
+              <th>Área</th>
+              <th>Equipo/Activo</th>
+              <th>Tipo inspección</th>
+              <th>OS</th>
+              <th>OC</th>
+              <th>Asignado a</th>
+              <th>Estado</th>
+            </tr>
+          </thead>
+          <tbody id="insplistBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+
+  <footer>
+    <a href="https://unknownshoppers.com" target="_blank" rel="noopener noreferrer">
+      Powered by <img src="img/logotus.jpg" alt="Unknown Shoppers" style="height:18px; vertical-align:middle">
+    </a>
+  </footer>
+
+  <!-- Firebase SDKs -->
+  <script src="https://www.gstatic.com/firebasejs/9.6.11/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.6.11/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.6.11/firebase-firestore-compat.js"></script>
+  <script src="firebase-config.js"></script>
+  <script src="firebase-init.js"></script>
+  <script src="script.js"></script>
+
+  <script>
+  (function(){
+    const tbody = document.getElementById('insplistBody');
+    const table = document.getElementById('insplistTable');
+    const q = document.getElementById('q');
+    const clearQ = document.getElementById('clearQ');
+    const count = document.getElementById('count');
+    const cards = document.getElementById('insp-pend-cards');
+    const statusFilter = document.getElementById('statusFilter');
+    const mineOnly = document.getElementById('mineOnly');
+    let allRows = [];
+    let view = [];
+
+    function fmtNum(n){ try { return n.toLocaleString('es-MX'); } catch { return String(n); } }
+
+    function syncScrollbar(){
+      const scroller = document.querySelector('.table-scroll');
+      const bar = document.querySelector('.scrollbar-x');
+      if (!scroller || !bar || !table) return;
+      const content = bar.querySelector('.scrollbar-content');
+      content.style.width = table.scrollWidth + 'px';
+      bar.scrollLeft = scroller.scrollLeft;
+      bar.onscroll = () => { scroller.scrollLeft = bar.scrollLeft; };
+      scroller.onscroll = () => { bar.scrollLeft = scroller.scrollLeft; };
+      let dragging = false; let startX=0; let startLeft=0;
+      bar.addEventListener('mousedown', (e)=>{
+        dragging=true; startX=e.clientX; startLeft=bar.scrollLeft;
+        document.getElementById('insplist-wrapper').classList.add('dragging');
+      });
+      window.addEventListener('mousemove', (e)=>{
+        if(!dragging) return;
+        const dx=e.clientX-startX;
+        bar.scrollLeft = startLeft + dx;
+      });
+      window.addEventListener('mouseup', ()=>{
+        if(dragging){
+          dragging=false;
+          document.getElementById('insplist-wrapper').classList.remove('dragging');
+        }
+      });
+    }
+
+    function renderKpis(rows){
+      if (!cards) return;
+      const total = rows.length;
+      const porCliente = new Map();
+      let pendientes = 0, enProceso = 0;
+      rows.forEach(r => {
+        const cli = (r.cliente || '').trim() || 'SIN CLIENTE';
+        porCliente.set(cli, (porCliente.get(cli) || 0) + 1);
+        const st = (r.status || 'pending').toLowerCase();
+        if (st === 'pending') pendientes++;
+        else if (st === 'in_progress') enProceso++;
+      });
+      cards.innerHTML = '';
+      const data = [
+        { label: 'Inspecciones pendientes (total)', val: total },
+        { label: 'Pendientes', val: pendientes },
+        { label: 'En proceso', val: enProceso },
+        { label: 'Clientes con inspecciones', val: porCliente.size }
+      ];
+      data.forEach(k => {
+        const card = document.createElement('div'); card.className='card';
+        const l = document.createElement('div'); l.className='kpi-label'; l.textContent = k.label;
+        const v = document.createElement('div'); v.className='kpi'; v.textContent = fmtNum(k.val);
+        card.appendChild(l); card.appendChild(v); cards.appendChild(card);
+      });
+    }
+
+    function renderBody(rows){
+      const frag = document.createDocumentFragment();
+      rows.forEach(r => {
+        const tr = document.createElement('tr');
+        const cells = [
+          r.cliente || '',
+          r.area || '',
+          r.equipoActivo || r.equipo || '',
+          r.tipoInspeccion || r.tipo || '',
+          r.os || '',
+          r.oc || '',
+          r.assignedTo || '',
+          (r.status || 'pending')
+        ];
+        cells.forEach((val, j) => {
+          const td = document.createElement('td');
+          if (j === 7){
+            const st = String(val || 'pending').toLowerCase();
+            const b = document.createElement('span');
+            b.className = 'ri-badge ' + (st === 'pending' ? 'pending' : (st === 'in_progress' ? 'in-progress' : '')); 
+            b.textContent = st === 'pending' ? 'Pendiente' : (st === 'in_progress' ? 'En proceso' : String(val));
+            td.appendChild(b);
+          } else if (j === 6){
+            const current = val == null ? '' : String(val);
+            td.textContent = current;
+            td.style.cursor = 'pointer';
+            td.title = 'Asignar inspector (correo)';
+            td.addEventListener('click', async () => {
+              try{
+                const userEmail = window.auth?.currentUser?.email || '';
+                const nuevo = prompt('Correo del inspector asignado (deja vacío para limpiar):', current || userEmail);
+                if (nuevo === null) return;
+                const trimmed = String(nuevo || '').trim();
+                const db = window.db;
+                if (!db || !r.id) return;
+                await db.collection('inspectionOrders').doc(r.id).update({ assignedTo: trimmed || null });
+                r.assignedTo = trimmed;
+                td.textContent = trimmed;
+              }catch(e){ console.warn('[inspeccionlist] No se pudo actualizar assignedTo', e); }
+            });
+          } else {
+            td.textContent = val == null ? '' : String(val);
+          }
+          tr.appendChild(td);
+        });
+        frag.appendChild(tr);
+      });
+      tbody.innerHTML = '';
+      if (!rows.length){
+        const tr = document.createElement('tr');
+        const td = document.createElement('td');
+        td.colSpan = 8;
+        td.style.textAlign = 'center';
+        td.style.padding = '32px 8px';
+        td.textContent = 'No hay inspecciones pendientes.';
+        tr.appendChild(td);
+        tbody.appendChild(tr);
+      } else {
+        tbody.appendChild(frag);
+      }
+      count.textContent = fmtNum(rows.length) + ' inspecciones';
+      syncScrollbar();
+      renderKpis(allRows);
+    }
+
+    function applyFilter(){
+      const term = (q.value || '').trim().toLowerCase();
+      const stVal = (statusFilter && statusFilter.value) ? statusFilter.value.toLowerCase() : '';
+      const mineEmail = (mineOnly && mineOnly.checked && window.auth && window.auth.currentUser && window.auth.currentUser.email)
+        ? String(window.auth.currentUser.email).toLowerCase()
+        : '';
+      view = allRows.filter(r => {
+        const st = String(r.status || 'pending').toLowerCase();
+        if (stVal && st !== stVal) return false;
+        if (mineEmail){
+          const assigned = String(r.assignedTo || '').toLowerCase();
+          if (assigned !== mineEmail) return false;
+        }
+        if (!term) return true;
+        const haystack = [
+          r.cliente,
+          r.area,
+          r.equipoActivo,
+          r.equipo,
+          r.os,
+          r.oc,
+          r.tipoInspeccion,
+          r.tipo,
+          r.assignedTo
+        ].join(' | ').toLowerCase();
+        return haystack.includes(term);
+      });
+      renderBody(view);
+    }
+
+    function attachFilter(){
+      if (q && clearQ){
+        q.addEventListener('input', applyFilter);
+        clearQ.addEventListener('click', ()=>{ q.value=''; applyFilter(); });
+      }
+      if (statusFilter){
+        statusFilter.addEventListener('change', applyFilter);
+      }
+      if (mineOnly){
+        mineOnly.addEventListener('change', applyFilter);
+      }
+    }
+
+    async function ready(){
+      const max = 60;
+      for (let i=0;i<max;i++){
+        if (window.db) return true;
+        await new Promise(r=>setTimeout(r,50));
+      }
+      return !!window.db;
+    }
+
+    async function loadInspectionOrders(){
+      try{
+        await ready();
+        const db = window.db;
+        if (!db) return;
+        // Colección propuesta para inspecciones pendientes
+        const snap = await db.collection('inspectionOrders')
+          .orderBy('createdAt','desc')
+          .limit(5000)
+          .get();
+        const rows = [];
+        snap.forEach(doc => {
+          const d = doc.data() || {};
+          rows.push(Object.assign({ id: doc.id }, d));
+        });
+        allRows = rows;
+        view = rows.slice();
+        renderBody(view);
+      }catch(e){
+        console.error('[inspeccionlist] Error cargando inspectionOrders', e);
+      }
+    }
+
+    if (document.readyState === 'loading'){
+      document.addEventListener('DOMContentLoaded', ()=>{
+        attachFilter();
+        loadInspectionOrders();
+      });
+    } else {
+      attachFilter();
+      loadInspectionOrders();
+    }
+  })();
+  </script>
+</body>
+</html>
