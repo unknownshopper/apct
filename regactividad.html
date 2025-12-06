@@ -64,6 +64,9 @@
     
     <div class="toolbar">
       <input type="text" id="searchInput" placeholder="Buscar por equipo, cliente, área..." />
+      <select id="areaFilter">
+        <option value="">Todas las áreas</option>
+      </select>
       <button id="exportBtn" class="btn-secondary">📥 Exportar CSV</button>
       <button id="clearAllBtn" class="btn-danger">🗑️ Borrar Todo</button>
       <button id="refreshBtn" class="btn-secondary">🔄 Actualizar</button>
@@ -105,6 +108,7 @@
             <th>Serial</th>
             <th>Equipo/Activo</th>
             <th>Cliente</th>
+            <th>Área</th>
             <th>Inicio Servicio</th>
             <th>Terminación</th>
             <th>Días</th>
@@ -115,7 +119,7 @@
         </thead>
         <tbody id="historyTableBody">
           <tr>
-            <td colspan="11" style="text-align:center; padding:40px;">Cargando registros...</td>
+            <td colspan="12" style="text-align:center; padding:40px;">Cargando registros...</td>
           </tr>
         </tbody>
       </table>

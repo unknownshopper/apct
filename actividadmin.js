@@ -283,6 +283,8 @@
                 ensureComputedAmounts(r);
                 saveRowsToLocal();
                 renderBody(view);
+                // Si la fila proviene de Firestore (_firestoreId), actualizar también el documento
+                updateFirestoreRow(r);
               };
               inp.addEventListener('change', commitPrecio);
               inp.addEventListener('blur', commitPrecio);

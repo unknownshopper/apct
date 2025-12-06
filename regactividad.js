@@ -125,7 +125,7 @@ async function loadHistory() {
     }
     
     if (rows.length === 0) {
-      document.getElementById('historyTableBody').innerHTML = '<tr><td colspan="11" style="text-align:center; padding:40px;">No hay registros guardados</td></tr>';
+      document.getElementById('historyTableBody').innerHTML = '<tr><td colspan="12" style="text-align:center; padding:40px;">No hay registros guardados</td></tr>';
       document.getElementById('totalRegistros').textContent = '0';
       document.getElementById('totalInternos').textContent = '0';
       document.getElementById('totalExternos').textContent = '0';
@@ -182,6 +182,31 @@ async function loadHistory() {
       const elD = document.getElementById('avgDiasServicio'); if (elD) elD.textContent = avgDias.toLocaleString('es-MX');
     } catch(e){ console.warn('[regactividad] métricas act/venc/días', e); }
     
+    try {
+      const sel = document.getElementById('areaFilter');
+      if (sel && headerIndices.AREA != null && headerIndices.AREA >= 0) {
+        const counts = new Map();
+        rows.forEach(r => {
+          const a = String(r[headerIndices.AREA] || '').trim();
+          if (!a) return;
+          counts.set(a, (counts.get(a) || 0) + 1);
+        });
+        sel.innerHTML = '';
+        const optAll = document.createElement('option');
+        optAll.value = '';
+        optAll.textContent = 'Todas las áreas';
+        sel.appendChild(optAll);
+        Array.from(counts.keys()).sort((a, b) => a.localeCompare(b || '', 'es', { sensitivity: 'base' })).forEach(a => {
+          const o = document.createElement('option');
+          o.value = a;
+          o.textContent = `${a} (${counts.get(a) || 0})`;
+          sel.appendChild(o);
+        });
+      }
+    } catch(e) {
+      console.warn('[regactividad] areaFilter populate', e);
+    }
+
     renderTable(rows);
   } catch (e) {
     console.error('[regactividad] load:', e);
@@ -215,7 +240,7 @@ function renderTable(rows){
     const rowsForClient = groups.get(cli) || [];
     const trCli = document.createElement('tr');
     const tdCli = document.createElement('td');
-    tdCli.colSpan = 10; // coincide con columnas visibles de la tabla
+    tdCli.colSpan = 12; // coincide con columnas visibles de la tabla
     tdCli.style.background = '#f3f4f6';
     tdCli.style.fontWeight = '700';
     tdCli.style.padding = '6px 10px';
@@ -254,6 +279,7 @@ function renderTable(rows){
       tr.appendChild(makeTd(row[headerIndices.SERIAL])); 
       tr.appendChild(makeTd(row[headerIndices.EQUIPO])); 
       tr.appendChild(makeTd(row[headerIndices.CLIENTE])); 
+      tr.appendChild(makeTd(row[headerIndices.AREA])); 
       tr.appendChild(makeTd(row[headerIndices.INICIO])); 
       tr.appendChild(makeTd(row[headerIndices.TERMINACION])); 
       const tdDias=makeTd(row[headerIndices.DIAS]||'0'); 
@@ -514,6 +540,29 @@ function editRecord(index, row){
   await loadHistory();
 })();
 
+(function(){
+  const searchInput = document.getElementById('searchInput');
+  const areaFilter = document.getElementById('areaFilter');
+
+  function applyRowFilters(){
+    const term = (searchInput && searchInput.value ? searchInput.value : '').toLowerCase();
+    const area = (areaFilter && areaFilter.value ? areaFilter.value : '').toLowerCase();
+    document.querySelectorAll('#historyTableBody tr').forEach(r=>{
+      const text = r.textContent.toLowerCase();
+      const okTerm = !term || text.includes(term);
+      const okArea = !area || text.includes(area);
+      r.style.display = (okTerm && okArea) ? '' : 'none';
+    });
+  }
+
+  if (searchInput){
+    searchInput.addEventListener('input', applyRowFilters);
+  }
+  if (areaFilter){
+    areaFilter.addEventListener('change', applyRowFilters);
+  }
+})();
+
 document.querySelector('.menu-toggle')?.addEventListener('click', function(){ const nav=document.getElementById('primary-nav'); nav.classList.toggle('open'); this.setAttribute('aria-expanded', nav.classList.contains('open')); });
 
 // Botón de logout
@@ -531,8 +580,6 @@ if (logoutBtn) {
     }
   });
 }
-
-document.getElementById('searchInput')?.addEventListener('input', (e)=>{ const term=e.target.value.toLowerCase(); document.querySelectorAll('#historyTableBody tr').forEach(r=>{ r.style.display = r.textContent.toLowerCase().includes(term)?'':'none'; }); });
 
 document.getElementById('exportBtn')?.addEventListener('click', function(){ try{ const key='actividad:newRows'; const stored=localStorage.getItem(key); const rows=stored?JSON.parse(stored):[]; if(rows.length===0){ alert('No hay registros para exportar'); return; } const headersCsv='Tipo,Serial,Equipo/Activo,Descripción,Cliente,Área,Ubicación,Factura,Inicio,Terminación,Días,Precio\n'; let csv=headersCsv; rows.forEach(row=>{ const prop=row[headerIndices.PROPIEDAD]||''; const tipo=prop==='PCT'?'PROPIO':'TERCEROS'; const fields=[ tipo, row[headerIndices.SERIAL]||'', row[headerIndices.EQUIPO]||'', row[headerIndices.DESCRIPCION]||'', row[headerIndices.CLIENTE]||'', row[headerIndices.AREA]||'', row[headerIndices.UBICACION]||'', row[headerIndices.FACTURA]||'', row[headerIndices.INICIO]||'', row[headerIndices.TERMINACION]||'', row[headerIndices.DIAS]||'', row[headerIndices.PRECIO]||'' ]; csv += fields.map(v=>`"${String(v).replace(/\"/g,'\"\"')}"`).join(',')+'\n'; }); const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='registros_actividad.csv'; a.click(); }catch(e){ console.error('[regactividad] export csv', e); alert('Error al exportar CSV'); }});
 

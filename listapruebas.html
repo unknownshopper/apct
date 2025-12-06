@@ -34,6 +34,10 @@
       .btn-edit:hover { background:#dbeafe; }
       .btn-delete { background:#fee2e2; border-color:#ef4444; color:#b91c1c; }
       .btn-delete:hover { background:#fecaca; }
+      .up-client-row td { background:#e5e7eb; font-weight:600; cursor:pointer; }
+      .up-client-toggle { background:transparent; border:none; padding:4px 0; font-size:12px; font-weight:600; cursor:pointer; text-align:left; width:100%; }
+      .up-area-row td { background:#f3f4f6; font-weight:500; font-size:11px; padding-left:16px; }
+      .up-area-toggle { background:transparent; border:none; padding:2px 0; font-size:11px; font-weight:500; cursor:pointer; text-align:left; width:100%; }
     </style>
   </head>
   <body>
@@ -240,16 +244,67 @@
           cols.forEach(h=>{ const th = document.createElement('th'); th.textContent=h; htr.appendChild(th); });
           thead.appendChild(htr);
           const tbody = document.createElement('tbody');
+          const groups = new Map();
           for (const o of UPCOMING_VIEW){
-            const tr = document.createElement('tr');
-            const tEq = document.createElement('td'); tEq.textContent = o.equipo || ''; tr.appendChild(tEq);
-            const tPr = document.createElement('td'); tPr.textContent = (o.pruebasRequeridas||[]).join(', '); tr.appendChild(tPr);
-            const tOs = document.createElement('td'); tOs.textContent = o.os || ''; tr.appendChild(tOs);
-            const tOc = document.createElement('td'); tOc.textContent = o.oc || ''; tr.appendChild(tOc);
-            const tCli = document.createElement('td'); tCli.textContent = o.cliente || ''; tr.appendChild(tCli);
-            const tEdo = document.createElement('td'); tEdo.textContent = o.edo || ''; tr.appendChild(tEdo);
-            const tSt = document.createElement('td'); tSt.textContent = o.status || ''; tr.appendChild(tSt);
-            tbody.appendChild(tr);
+            const cliRaw = (o.cliente || '').trim();
+            const cli = cliRaw || 'SIN CLIENTE';
+            const areaRaw = (o.area || '').trim();
+            const area = areaRaw || 'SIN ÁREA';
+            if (!groups.has(cli)) groups.set(cli, new Map());
+            const byArea = groups.get(cli);
+            if (!byArea.has(area)) byArea.set(area, []);
+            byArea.get(area).push(o);
+          }
+
+          for (const [cliente, areasMap] of groups.entries()){
+            const grpTr = document.createElement('tr');
+            grpTr.classList.add('up-client-row');
+            grpTr.dataset.cliente = cliente;
+            const td = document.createElement('td');
+            td.colSpan = cols.length;
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'up-client-toggle';
+            btn.dataset.cliente = cliente;
+            btn.dataset.state = 'expanded';
+            btn.textContent = '▼ ' + cliente;
+            td.appendChild(btn);
+            grpTr.appendChild(td);
+            tbody.appendChild(grpTr);
+
+            for (const [area, rows] of areasMap.entries()){
+              const areaTr = document.createElement('tr');
+              areaTr.classList.add('up-area-row');
+              areaTr.dataset.cliente = cliente;
+              areaTr.dataset.area = area;
+              const tdArea = document.createElement('td');
+              tdArea.colSpan = cols.length;
+              const btnArea = document.createElement('button');
+              btnArea.type = 'button';
+              btnArea.className = 'up-area-toggle';
+              btnArea.dataset.cliente = cliente;
+              btnArea.dataset.area = area;
+              btnArea.dataset.state = 'expanded';
+              btnArea.textContent = `▼ Área: ${area}`;
+              tdArea.appendChild(btnArea);
+              areaTr.appendChild(tdArea);
+              tbody.appendChild(areaTr);
+
+              for (const o of rows){
+                const tr = document.createElement('tr');
+                tr.classList.add('up-equipo-row');
+                tr.dataset.cliente = cliente;
+                tr.dataset.area = area;
+                const tEq = document.createElement('td'); tEq.textContent = o.equipo || ''; tr.appendChild(tEq);
+                const tPr = document.createElement('td'); tPr.textContent = (o.pruebasRequeridas||[]).join(', '); tr.appendChild(tPr);
+                const tOs = document.createElement('td'); tOs.textContent = o.os || ''; tr.appendChild(tOs);
+                const tOc = document.createElement('td'); tOc.textContent = o.oc || ''; tr.appendChild(tOc);
+                const tCli = document.createElement('td'); tCli.textContent = o.cliente || ''; tr.appendChild(tCli);
+                const tEdo = document.createElement('td'); tEdo.textContent = o.edo || ''; tr.appendChild(tEdo);
+                const tSt = document.createElement('td'); tSt.textContent = o.status || ''; tr.appendChild(tSt);
+                tbody.appendChild(tr);
+              }
+            }
           }
           table.innerHTML = '';
           table.appendChild(thead);
@@ -557,7 +612,7 @@
               if (snap.size < 500) break;
             }
             console.log(`[listapruebas] Órdenes pendientes eliminadas: ${totalDeleted}`);
-            alert(`Se eliminaron ${totalDeleted} órdenes pendientes de testOrders.`);
+            alert(`Se eliminaron ${totalDeleted} órdenes pendientes.`);
           }catch(e){
             console.error('[listapruebas] clearAllPendingTestOrders', e);
             alert('Error al borrar órdenes pendientes: ' + e.message);
@@ -584,6 +639,7 @@
               if (!equipo) continue;
 
               const idxCli = headerIndexByVariantsFrom(headers, ['CLIENTE']);
+              const idxArea = headerIndexByVariantsFrom(headers, ['AREA CLIENTE','ÁREA CLIENTE','AREA','ÁREA']);
               const idxOS  = headerIndexByVariantsFrom(headers, ['ORDEN DE SERVICIO','O. S.','O.S.','OS']);
               const idxOC  = headerIndexByVariantsFrom(headers, ['ORDEN DE COMPRA','ORDEN COMPRA','NO. ORDEN DE COMPRA','NO ORDEN DE COMPRA','NÚMERO DE ORDEN','NUMERO DE ORDEN','OC']);
               const idxEdo = headerIndexByVariantsFrom(headers, ['EDO_GENERAL','EDO','ESTADO']);
@@ -612,6 +668,7 @@
               if (dProx < today || dProx > limit) continue; // solo próximas dentro del próximo año
 
               const cliente = idxCli>=0 ? String(data[headers[idxCli]]||'').trim() : '';
+              const area = idxArea>=0 ? String(data[headers[idxArea]]||'').trim() : '';
               const os = idxOS>=0 ? String(data[headers[idxOS]]||'').trim() : '';
               const oc = idxOC>=0 ? String(data[headers[idxOC]]||'').trim() : '';
               const edo = idxEdo>=0 ? String(data[headers[idxEdo]]||'').trim() : '';
@@ -623,6 +680,7 @@
                 os,
                 oc,
                 cliente,
+                area,
                 edo,
                 status: 'pendiente'
               });
@@ -643,6 +701,7 @@
                     os: d.os || '',
                     oc: d.oc || '',
                     cliente: d.cliente || '',
+                    area: d.areaCliente || d.area || '',
                     edo: d.edo || '',
                     status: d.status || 'pendiente'
                   });
@@ -803,6 +862,47 @@
           ['up-f-os','up-f-oc','up-f-cli','up-f-eq','up-f-status'].forEach(id=>{
             const el = document.getElementById(id); if (el) el.addEventListener('input', ()=>{ applyUpcomingFilter(); renderUpcoming(); });
           });
+
+          const upcomingTable = document.getElementById('upcoming-table');
+          if (upcomingTable){
+            upcomingTable.addEventListener('click', (e)=>{
+              const btnClient = e.target.closest('.up-client-toggle');
+              if (btnClient){
+                const cliente = btnClient.dataset.cliente || '';
+                const isCollapsed = btnClient.dataset.state === 'collapsed';
+                btnClient.dataset.state = isCollapsed ? 'expanded' : 'collapsed';
+                btnClient.textContent = (isCollapsed ? '▼ ' : '▶ ') + (cliente || 'SIN CLIENTE');
+                const rowsEq = upcomingTable.querySelectorAll('tr.up-equipo-row');
+                rowsEq.forEach(r=>{
+                  if ((r.dataset.cliente || '') === cliente){
+                    r.style.display = isCollapsed ? '' : 'none';
+                  }
+                });
+                const rowsArea = upcomingTable.querySelectorAll('tr.up-area-row');
+                rowsArea.forEach(r=>{
+                  if ((r.dataset.cliente || '') === cliente){
+                    r.style.display = isCollapsed ? '' : 'none';
+                  }
+                });
+                return;
+              }
+
+              const btnArea = e.target.closest('.up-area-toggle');
+              if (btnArea){
+                const cliente = btnArea.dataset.cliente || '';
+                const area = btnArea.dataset.area || '';
+                const isCollapsed = btnArea.dataset.state === 'collapsed';
+                btnArea.dataset.state = isCollapsed ? 'expanded' : 'collapsed';
+                btnArea.textContent = (isCollapsed ? '▼ ' : '▶ ') + ` Área: ${area || 'SIN ÁREA'}`;
+                const rowsEq = upcomingTable.querySelectorAll('tr.up-equipo-row');
+                rowsEq.forEach(r=>{
+                  if ((r.dataset.cliente || '') === cliente && (r.dataset.area || '') === area){
+                    r.style.display = isCollapsed ? '' : 'none';
+                  }
+                });
+              }
+            });
+          }
         }
 
         if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();

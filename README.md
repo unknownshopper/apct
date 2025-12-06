@@ -240,7 +240,7 @@ Sistema web para gestionar inventario, inspecciones y actividad operativa de equ
 - **Trazabilidad y auditoría**: metadatos de usuario/fecha, posibles logs/auditoría; Excel carece de bitácora robusta.
 - **Estandarización**: formularios con validaciones, listas controladas y reglas de conformidad; evita formulas rotas y formatos dispares.
 - **Integración de datos**: vínculo directo con inventario CSV y (próximo) Firestore; en Excel hay copias pegadas propensas a error.
-- **Impresión/PDF profesional**: reportes con encabezado, logo y tablas que no se cortan entre páginas; en Excel suele requerir ajustes manuales.
+- **Impresión/PDF profesional**: reportes´ con encabezado, logo y tablas que no se cortan entre páginas; en Excel suele requerir ajustes manuales.
 - **Búsqueda y performance**: tablas con ordenamiento/filtrado y, con Firestore, consultas eficientes; Excel ralentiza en volúmenes altos.
 - **Seguridad y respaldo**: Auth de Firebase, reglas de acceso y respaldo gestionado; Excel depende de carpetas compartidas vulnerables.
 - **Despliegue y versionado**: cambios versionados en Git y publicados; en Excel proliferan copias locales.

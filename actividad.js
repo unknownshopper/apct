@@ -17,11 +17,13 @@
   const activityKpis = document.getElementById('activity-kpis');
   const activityCards = document.getElementById('activity-cards');
   const clientFilterEl = document.getElementById('clientFilter');
-  // Estado de colapso por cliente (para grupos)
+  // Estado de colapso por cliente (para grupos) y por área dentro del cliente
   const collapsedClients = new Set();
+  const collapsedAreas = new Map(); // key: cliente + '|||'+ area
   let collapsedInitialized = false;
 
   let rows = [];
+  let baseRows = [];
   let headers = [];
   let view = [];
   let sortCol = -1;
@@ -446,24 +448,36 @@
   function renderBody(data){
     const frag = document.createDocumentFragment();
     const totalCols = 2 + (visibleCols ? visibleCols.labels.length : headers.length); // selección + cols + acciones
-    const selClient = (clientFilterEl?.value||'').trim();
-    // Construir orden de clientes según aparición
-    let orderOfClients = [];
-    if (clienteIdx>=0){
-      const seen = new Set();
-      for (let i=0;i<data.length;i++){ const c=String(data[i][clienteIdx]||'').trim(); if (!seen.has(c)){ seen.add(c); orderOfClients.push(c); } }
+    const selClient = (clientFilterEl?.value || '').trim();
+
+    // Índice de área del cliente (si existe)
+    const areaIdx = headerIndex(['AREA DEL CLIENTE','ÁREA DEL CLIENTE','AREA CLIENTE','ÁREA CLIENTE','AREA','ÁREA']);
+
+    // Construir estructura Cliente -> Área -> filas, respetando el orden original
+    const groups = new Map();
+    for (let i = 0; i < data.length; i++){
+      const row = data[i];
+      const cli = clienteIdx >= 0 ? String(row[clienteIdx] || '').trim() : '';
+      const area = areaIdx >= 0 ? String(row[areaIdx] || '').trim() : '';
+      if (!groups.has(cli)) groups.set(cli, new Map());
+      const byArea = groups.get(cli);
+      if (!byArea.has(area)) byArea.set(area, []);
+      byArea.get(area).push(row);
     }
+
+    const orderOfClients = Array.from(groups.keys());
+
     // Inicial: si no hay filtro y no hemos fijado estados, colapsar todos UNA sola vez
-    if (!selClient && !collapsedInitialized && collapsedClients.size===0){
-      orderOfClients.forEach(c=>collapsedClients.add(c));
+    if (!selClient && !collapsedInitialized && collapsedClients.size === 0){
+      orderOfClients.forEach(c => collapsedClients.add(c));
       collapsedInitialized = true;
     }
-    let currentGroup = null;
-    for (let i=0;i<data.length;i++){
-      const row = data[i];
-      const cli = clienteIdx>=0 ? String(row[clienteIdx]||'').trim() : '';
-      if (!selClient && clienteIdx>=0 && cli !== currentGroup){
-        currentGroup = cli;
+
+    for (const cli of orderOfClients){
+      const byArea = groups.get(cli) || new Map();
+
+      // Fila de grupo por cliente (solo cuando no hay filtro específico por cliente)
+      if (!selClient && clienteIdx >= 0){
         const trGroup = document.createElement('tr');
         const tdg = document.createElement('td');
         tdg.colSpan = totalCols;
@@ -476,49 +490,158 @@
         const caret = document.createElement('span');
         caret.textContent = isCollapsed ? '►' : '▼';
         caret.style.marginRight = '8px';
-        const title = document.createElement('span'); title.textContent = cli || '— Sin cliente —';
-        tdg.appendChild(caret); tdg.appendChild(title);
+        const title = document.createElement('span');
+        title.textContent = cli || '— Sin cliente —';
+        tdg.appendChild(caret);
+        tdg.appendChild(title);
         tdg.style.cursor = 'pointer';
-        tdg.addEventListener('click', ()=>{
-          const nowCollapsed = collapsedClients.has(cli);
-          if (nowCollapsed) collapsedClients.delete(cli); else collapsedClients.add(cli);
+        tdg.addEventListener('click', () => {
+          if (collapsedClients.has(cli)) collapsedClients.delete(cli); else collapsedClients.add(cli);
           renderBody(view);
         });
         trGroup.appendChild(tdg);
         frag.appendChild(trGroup);
       }
-      const tr = document.createElement('tr');
-      if (!selClient && clienteIdx>=0){ tr.dataset.client = cli; if (collapsedClients.has(cli)) tr.style.display = 'none'; }
-      const tdSel = document.createElement('td');
-      let pre = 'propio';
-      if (propiedadIdx >= 0){ const prop = String(row[propiedadIdx]||'').trim().toUpperCase(); if (prop === 'PCT') pre = 'propio'; else if (prop) pre = 'terceros'; }
-      const tag = document.createElement('span'); tag.className = 'sel-tag readonly'; tag.textContent = (pre === 'propio') ? 'Propio' : 'Terceros'; tdSel.appendChild(tag);
-      // Acciones se renderizan en columna final; aquí solo va SELECCIÓN
-      tr.appendChild(tdSel);
-      const order = visibleCols ? visibleCols.order : headers.map((_,k)=>k);
-      for (let j=0;j<order.length;j++){
-        const td = document.createElement('td');
-        const idx = order[j];
-        let v = idx == null || idx < 0 ? '' : (row[idx] == null ? '' : row[idx]);
-        const label = (visibleCols ? visibleCols.labels[j] : headers[j]) || '';
-        const isMultiDateField = /^(FIN PARCIAL DEL SERVICIO|FIN PARCIAL|CONTINUACION DEL SERVICIO|CONTINUACIÓN DEL SERVICIO)$/i.test(normalizeHeader(label).toUpperCase());
-        if (!isMultiDateField && /fecha\s|inicio del servicio|continuacion del servicio|fin parcial del servicio|terminacion del servicio|devolucion/i.test(label)){
-          const s = String(v).trim(); const m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
-          if (m){ let d = parseInt(m[1],10), M = parseInt(m[2],10), y = parseInt(m[3],10); if (y < 100) y += 2000; const dd = String(d).padStart(2,'0'); const MM = String(M).padStart(2,'0'); const yy = String(y % 100).padStart(2,'0'); v = `${dd}/${MM}/${yy}`; }
+
+      const clientIsCollapsed = !selClient && clienteIdx >= 0 && collapsedClients.has(cli);
+      if (clientIsCollapsed) continue;
+
+      // Recorrer áreas en orden de inserción
+      for (const [area, rowsForArea] of byArea.entries()){
+        const areaKey = `${cli}|||${area}`;
+        const isAreaCollapsed = collapsedAreas.get(areaKey) === true;
+
+        // Fila de encabezado de área
+        const trArea = document.createElement('tr');
+        const tdArea = document.createElement('td');
+        tdArea.colSpan = totalCols;
+        tdArea.style.background = '#f9fafb';
+        tdArea.style.fontWeight = '600';
+        tdArea.style.color = '#4b5563';
+        tdArea.style.padding = '4px 10px';
+        tdArea.style.cursor = 'pointer';
+        const caretA = document.createElement('span');
+        caretA.textContent = isAreaCollapsed ? '►' : '▼';
+        caretA.style.marginRight = '6px';
+        const labelA = document.createElement('span');
+        labelA.textContent = area ? `Área: ${area}` : 'Área: — Sin área —';
+        tdArea.appendChild(caretA);
+        tdArea.appendChild(labelA);
+        tdArea.addEventListener('click', () => {
+          const now = collapsedAreas.get(areaKey) === true;
+          collapsedAreas.set(areaKey, !now);
+          renderBody(view);
+        });
+        trArea.appendChild(tdArea);
+        frag.appendChild(trArea);
+
+        if (isAreaCollapsed) continue;
+
+        // Filas de datos para esta área
+        for (const row of rowsForArea){
+          const tr = document.createElement('tr');
+
+          const tdSel = document.createElement('td');
+          let pre = 'propio';
+          if (propiedadIdx >= 0){
+            const prop = String(row[propiedadIdx] || '').trim().toUpperCase();
+            if (prop === 'PCT') pre = 'propio'; else if (prop) pre = 'terceros';
+          }
+          const tag = document.createElement('span');
+          tag.className = 'sel-tag readonly';
+          tag.textContent = (pre === 'propio') ? 'Propio' : 'Terceros';
+          tdSel.appendChild(tag);
+          tr.appendChild(tdSel);
+
+          const order = visibleCols ? visibleCols.order : headers.map((_, k) => k);
+          for (let j = 0; j < order.length; j++){
+            const td = document.createElement('td');
+            const idx = order[j];
+            let v = (idx == null || idx < 0) ? '' : (row[idx] == null ? '' : row[idx]);
+            const label = (visibleCols ? visibleCols.labels[j] : headers[j]) || '';
+
+            const isMultiDateField = /^(FIN PARCIAL DEL SERVICIO|FIN PARCIAL|CONTINUACION DEL SERVICIO|CONTINUACIÓN DEL SERVICIO)$/i.test(normalizeHeader(label).toUpperCase());
+            if (!isMultiDateField && /fecha\s|inicio del servicio|continuacion del servicio|fin parcial del servicio|terminacion del servicio|devolucion/i.test(label)){
+              const s = String(v).trim();
+              const m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
+              if (m){
+                let d = parseInt(m[1], 10);
+                let M = parseInt(m[2], 10);
+                let y = parseInt(m[3], 10);
+                if (y < 100) y += 2000;
+                const dd = String(d).padStart(2, '0');
+                const MM = String(M).padStart(2, '0');
+                const yy = String(y % 100).padStart(2, '0');
+                v = `${dd}/${MM}/${yy}`;
+              }
+            }
+
+            const isEquipoCol = /^(EQUIPO\s*\/\s*ACTIVO|EQUIPO\s*ACTIVO|EQUIPO ACTIVO|EQUIPO)$/i.test(normalizeHeader(label).toUpperCase());
+            if (isEquipoCol){
+              const selCell = tdSel;
+              const selEl = selCell.querySelector('select');
+              const tipo = (selEl ? selEl.value : (selCell.textContent || 'propio')).toString().trim().toLowerCase();
+              const input = document.createElement('input');
+              input.type = 'text';
+              input.value = String(v || '');
+              if (tipo === 'propio'){
+                ensureDatalist('dl-inventory-equipos', inventoryOptions || []);
+                input.setAttribute('list', 'dl-inventory-equipos');
+                input.placeholder = 'Equipo/Activo (inventario)';
+              } else {
+                input.placeholder = 'Clave del proveedor';
+                const prov = propiedadIdx >= 0 ? String(row[propiedadIdx] || '').trim().toUpperCase() : '';
+                const dlid = 'dl-prov-' + (prov || 'GEN');
+                const opts = externalOptionsByProvider.get(prov) ? Array.from(externalOptionsByProvider.get(prov).values()) : [];
+                ensureDatalist(dlid, opts);
+                input.setAttribute('list', dlid);
+              }
+              td.appendChild(input);
+            } else {
+              const isDescCol = /^DESCRIPCION$/i.test(normalizeHeader(label).toUpperCase()) || /^DESCRIPCIÓN$/i.test(normalizeHeader(label).toUpperCase());
+              if (isDescCol){
+                const selCell = tdSel;
+                const selEl = selCell.querySelector('select');
+                const tipo = (selEl ? selEl.value : (selCell.textContent || 'propio')).toString().trim().toLowerCase();
+                const idxEquipoHeader = headers.findIndex(h => /^EQUIPO\s*\/\s*ACTIVO|EQUIPO\s*ACTIVO|EQUIPO$/i.test(normalizeHeader(h).toUpperCase()));
+                const equipoVal = idxEquipoHeader >= 0 ? String(row[idxEquipoHeader] || '').trim() : '';
+                const descInv = invDescByEquipo.get(equipoVal) || invDescByEquipo.get(equipoVal.toUpperCase()) || '';
+                if (tipo === 'propio' && descInv){
+                  v = descInv;
+                  console.log('[actividad] DESC autofill', { equipo: equipoVal, desc: v });
+                }
+                td.textContent = v;
+              } else if (/^(SERIAL|#)$/i.test(normalizeHeader(label).toUpperCase())){
+                const selCell = tdSel;
+                const selEl = selCell.querySelector('select');
+                const tipo = (selEl ? selEl.value : (selCell.textContent || 'propio')).toString().trim().toLowerCase();
+                const idxEquipoHeader = headers.findIndex(h => /^EQUIPO\s*\/\s*ACTIVO|EQUIPO\s*ACTIVO|EQUIPO$/i.test(normalizeHeader(h).toUpperCase()));
+                const equipoVal = idxEquipoHeader >= 0 ? String(row[idxEquipoHeader] || '').trim() : '';
+                const serialInv = invSerialByEquipo.get(equipoVal) || invSerialByEquipo.get(equipoVal.toUpperCase()) || '';
+                if (tipo === 'propio' && serialInv){
+                  v = serialInv;
+                  console.log('[actividad] SERIAL autofill', { equipo: equipoVal, serial: v });
+                }
+                td.textContent = v;
+              } else if (/^(FIN PARCIAL DEL SERVICIO|FIN PARCIAL|CONTINUACION DEL SERVICIO|CONTINUACIÓN DEL SERVICIO)$/i.test(normalizeHeader(label).toUpperCase())){
+                td.textContent = v;
+                td.style.whiteSpace = 'pre-wrap';
+                td.style.fontSize = '0.9em';
+                td.style.verticalAlign = 'top';
+                td.style.lineHeight = '1.4';
+              } else {
+                td.textContent = v;
+              }
+            }
+
+            tr.appendChild(td);
+          }
+
+          frag.appendChild(tr);
         }
-        const isEquipoCol = /^(EQUIPO\s*\/\s*ACTIVO|EQUIPO\s*ACTIVO|EQUIPO ACTIVO|EQUIPO)$/i.test(normalizeHeader(label).toUpperCase());
-        if (isEquipoCol){ const selCell = tdSel; const selEl = selCell.querySelector('select'); const tipo = (selEl ? selEl.value : (selCell.textContent||'propio')).toString().trim().toLowerCase(); const input = document.createElement('input'); input.type = 'text'; input.value = String(v||''); if (tipo === 'propio'){ ensureDatalist('dl-inventory-equipos', inventoryOptions||[]); input.setAttribute('list', 'dl-inventory-equipos'); input.placeholder = 'Equipo/Activo (inventario)'; } else { input.placeholder = 'Clave del proveedor'; const prov = propiedadIdx>=0 ? String(row[propiedadIdx]||'').trim().toUpperCase() : ''; const dlid = 'dl-prov-' + (prov||'GEN'); const opts = externalOptionsByProvider.get(prov) ? Array.from(externalOptionsByProvider.get(prov).values()) : []; ensureDatalist(dlid, opts); input.setAttribute('list', dlid); } td.appendChild(input); }
-        else {
-          const isDescCol = /^DESCRIPCION$/i.test(normalizeHeader(label).toUpperCase()) || /^DESCRIPCIÓN$/i.test(normalizeHeader(label).toUpperCase());
-          if (isDescCol){ const selCell = tdSel; const selEl = selCell.querySelector('select'); const tipo = (selEl ? selEl.value : (selCell.textContent||'propio')).toString().trim().toLowerCase(); const idxEquipoHeader = headers.findIndex(h=>/^EQUIPO\s*\/\s*ACTIVO|EQUIPO\s*ACTIVO|EQUIPO$/i.test(normalizeHeader(h).toUpperCase())); const equipoVal = idxEquipoHeader>=0 ? String(row[idxEquipoHeader]||'').trim() : ''; const descInv = invDescByEquipo.get(equipoVal) || invDescByEquipo.get(equipoVal.toUpperCase()) || ''; if (tipo === 'propio' && descInv){ v = descInv; console.log('[actividad] DESC autofill', { equipo: equipoVal, desc: v }); } td.textContent = v; }
-          else if (/^(SERIAL|#)$/i.test(normalizeHeader(label).toUpperCase())){ const selCell = tdSel; const selEl = selCell.querySelector('select'); const tipo = (selEl ? selEl.value : (selCell.textContent||'propio')).toString().trim().toLowerCase(); const idxEquipoHeader = headers.findIndex(h=>/^EQUIPO\s*\/\s*ACTIVO|EQUIPO\s*ACTIVO|EQUIPO$/i.test(normalizeHeader(h).toUpperCase())); const equipoVal = idxEquipoHeader>=0 ? String(row[idxEquipoHeader]||'').trim() : ''; const serialInv = invSerialByEquipo.get(equipoVal) || invSerialByEquipo.get(equipoVal.toUpperCase()) || ''; if (tipo === 'propio' && serialInv){ v = serialInv; console.log('[actividad] SERIAL autofill', { equipo: equipoVal, serial: v }); } td.textContent = v; }
-          else if (/^(FIN PARCIAL DEL SERVICIO|FIN PARCIAL|CONTINUACION DEL SERVICIO|CONTINUACIÓN DEL SERVICIO)$/i.test(normalizeHeader(label).toUpperCase())){ td.textContent = v; td.style.whiteSpace = 'pre-wrap'; td.style.fontSize = '0.9em'; td.style.verticalAlign = 'top'; td.style.lineHeight = '1.4'; }
-          else { td.textContent = v; }
-        }
-        tr.appendChild(td);
       }
-      frag.appendChild(tr);
     }
+
     tbody.innerHTML = '';
     tbody.appendChild(frag);
     count.textContent = fmt(data.length) + ' registros';
@@ -710,15 +833,36 @@
             }
           }
         }
-        try{
-          const keyLS = 'actividad:newRows';
-          const cleanRows = rows.map(r => { if (r && r._firestoreId){ const { _firestoreId, ...rest } = r; return rest; } return r; });
-          localStorage.setItem(keyLS, JSON.stringify(cleanRows));
-        }catch(e){ console.error('[actividad] Error al actualizar localStorage en edición:', e); }
+        // Importante: no volver a escribir actividad:newRows desde actividad.html
+        // para no sobrescribir los valores de terminación/precio administrados en actividadmin.
+        // La persistencia de estos campos se mantiene solo desde actividadmin.
       }catch(e){ console.error('[actividad] Error al guardar edición:', e); }
       delete tr.dataset.editing;
       applyFilter();
     });
+  }
+
+  let autoRefreshTimer = null;
+
+  function mergeLocalRows(){
+    try{
+      const keyLS = 'actividad:newRows';
+      const localRows = JSON.parse(localStorage.getItem(keyLS)||'[]');
+      if (Array.isArray(localRows) && localRows.length){
+        rows = [...localRows, ...baseRows];
+      } else {
+        rows = baseRows.slice();
+      }
+      view = rows;
+      renderHead();
+      renderBody(view);
+    }catch(e){ console.warn('[actividad] Error al mezclar filas locales en auto-refresh:', e); }
+  }
+
+  function setupAutoRefresh(){
+    if (autoRefreshTimer != null) return;
+    // Refrescar cada 30 segundos la vista en base a localStorage + CSV base
+    autoRefreshTimer = setInterval(mergeLocalRows, 30000);
   }
 
   async function load(){
@@ -735,6 +879,8 @@
       }
       if (headerRowIndex < 0){ headers = data[0]||[]; rows = data.slice(1); }
       else { headers = data[headerRowIndex]||[]; rows = data.slice(headerRowIndex+1); }
+
+      baseRows = rows.slice();
 
       // índice de cliente
       clienteIdx = headerIndex(['CLIENTE']);
@@ -782,11 +928,9 @@
       renderHead();
       renderBody(view);
       deferReflowFix();
-      try{
-        const keyLS = 'actividad:newRows';
-        const localRows = JSON.parse(localStorage.getItem(keyLS)||'[]');
-        if (Array.isArray(localRows) && localRows.length){ rows = [...localRows, ...rows]; view = rows; renderHead(); renderBody(view); }
-      }catch{}
+      // Mezclar con caché local (si existe) y activar auto-refresh periódico
+      mergeLocalRows();
+      setupAutoRefresh();
     }catch(e){ console.error('[actividad] Error al cargar datos:', e); }
   }
 
@@ -1072,4 +1216,3 @@
 
   if (document.readyState === 'complete') { setTimeout(load, 0); } else { window.addEventListener('load', load); }
 })();
-
